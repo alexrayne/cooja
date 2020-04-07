@@ -54,6 +54,7 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JTabbedPane;
 import javax.swing.ListSelectionModel;
+import javax.swing.BorderFactory; 
 
 import org.apache.log4j.Logger;
 import org.jdom.Element;
@@ -62,6 +63,7 @@ import org.contikios.cooja.Mote;
 import org.contikios.cooja.interfaces.SerialIO;
 import org.contikios.cooja.interfaces.SerialPort;
 import org.contikios.cooja.dialogs.MessageListUI;
+import org.contikios.cooja.dialogs.MessageContainer;
 
 import org.contikios.cooja.util.StringUtils;
 
@@ -213,6 +215,7 @@ public abstract class SerialUI extends SerialIO
       //x.setFont(new Font("Consolas", Font.PLAIN, 10));
       //x.setFont(new Font("Curier New", Font.PLAIN, 10));
       x.setCellRenderer( x.newWrapedMessageRenderer() );
+      x.setScrolableVertical();
 
       x.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
       x.addPopupMenuItem(null, true);
@@ -220,9 +223,13 @@ public abstract class SerialUI extends SerialIO
       x.setForeground(LOG,       Color.black);
       x.setForeground(RECEIVING, Color.blue);
       x.setForeground(SENDING,   Color.magenta);
+      x.setBorder(RECEIVING,BorderFactory.createMatteBorder(1, 5, 1, 1, Color.blue) );
+      x.setBorder(SENDING,  BorderFactory.createMatteBorder(1, 1, 1, 5, Color.magenta) );
+      x.setBorder(LOG,      BorderFactory.createMatteBorder(1, 1, 1, 1, Color.black) );
 
       JScrollPane scrollPane = new JScrollPane(x);
-      scrollPane.setPreferredSize(new Dimension(100, 100));
+      //scrollPane.setViewportView(x);
+      scrollPane.setPreferredSize(new Dimension(80, 100));
       return scrollPane;
   }
 
@@ -238,7 +245,7 @@ public abstract class SerialUI extends SerialIO
     logTextPane.setLineWrap(true);
     logTextPane.setWrapStyleWord(true);
     JScrollPane scrollTextPane = new JScrollPane(logTextPane);
-    scrollTextPane.setPreferredSize(new Dimension(100, 100));
+    scrollTextPane.setPreferredSize(new Dimension(80, 100));
     tabbedView.addTab("text", scrollTextPane);
 
     //final JTextArea logHexPane = new JTextArea();
@@ -252,7 +259,7 @@ public abstract class SerialUI extends SerialIO
     tabbedView.addTab("dump", fanoutMessageList(logDumpPane));
 
     JPanel commandPane = new JPanel(new BorderLayout());
-    final JTextField commandField = new JTextField(15);
+    final JTextField commandField = new JTextField(5);//15
     JButton sendButton = new JButton("Send data");
 
     ActionListener sendCommandAction = new ActionListener() {
@@ -484,20 +491,58 @@ public abstract class SerialUI extends SerialIO
 
   protected static void appendToHexArea(MessageListUI textArea, final byte[] data, int type) {
 	  if(data.length > 0) {
-		  final String line = StringUtils.toHex(data, 1);
-		  // TODO whitout \n JTextArea does not wraps text in JList
-		  textArea.addMessage( line+'\n' , type);
+		  textArea.addMessage( new HexMessage (data , type) );
 	  }
   }
 
   protected static void appendToDumpArea(MessageListUI textArea, final byte[] data, int type) {
 	  if(data.length > 0) {
-		  final String line = StringUtils.hexDump(data, 1, 16);
-		  textArea.addMessage( line , type);
+	      MessageRanged msg = new DumpMessage(data , type);
+          textArea.addMessage( msg );
 	  }
+  }
+
+  public  static 
+  class BinMessage extends MessageRanged {
+      public final byte[] data;
+
+      public BinMessage(final byte[] x, int type ){
+          super(type);
+          this.data = x;
+      }
+  } 
+
+  public  static 
+  class HexMessage extends BinMessage {
+
+      public HexMessage(final byte[] x, int type ){
+          super(x, type);
+      }
+
+      @Override
+      public String toString() {
+          return StringUtils.toHex(data, 1);
+      }
+  }
+
+  public  static 
+  class DumpMessage extends BinMessage {
+
+      public DumpMessage(final byte[] x, int type ){
+          super(x, type);
+      }
+
+      @Override
+      public String toString() {
+          final String line = StringUtils.hexDump(data, 1, 16);
+          if (line.charAt(line.length()-1)=='\n')
+              return line.substring(0, line.length()-1);
+          return line;
+      }
   }
 
   private static String trim(String text) {
     return (text != null) && ((text = text.trim()).length() > 0) ? text : null;
   }
+  
 }
