@@ -32,6 +32,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.lang.Throwable;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -218,7 +219,7 @@ public class StringUtils {
   }
 
   public static
-  String dumpStackTrace(Exception ex) {
+  String dumpStackTrace(Throwable ex) {
       StringWriter writer = new StringWriter();
       PrintWriter printWriter = new PrintWriter( writer );
       ex.printStackTrace( printWriter );
