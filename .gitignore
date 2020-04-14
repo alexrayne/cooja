@@ -11,3 +11,4 @@ build
 /.hgignore
 /.hgsub
 /.hgsubstate
+*.orig
