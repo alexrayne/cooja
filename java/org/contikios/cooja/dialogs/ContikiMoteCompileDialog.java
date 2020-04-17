@@ -40,6 +40,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.io.File;
+import java.nio.file.Path;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 
@@ -213,39 +214,89 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
     }
 
     /*"make clean TARGET=cooja\n" + */
-    String command = Cooja.getExternalToolsSetting("PATH_MAKE") + " " 
-            + getExpectedFirmwareFile(source).getName() 
-            ;
-    final String target_cmd = " TARGET=cooja";
-    final String netstack_cmd = " DEFINES=NETSTACK_CONF_H=" 
-                + ((ContikiMoteType) moteType).getNetworkStack().getHeaderFile();
-    if (save_command.trim().length() <= 2) {
-        //build new command
-        String defines = "";
-        if (((ContikiMoteType) moteType).getNetworkStack().getHeaderFile() != null) {
-          command += target_cmd + netstack_cmd;
-        }
-    }
-    else {
-        // update old command with new source, and netstack
-        int cmd_finish = save_command.indexOf(" TARGET");
-        if (cmd_finish > 0)
-            command +=  save_command.substring(cmd_finish);
-        else {
-            logger.warn("was strange compile commmand: "+save_command);
-            command += target_cmd;
-        }
+    final String target = getExpectedFirmwareFile(source).getName();
+    String command = setCommandTarget(save_command, target);
 
-        // update netstack header
-        final String netstack_patern = "\\sDEFINES=NETSTACK_CONF_H=(\\S*)";
-        if ( command.indexOf("NETSTACK_CONF_H=") > 0) {
-            command = command.replaceAll(netstack_patern, netstack_cmd);
-        }
-        else
-            command += netstack_cmd;
-    }
+    final String newstack = ((ContikiMoteType) moteType).getNetworkStack().getHeaderFile(); 
+    command = setNetStack(command, newstack);
 
     return command;
+  }
+
+  private
+  String setNetStack(String command, String newstack) {
+      final String netstack_patern = "NETSTACK_CONF_H=([^\\s,]*)";
+
+      if (newstack == null) {
+          //remove netstack
+          command = command.replaceAll(netstack_patern, "");
+          return command;
+      }
+
+      final String netstack_def = "NETSTACK_CONF_H=" + newstack; 
+      final String netstack_cmd = " DEFINES=" + netstack_def;  
+
+      // update netstack header
+      if ( command.indexOf("NETSTACK_CONF_H=") > 0) {
+          command = command.replaceAll(netstack_patern, netstack_def);
+      }
+      else
+          command += netstack_cmd;
+      return command;
+  }
+
+  private
+  String setCommandTarget(String command, String target) {
+
+      String target_cmd = "TARGET="+getTargetName();
+      
+      int cmd_finish = command.lastIndexOf("make ");
+      if (cmd_finish > 0) {
+          // update old command with new source, and netstack
+          final String target_patern = " ((\\S)*."+getTargetName()+") "+target_cmd;
+          String make = command.substring(cmd_finish);
+          make = make.replaceAll(target_patern, " " + target + " "+target_cmd );
+
+          return command.substring(0, cmd_finish) + make;
+      }
+      else {
+          String new_command = Cooja.getExternalToolsSetting("PATH_MAKE") + " " 
+                  + target + " "+target_cmd
+                  ;
+          return command + "\n"+new_command;
+      }
+  }
+
+  private final static String[][] PATH_IDENTIFIER = {
+          {"[CONTIKI_DIR]","PATH_CONTIKI",""},
+          //{"[COOJA_DIR]","PATH_COOJA",""},
+          //{"[APPS_DIR]","PATH_APPS","apps"}
+      };
+
+  @Override
+  public
+  String updateCommandPath(String command, final File source) {
+      Path src = source.toPath().getParent().toAbsolutePath();
+      logger.info("fixup refs for "+ source + " path:"+src);
+      for(final String[] elem : PATH_IDENTIFIER ){
+          if (command.indexOf(elem[0]) <= 0 )
+              continue;
+
+          File elem_path = new File( Cooja.getExternalToolsSetting(elem[1]) );
+          String canonical = elem_path.getAbsolutePath();
+          String relative  = src.relativize(elem_path.getAbsoluteFile().toPath()).normalize().toString();
+          if (canonical.length() < relative.length()) {
+              command = command.replace( elem[0] , canonical);
+              logger.info("fixup reference "+ elem[0] +" -> "+ canonical);
+          }
+          else {
+              command = command.replace( elem[0] , relative);
+              logger.info("fixup reference "+ elem[0] 
+                          +" -> "+ relative 
+                          +" :" + canonical);
+          }
+      }
+      return command;
   }
 
   public File getExpectedFirmwareFile(File source) {
