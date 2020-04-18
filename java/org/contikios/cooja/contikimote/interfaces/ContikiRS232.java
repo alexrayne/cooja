@@ -157,7 +157,7 @@ public class ContikiRS232 extends SerialUI implements ContikiMoteInterface, Poll
       return;
     }
 
-    pendingBytesEvent = new MoteTimeEvent(mote, 0) {
+    pendingBytesEvent = new MoteTimeEvent(mote) {
       public void execute(long t) {
         ContikiRS232.this.pendingBytesEvent = null;
         if (pendingBytes.isEmpty()) {
@@ -218,7 +218,7 @@ public class ContikiRS232 extends SerialUI implements ContikiMoteInterface, Poll
       return;
     }
 
-    pendingBytesEvent = new MoteTimeEvent(mote, 0) {
+    pendingBytesEvent = new MoteTimeEvent(mote) {
       public void execute(long t) {
         ContikiRS232.this.pendingBytesEvent = null;
         if (pendingBytes.isEmpty()) {

@@ -32,44 +32,47 @@ package org.contikios.cooja;
 
 /**
  * @author Joakim Eriksson (ported to COOJA by Fredrik Osterlind)
+ *         Matthew Bradbury <matt-bradbury@live.co.uk>
  */
 public abstract class TimeEvent {
-  TimeEvent nextEvent;
-  TimeEvent prevEvent;
 
-  EventQueue queue = null;
-  String name;
+  private boolean isQueued = false;
+  private boolean isScheduled = false;
 
-  protected long time;
-
-  boolean isScheduled = false;
-
-  public TimeEvent(long time) {
-    this(time, null);
-  }
-
-  public TimeEvent(long time, String name) {
-    this.time = time;
-    this.name = name;
-  }
-
-  public final long getTime() {
-    return time;
+  public TimeEvent() {
   }
 
   public boolean isScheduled() {
     return isScheduled;
   }
 
-  public boolean remove() {
+  public boolean isQueued() {
+    return isQueued;
+  }
+
+  public void setScheduled(boolean queued) {
+    isScheduled = queued;
+    isQueued = queued;
+  }
+
+  public void remove() {
     isScheduled = false;
-    return false;
   }
 
   public abstract void execute(long t);
 
-  public String getShort() {
-    return "" + time + (name != null ? ": " + name : "");
+
+
+  /**
+   * there always used TimeEvent(0), this constructor now useless
+   *
+   * @deprecated use {TimeEvent()} instead.  
+   */
+  @Deprecated
+  public TimeEvent(long time) {
   }
 
+  @Deprecated
+  public TimeEvent(long time, String name) {
+  }
 }

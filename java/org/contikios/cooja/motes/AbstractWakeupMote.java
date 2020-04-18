@@ -42,7 +42,9 @@ public abstract class AbstractWakeupMote implements Mote {
   
   protected Simulation simulation = null;
 
-  private TimeEvent executeMoteEvent = new MoteTimeEvent(this, 0) {
+  private long nextWakeupTime = -1;
+
+  private final TimeEvent executeMoteEvent = new MoteTimeEvent(this) {
     public void execute(long t) {
       AbstractWakeupMote.this.execute(t);
     }
@@ -78,20 +80,17 @@ public abstract class AbstractWakeupMote implements Mote {
    * the mote software will execute as soon as possible.
    */
   public void requestImmediateWakeup() {
-//    if (simulation == null) {
-//      simulation = getSimulation();
-//    }
+    long t = simulation.getSimulationTime();
     
     if (simulation.isSimulationThread()) {
       /* Schedule wakeup immediately */
-      scheduleNextWakeup(simulation.getSimulationTime());
-      return;
+      scheduleNextWakeup(t);
     }
 
     /* Schedule wakeup asap */
     simulation.invokeSimulationThread(new Runnable() {
       public void run() {
-        scheduleNextWakeup(simulation.getSimulationTime());
+          scheduleNextWakeup(t);
       }
     });
   }
@@ -103,7 +102,7 @@ public abstract class AbstractWakeupMote implements Mote {
 	  if (!executeMoteEvent.isScheduled()) {
 		  return -1;
 	  }
-	  return executeMoteEvent.getTime();
+    return nextWakeupTime;
   }
   
   /**
@@ -118,14 +117,10 @@ public abstract class AbstractWakeupMote implements Mote {
    * @return True iff wakeup request rescheduled the wakeup time.
    */
   public boolean scheduleNextWakeup(long time) {
-//    if (simulation == null) {
-//      simulation = getSimulation();
-//    }
-
-      assert simulation.isSimulationThread() : "Scheduling event from non-simulation thread";
+    assert simulation.isSimulationThreadOrNull() : "Scheduling event from non-simulation thread (" + Thread.currentThread() + ")";
       
     if (executeMoteEvent.isScheduled() &&
-        executeMoteEvent.getTime() <= time) {
+        nextWakeupTime <= time) {
       /* Already scheduled wakeup event precedes given time - ignore wakeup request */
       return false;
     }
@@ -137,6 +132,9 @@ public abstract class AbstractWakeupMote implements Mote {
     }
 
     simulation.scheduleEvent(executeMoteEvent, time);
+
+    nextWakeupTime = time;
+
     return true;
   }
 

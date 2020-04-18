@@ -40,20 +40,30 @@ package org.contikios.cooja;
  * @author Fredrik Osterlind
  */
 public abstract class MoteTimeEvent extends TimeEvent {
-  private Mote mote;
+  private final Mote mote;
 
-  public MoteTimeEvent(Mote mote, long time) {
-    super(time);
-    this.mote = mote;
-  }
-  
-  public MoteTimeEvent(Mote mote, long time, String name) {
-    super(time, name);
+  public MoteTimeEvent(Mote mote) {
+    super();
     this.mote = mote;
   }
 
   public Mote getMote() {
     return mote;
   }
+
+  /**
+   * there always used MoteTimeEvent(, 0), this constructor now useless
+   *
+   * @deprecated use {MoteTimeEvent(mote)} instead.  
+   */
+  public MoteTimeEvent(Mote mote, long time) {
+      super();
+      this.mote = mote;
+    }
+    
+    public MoteTimeEvent(Mote mote, long time, String name) {
+      super();
+      this.mote = mote;
+    }
 
 }
