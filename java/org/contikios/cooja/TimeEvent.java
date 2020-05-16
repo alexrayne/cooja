@@ -61,7 +61,8 @@ public abstract class TimeEvent {
 
   public abstract void execute(long t);
 
-
+  //kills event execution - signal to execution thread  
+  public void kill() {};
 
   /**
    * there always used TimeEvent(0), this constructor now useless

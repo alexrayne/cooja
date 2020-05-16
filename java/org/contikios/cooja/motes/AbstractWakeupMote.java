@@ -48,6 +48,10 @@ public abstract class AbstractWakeupMote implements Mote {
     public void execute(long t) {
       AbstractWakeupMote.this.execute(t);
     }
+    @Override
+    public void kill() {
+        AbstractWakeupMote.this.kill();
+    }
     public String toString() {
       return "EXECUTE " + this.getClass().getName();
     }
@@ -69,6 +73,11 @@ public abstract class AbstractWakeupMote implements Mote {
    * @param time Simulation time.
    */
   public abstract void execute(long time);
+
+  /**
+   * try abort mote executing thread
+   * */
+  public void kill() {}
 
   /**
    * Execute mote software as soon as possible.

@@ -74,7 +74,7 @@ public class ContikiMote extends AbstractWakeupMote implements Mote {
   private ContikiMoteType myType = null;
   private SectionMoteMemory myMemory = null;
   private MoteInterfaceHandler myInterfaceHandler = null;
-  public enum MoteState{ STATE_OK, STATE_HANG};
+  public enum MoteState{ STATE_OK, STATE_EXEC, STATE_HANG};
   public MoteState execute_state = MoteState.STATE_OK;
 
   /**
@@ -157,7 +157,9 @@ public class ContikiMote extends AbstractWakeupMote implements Mote {
 
     /* Handle a single Contiki events */
     try {
-    myType.tick();
+        execute_state = MoteState.STATE_EXEC;
+        myType.tick();
+        execute_state = MoteState.STATE_OK;
     } 
     catch (RuntimeException e) {
         execute_state = MoteState.STATE_HANG;
@@ -201,6 +203,17 @@ public class ContikiMote extends AbstractWakeupMote implements Mote {
         // do not remove mote, just make it hung 
         //simulation.removeMote(this);
     }
+  }
+
+  /**
+   * try abort mote executing thread
+   * */
+  @Override
+  public void kill() {
+      if (execute_state == MoteState.STATE_EXEC) {
+          logger.warn( "killing mote"+getID() );
+          myType.kill();
+      }
   }
 
   /**
