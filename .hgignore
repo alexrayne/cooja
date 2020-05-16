@@ -3,3 +3,4 @@ syntax: glob
 **/build
 **.jar
 *.orig
+*.rej
