@@ -815,6 +815,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp {
         appendToFileWroteHeader = false;
       } catch (Exception ex) {
         logger.fatal("Append file failed: " + ex.getMessage(), ex);
+        simulation.stopSimulation();
         return false;
       }
     }
