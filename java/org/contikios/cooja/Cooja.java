@@ -4164,14 +4164,14 @@ public class Cooja extends Observable {
 
     portable = createContikiRelativePath(file);
     if (portable != null) {
-      /*logger.info("Generated Contiki relative path '" + file.getPath() + "' to '" + portable.getPath() + "'");*/
+      logger.info("Generated Contiki relative path '" + file.getPath() + "' to '" + portable.getPath() + "'");
       return portable;
     }
 
     if (allowConfigRelativePaths) {
       portable = createConfigRelativePath(file);
       if (portable != null) {
-        /*logger.info("Generated config relative path '" + file.getPath() + "' to '" + portable.getPath() + "'");*/
+        logger.info("Generated config relative path '" + file.getPath() + "' to '" + portable.getPath() + "'");
         return portable;
       }
     }
@@ -4197,13 +4197,13 @@ public class Cooja extends Observable {
     File absolute = null;
     absolute = restoreContikiRelativePath(file);
     if (absolute != null) {
-      /*logger.info("Restored Contiki relative path '" + file.getPath() + "' to '" + absolute.getPath() + "'");*/
+      logger.info("Restored Contiki relative path '" + file.getPath() + "' to '" + absolute.getPath() + "'");
       return absolute;
     }
 
     absolute = restoreConfigRelativePath(file);
     if (absolute != null) {
-      /*logger.info("Restored config relative path '" + file.getPath() + "' to '" + absolute.getPath() + "'");*/
+      logger.info("Restored config relative path '" + file.getPath() + "' to '" + absolute.getPath() + "'");
       return absolute;
     }
 
