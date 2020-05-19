@@ -295,6 +295,7 @@ public abstract class LogUI extends Log
   private boolean cfg_serial_ok = false;
 
   public void setConfigXML(Collection<Element> configXML, boolean visAvailable) {
+      cfg_serial_ok = false;
       for (Element element : configXML) {
           if (element.getName().equals("listen_serial")) {
               listenSerial( Boolean.parseBoolean(element.getText()) );

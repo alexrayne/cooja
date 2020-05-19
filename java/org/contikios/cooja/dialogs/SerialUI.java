@@ -482,14 +482,14 @@ public abstract class SerialUI extends SerialIO
       }
       sb.append(s + HISTORY_SEPARATOR);
     }
-    if (sb.length() == 0) {
-      return null;
-    }
 
     ArrayList<Element> config = new ArrayList<Element>();
-    Element element = new Element("history");
-    element.setText(sb.toString());
-    config.add(element);
+
+    if (sb.length() > 0) {
+        Element element = new Element("history");
+        element.setText(sb.toString());
+        config.add(element);
+    }
 
     setXMLValue(config, "log_received", isLogged());
 
@@ -498,6 +498,7 @@ public abstract class SerialUI extends SerialIO
 
   private boolean cfg_serial_ok = false;
   public void setConfigXML(Collection<Element> configXML, boolean visAvailable) {
+    cfg_serial_ok = false;
     for (Element element : configXML) {
       if (element.getName().equals("history")) {
         String[] history = element.getText().split(HISTORY_SEPARATOR);
