@@ -163,6 +163,21 @@ The COOJA Simulator
     </java>
   </target>
 
+  <target name="runjmx" depends="init, compile, jar, copy configs">
+    <java fork="yes" dir="${build}" classname="org.contikios.cooja.Cooja">
+      <arg line="${args}"/>
+      <env key="LD_LIBRARY_PATH" value="."/>
+      <jvmarg line="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=9010 -Dcom.sun.management.jmxremote.rmi.port=9010 -Dcom.sun.management.jmxremote.local.only=false -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"/>
+      <classpath>
+        <pathelement path="${build}"/>
+        <pathelement location="lib/jdom.jar"/>
+        <pathelement location="lib/log4j.jar"/>
+        <pathelement location="lib/jsyntaxpane.jar"/>
+        <pathelement location="lib/swingx-all-1.6.4.jar"/>
+      </classpath>
+    </java>
+  </target>
+
   <target name="runfree" depends="init, compile, jar, copy configs">
     <java fork="yes" dir="${build}" classname="org.contikios.cooja.Cooja" maxmemory="1536m">
       <arg line="${args}"/>
