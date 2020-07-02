@@ -70,6 +70,7 @@ import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.interfaces.Log;
 import org.contikios.cooja.interfaces.SerialIO;
 import org.contikios.cooja.interfaces.SerialPort;
+import org.contikios.cooja.dialogs.HistoryUI;
 import org.contikios.cooja.interfaces.ApplicationLogPort;
 import org.contikios.cooja.dialogs.LogUI;
 import org.contikios.cooja.dialogs.HistoryUI;
