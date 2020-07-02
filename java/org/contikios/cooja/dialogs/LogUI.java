@@ -283,7 +283,6 @@ public abstract class LogUI extends Log
     controlsInform.deleteObserver(observer);
   }
 
-  private static final String HISTORY_SEPARATOR = "~;";
   public Collection<Element> getConfigXML() {
     ArrayList<Element> config = new ArrayList<Element>();
 

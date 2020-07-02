@@ -72,6 +72,7 @@ import org.contikios.cooja.interfaces.SerialIO;
 import org.contikios.cooja.interfaces.SerialPort;
 import org.contikios.cooja.interfaces.ApplicationLogPort;
 import org.contikios.cooja.dialogs.LogUI;
+import org.contikios.cooja.dialogs.HistoryUI;
 import org.contikios.cooja.dialogs.MessageListUI;
 import org.contikios.cooja.dialogs.MessageContainer;
 
@@ -99,9 +100,7 @@ public abstract class SerialUI extends SerialIO
   private byte[] lastSendingData = null;
 
   /* Command history */
-  private final static int HISTORY_SIZE = 15;
-  private ArrayList<String> history = new ArrayList<String>();
-  private int historyPos = -1;
+  private HistoryUI                 history = new HistoryUI();;
 
   // informer about controls changes
   private class controlsInformer extends Observable {
@@ -322,16 +321,7 @@ public abstract class SerialUI extends SerialIO
         }
 
         try {
-          /* Add to history */
-          if (history.size() > 0 && command.equals(history.get(0))) {
-            /* Ignored */
-          } else {
-            history.add(0, command);
-            while (history.size() > HISTORY_SIZE) {
-              history.remove(HISTORY_SIZE-1);
-            }
-          }
-          historyPos = -1;
+            history.add(command);
 
           appendToTextArea(logTextPane, "> " + command);
           commandField.setText("");
@@ -356,41 +346,7 @@ public abstract class SerialUI extends SerialIO
     commandField.addActionListener(sendCommandAction);
     sendButton.addActionListener(sendCommandAction);
 
-    /* History */
-    commandField.addKeyListener(new KeyAdapter() {
-      public void keyPressed(KeyEvent e) {
-        switch (e.getKeyCode()) {
-        case KeyEvent.VK_UP: {
-          historyPos++;
-          if (historyPos >= history.size()) {
-            historyPos = history.size() - 1;
-            commandField.getToolkit().beep();
-          }
-          if (historyPos >= 0 && historyPos < history.size()) {
-            commandField.setText(history.get(historyPos));
-          } else {
-            commandField.setText("");
-          }
-          break;
-        }
-        case KeyEvent.VK_DOWN: {
-          historyPos--;
-          if (historyPos < 0) {
-            historyPos = -1;
-            commandField.setText("");
-            commandField.getToolkit().beep();
-            break;
-          }
-          if (historyPos >= 0 && historyPos < history.size()) {
-            commandField.setText(history.get(historyPos));
-          } else {
-            commandField.setText("");
-          }
-          break;
-        }
-        }
-      }
-    });
+    history.assignOnUI(commandField);
 
     commandPane.add(BorderLayout.CENTER, commandField);
     commandPane.add(BorderLayout.EAST, sendButton);
@@ -477,21 +433,11 @@ public abstract class SerialUI extends SerialIO
     controlsInform.deleteObserver(observer);
   }
 
-  private static final String HISTORY_SEPARATOR = "~;";
   public Collection<Element> getConfigXML() {
-    StringBuilder sb = new StringBuilder();
-    for (String s: history) {
-      if (s == null) {
-        continue;
-      }
-      sb.append(s + HISTORY_SEPARATOR);
-    }
-
     ArrayList<Element> config = new ArrayList<Element>();
 
-    if (sb.length() > 0) {
-        Element element = new Element("history");
-        element.setText(sb.toString());
+    Element element = history.getConfigXML("history");
+    if (element != null) {
         config.add(element);
     }
 
@@ -505,11 +451,7 @@ public abstract class SerialUI extends SerialIO
     cfg_serial_ok = false;
     for (Element element : configXML) {
       if (element.getName().equals("history")) {
-        String[] history = element.getText().split(HISTORY_SEPARATOR);
-        for (String h: history) {
-          this.history.add(h);
-        }
-        historyPos = -1;
+          history.setConfigXML(element);
       }
       if (element.getName().equals("log_received")) {
           setLogged( Boolean.parseBoolean(element.getText()) );
