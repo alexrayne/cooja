@@ -134,26 +134,27 @@ public abstract class MoteInterface extends Observable {
   boolean assignXMLValue(Collection<Element> configXML
                     , final String name, final boolean value) 
   {
-        for (Element element : configXML) {
-            if (element.getName().equals(name)) {
-                element.setText("" + value);
-                return true;
-            }
-        }
-        return false;
+      return assignXMLValue(configXML, name, ""+value);
   }
 
   public static
   void setXMLValue(Collection<Element> configXML
-                    , final String name, final boolean value) 
+                    , final String name, final String value) 
   {
         if ( assignXMLValue(configXML, name, value) )
             return;
 
         Element element;
         element = new Element(name);
-        element.setText("" + value);
+        element.setText(value);
         configXML.add(element);
+  }
+
+  public static
+  void setXMLValue(Collection<Element> configXML
+                    , final String name, final boolean value) 
+  {
+      setXMLValue(configXML, name, ""+value);
   }
 
   /**
@@ -169,13 +170,22 @@ public abstract class MoteInterface extends Observable {
       boolean visAvailable);
 
   public static
-  String getXMLText(final Collection<Element> configXML, final String name) {
-	    for (Element element : configXML) {
+  Element getXMLElement(final Collection<Element> configXML, final String name) {
+        for (Element element : configXML) {
             if (element.getName().equals(name)) {
-                return element.getText();
+                return element;
             }
-	    }
+        }
         return null;
+  }
+  
+  
+  public static
+  String getXMLText(final Collection<Element> configXML, final String name) {
+      Element e = getXMLElement(configXML, name);
+      if (e != null)
+          return e.getText();
+      return null;
   }
 
   public static
@@ -205,13 +215,7 @@ public abstract class MoteInterface extends Observable {
   boolean assignXMLValue(Collection<Element> configXML
 		  			, final String name, final double value) 
   {
-	    for (Element element : configXML) {
-            if (element.getName().equals(name)) {
-                element.setText("" + value);
-                return true;
-            }
-	    }
-        return false;
+      return assignXMLValue(configXML, name, ""+value);
   }
 
 
@@ -219,13 +223,7 @@ public abstract class MoteInterface extends Observable {
   void setXMLValue(Collection<Element> configXML
 		  			, final String name, final double value) 
   {
-	    if ( assignXMLValue(configXML, name, value) )
-	    	return;
-
-	    Element element;
-        element = new Element(name);
-        element.setText("" + value);
-        configXML.add(element);
+      setXMLValue(configXML, name, ""+value);
   }
 
   /**
