@@ -253,6 +253,16 @@ public class SectionMoteMemory implements MemoryInterface {
     return symbols;
   }
 
+  /**
+   * Checks if given variable exists in memory.
+   *
+   * @param varName Variable name
+   * @return True if variable exists, false otherwise
+   */
+  public boolean symbolExists(String varName) {
+    return getSymbolMap().containsKey(varName);
+  }
+
   @Override
   public MemoryLayout getLayout() {
     return memLayout;

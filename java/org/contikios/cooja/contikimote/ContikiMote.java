@@ -44,6 +44,8 @@ import org.contikios.cooja.Simulation;
 import org.contikios.cooja.mote.memory.MemoryInterface;
 import org.contikios.cooja.motes.AbstractWakeupMote;
 
+import org.contikios.cooja.contikimote.interfaces.ContikiRadio;
+
 /**
  * A Contiki mote executes an actual Contiki system via
  * a loaded shared library and JNI.
@@ -215,8 +217,36 @@ public class ContikiMote extends AbstractWakeupMote implements Mote {
       }
     }
 
+    if (myMemory.symbolExists("simRadioHWOn"))
+    if ( getInterfaces().getInterfaceOfType(ContikiRadio.class) == null )
+    {
+        /* if firmware have radio, should provide it, 
+         * since radio firmware have blocking operations*/
+        logger.info("mote"+ getID() + " firmware have radio");
+        addInterface("org.contikios.cooja.contikimote.interfaces.ContikiRadio");
+    }
+
     requestImmediateWakeup();
     return true;
+  }
+
+  public
+  MoteInterface addInterface(final String typeName) {
+      //looks tis is old project, that use ContikiRS232 combined SerialPort with Log
+      //So load ContikiLog for this project, since now it deployed from ContikiRS232
+      Class<? extends MoteInterface> moteInterfaceClass =
+              simulation.getCooja().tryLoadClass(this, MoteInterface.class, typeName);
+
+      if (moteInterfaceClass == null) {
+        logger.fatal("Could not append mote interface class: " + typeName);
+        return null;
+      }
+      else {
+          logger.info("Append mote interface class: " + typeName);
+          MoteInterface intf = MoteInterface.generateInterface(moteInterfaceClass, this);
+          myInterfaceHandler.addInterface(intf);
+          return intf;
+      }
   }
 
   @Override
