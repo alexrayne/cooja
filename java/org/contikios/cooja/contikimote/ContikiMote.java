@@ -53,6 +53,8 @@ import java.lang.RuntimeException;
 import org.contikios.cooja.contikimote.interfaces.ContikiLog;
 import org.contikios.cooja.contikimote.interfaces.ContikiRS232;
 
+import org.contikios.cooja.contikimote.interfaces.ContikiRadio;
+
 /**
  * A Contiki mote executes an actual Contiki system via
  * a loaded shared library and JNI.
@@ -286,23 +288,40 @@ public class ContikiMote extends AbstractWakeupMote implements Mote {
     {
         //looks tis is old project, that use ContikiRS232 combined SerialPort with Log
         //So load ContikiLog for this project, since now it deployed from ContikiRS232
-        Class<? extends MoteInterface> moteInterfaceClass =
-                simulation.getCooja().tryLoadClass(this, MoteInterface.class
-                            , "org.contikios.cooja.contikimote.interfaces.ContikiLog");
+        logger.info("update ContikiLog mote"+ getID() + " from old project");
+        addInterface("org.contikios.cooja.contikimote.interfaces.ContikiLog");
+    }
 
-        if (moteInterfaceClass == null) {
-          logger.fatal("Could not append mote interface class: ContikiLog");
-          return false;
-        }
-        else {
-            logger.info("Append mote interface class: ContikiLog, for old project");
-            MoteInterface intf = MoteInterface.generateInterface(moteInterfaceClass, this);
-            myInterfaceHandler.addInterface(intf);
-        }
+    if (myMemory.symbolExists("simRadioHWOn"))
+    if ( getInterfaces().getInterfaceOfType(ContikiRadio.class) == null )
+    {
+        /* if firmware have radio, should provide it, 
+         * since radio firmware have blocking operations*/
+        logger.info("mote"+ getID() + " firmware have radio");
+        addInterface("org.contikios.cooja.contikimote.interfaces.ContikiRadio");
     }
 
     requestImmediateWakeup();
     return true;
+  }
+
+  public
+  MoteInterface addInterface(final String typeName) {
+      //looks tis is old project, that use ContikiRS232 combined SerialPort with Log
+      //So load ContikiLog for this project, since now it deployed from ContikiRS232
+      Class<? extends MoteInterface> moteInterfaceClass =
+              simulation.getCooja().tryLoadClass(this, MoteInterface.class, typeName);
+
+      if (moteInterfaceClass == null) {
+        logger.fatal("Could not append mote interface class: " + typeName);
+        return null;
+      }
+      else {
+          logger.info("Append mote interface class: " + typeName);
+          MoteInterface intf = MoteInterface.generateInterface(moteInterfaceClass, this);
+          myInterfaceHandler.addInterface(intf);
+          return intf;
+      }
   }
 
   @Override
