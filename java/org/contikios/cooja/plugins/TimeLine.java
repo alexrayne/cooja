@@ -77,6 +77,9 @@ import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import javax.swing.ButtonGroup;
+import javax.swing.JRadioButtonMenuItem;
+import javax.swing.JSeparator;
 
 import org.apache.log4j.Logger;
 import org.jdom.Element;
@@ -118,6 +121,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
 
   private static final Color COLOR_BACKGROUND = Color.WHITE;
   private static final boolean PAINT_ZERO_WIDTH_EVENTS = true;
+  private static final int PAINT_MIN_WIDTH_EVENTS = 5;
   private static final int TIMELINE_UPDATE_INTERVAL = 100;
 
   private double currentPixelDivisor = 200;
@@ -132,6 +136,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
   private static Logger logger = Logger.getLogger(TimeLine.class);
 
   private int paintedMoteHeight = EVENT_PIXEL_HEIGHT;
+  private int paintEventMinWidth = PAINT_MIN_WIDTH_EVENTS;
 
   private Simulation simulation;
   private LogOutputListener newMotesListener;
@@ -205,6 +210,14 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
       		return executionDetails;
 	    }
     });
+    viewMenu.add(new JSeparator());
+    ButtonGroup minEvWidthButtonGroup = new ButtonGroup();
+    for ( int s : new int[]{1,5,10} ) {
+        JRadioButtonMenuItem evwidthMenuItemN = new JRadioButtonMenuItem(
+                new ChangeMinEventWidthAction("min event width "+s, s));
+        minEvWidthButtonGroup.add(evwidthMenuItemN);
+        viewMenu.add(evwidthMenuItemN);
+    }
 
     fileMenu.add(new JMenuItem(saveDataAction));
     fileMenu.add(new JMenuItem(statisticsAction));
@@ -644,6 +657,18 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
         pixelX = mousePixelPositionX;
       }
       return (long) (pixelX*currentPixelDivisor);
+  }
+
+  private class ChangeMinEventWidthAction extends AbstractAction {
+      private int minWidth;
+      public ChangeMinEventWidthAction(String name, int minWidth) {
+        super(name);
+        this.minWidth = minWidth;
+      }
+      public void actionPerformed(ActionEvent e) {
+          paintEventMinWidth = minWidth;
+          timeline.repaint();
+      }
   }
 
   /**
@@ -1964,6 +1989,9 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
           }
         }
 
+        if( w < paintEventMinWidth)
+            w = paintEventMinWidth;
+
         Color color = ev.getEventColor();
         if (color == null) {
           /* Skip painting event */
@@ -2247,6 +2275,9 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
             continue;
           }
         }
+
+        if( w < paintEventMinWidth)
+            w = paintEventMinWidth;
 
         Color color = ev.getEventColor();
         if (color == null) {
