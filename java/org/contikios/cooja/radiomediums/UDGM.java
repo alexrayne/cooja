@@ -163,6 +163,19 @@ public class UDGM extends AbstractRadioMedium {
     dgrm.requestEdgeAnalysis();
   }
 
+  public double signalPowerFactorTo(Radio sender, Radio dstRadio) {
+      double dist = sender.getPosition().getDistanceTo(dstRadio.getPosition());
+
+      double maxTxDist = TRANSMITTING_RANGE
+      * ((double) sender.getCurrentOutputPowerIndicator() / (double) sender.getOutputPowerIndicatorMax());
+
+      if (maxTxDist == 0.0)
+    	  return 0.0;
+      
+      double distFactor = dist/maxTxDist;
+      return distFactor;
+  }
+  
   public RadioConnection createConnections(Radio sender) {
     RadioConnection newConnection = new RadioConnection(sender);
 
@@ -172,10 +185,9 @@ public class UDGM extends AbstractRadioMedium {
     }
 
     /* Calculate ranges: grows with radio output power */
-    double moteTransmissionRange = TRANSMITTING_RANGE
-    * ((double) sender.getCurrentOutputPowerIndicator() / (double) sender.getOutputPowerIndicatorMax());
-    double moteInterferenceRange = INTERFERENCE_RANGE
-    * ((double) sender.getCurrentOutputPowerIndicator() / (double) sender.getOutputPowerIndicatorMax());
+    double powerRate = ((double) sender.getCurrentOutputPowerIndicator() / (double) sender.getOutputPowerIndicatorMax()); 
+    double moteTransmissionRange = TRANSMITTING_RANGE * powerRate;
+    double moteInterferenceRange = INTERFERENCE_RANGE * powerRate;
 
     /* Get all potential destination radios */
     DestinationRadio[] potentialDestinations = dgrm.getPotentialDestinations(sender);
@@ -189,9 +201,7 @@ public class UDGM extends AbstractRadioMedium {
       Radio recv = dest.radio;
 
       /* Fail if radios are on different (but configured) channels */ 
-      if (sender.getChannel() >= 0 &&
-          recv.getChannel() >= 0 &&
-          sender.getChannel() != recv.getChannel()) {
+      if ( not_same_chanel(sender, recv) ) {
 
         /* Add the connection in a dormant state;
            it will be activated later when the radio will be
@@ -201,6 +211,7 @@ public class UDGM extends AbstractRadioMedium {
 
         continue;
       }
+
       Position recvPos = recv.getPosition();
 
       /* Fail if radio is turned off */
@@ -262,16 +273,15 @@ public class UDGM extends AbstractRadioMedium {
   public double getTxSuccessProbability(Radio source) {
     return SUCCESS_RATIO_TX;
   }
+  
   public double getRxSuccessProbability(Radio source, Radio dest) {
-  	double distance = source.getPosition().getDistanceTo(dest.getPosition());
-    double distanceSquared = Math.pow(distance,2.0);
-    double distanceMax = TRANSMITTING_RANGE * 
-    ((double) source.getCurrentOutputPowerIndicator() / (double) source.getOutputPowerIndicatorMax());
-    if (distanceMax == 0.0) {
-      return 0.0;
-    }
-    double distanceMaxSquared = Math.pow(distanceMax,2.0);
-    double ratio = distanceSquared / distanceMaxSquared;
+    
+    double ratio = signalPowerFactorTo(source, dest); 
+    if (ratio == 0.0) {
+        return 0.0;
+      }
+
+    ratio = ratio* ratio;
     if (ratio > 1.0) {
     	return 0.0;
     }
@@ -289,54 +299,37 @@ public class UDGM extends AbstractRadioMedium {
     /* Set signal strength to below strong on destinations */
     RadioConnection[] conns = getActiveConnections();
     for (RadioConnection conn : conns) {
-      if (conn.getSource().getCurrentSignalStrength() < SS_STRONG) {
-        conn.getSource().setCurrentSignalStrength(SS_STRONG);
-      }
+      Radio source = conn.getSource(); 
+      strength_powerup(source, SS_STRONG);
+
       for (Radio dstRadio : conn.getDestinations()) {
-        if (conn.getSource().getChannel() >= 0 &&
-            dstRadio.getChannel() >= 0 &&
-            conn.getSource().getChannel() != dstRadio.getChannel()) {
-          continue;
-        }
+        if ( not_same_chanel( source, dstRadio) ) continue;
 
-        double dist = conn.getSource().getPosition().getDistanceTo(dstRadio.getPosition());
-
-        double maxTxDist = TRANSMITTING_RANGE
-        * ((double) conn.getSource().getCurrentOutputPowerIndicator() / (double) conn.getSource().getOutputPowerIndicatorMax());
-        double distFactor = dist/maxTxDist;
-
+        double distFactor = signalPowerFactorTo(source, dstRadio);
         double signalStrength = SS_STRONG + distFactor*(SS_WEAK - SS_STRONG);
-        if (dstRadio.getCurrentSignalStrength() < signalStrength) {
-          dstRadio.setCurrentSignalStrength(signalStrength);
-        }
+
+        strength_powerup(dstRadio, signalStrength);
       }
     }
 
     /* Set signal strength to below weak on interfered */
     for (RadioConnection conn : conns) {
+      Radio source = conn.getSource(); 
       for (Radio intfRadio : conn.getInterfered()) {
-        if (conn.getSource().getChannel() >= 0 &&
-            intfRadio.getChannel() >= 0 &&
-            conn.getSource().getChannel() != intfRadio.getChannel()) {
-          continue;
-        }
+        if ( not_same_chanel(source, intfRadio) )  continue;
 
-        double dist = conn.getSource().getPosition().getDistanceTo(intfRadio.getPosition());
-
-        double maxTxDist = TRANSMITTING_RANGE
-        * ((double) conn.getSource().getCurrentOutputPowerIndicator() / (double) conn.getSource().getOutputPowerIndicatorMax());
-        double distFactor = dist/maxTxDist;
+        double distFactor = signalPowerFactorTo(source, intfRadio);
 
         if (distFactor < 1) {
+        	
           double signalStrength = SS_STRONG + distFactor*(SS_WEAK - SS_STRONG);
-          if (intfRadio.getCurrentSignalStrength() < signalStrength) {
-            intfRadio.setCurrentSignalStrength(signalStrength);
-          }
+          strength_powerup(intfRadio, signalStrength);
+          
         } else {
+        	
           intfRadio.setCurrentSignalStrength(SS_WEAK);
-          if (intfRadio.getCurrentSignalStrength() < SS_WEAK) {
-            intfRadio.setCurrentSignalStrength(SS_WEAK);
-          }
+          strength_powerup(intfRadio, SS_WEAK);	// WT ? why set twice?
+          
         }
 
         if (!intfRadio.isInterfered()) {

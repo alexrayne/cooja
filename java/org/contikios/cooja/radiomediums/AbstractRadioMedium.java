@@ -133,7 +133,21 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 	 * @return New connection
 	 */
 	abstract public RadioConnection createConnections(Radio radio);
-	
+
+	protected void strength_powerup(Radio dstRadio, double signalStrength) {
+		if (dstRadio.getCurrentSignalStrength() < signalStrength) {
+			dstRadio.setCurrentSignalStrength(signalStrength);
+		}
+	}
+
+	/* Fail if radios are on different (but configured) channels */
+	protected boolean not_same_chanel(Radio sender, Radio recv) {
+		return sender.getChannel() >= 0 &&
+				recv.getChannel() >= 0 &&
+				sender.getChannel() != recv.getChannel();
+	}
+
+
 	/**
 	 * Updates all radio interfaces' signal strengths according to
 	 * the current active connections.
@@ -148,32 +162,25 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 		/* Set signal strength to strong on destinations */
 		RadioConnection[] conns = getActiveConnections();
 		for (RadioConnection conn : conns) {
-			if (conn.getSource().getCurrentSignalStrength() < SS_STRONG) {
-				conn.getSource().setCurrentSignalStrength(SS_STRONG);
-			}
+			Radio source = conn.getSource();
+			strength_powerup(source, SS_STRONG);
+
 			for (Radio dstRadio : conn.getDestinations()) {
-				if (conn.getSource().getChannel() >= 0 &&
-						dstRadio.getChannel() >= 0 &&
-						conn.getSource().getChannel() != dstRadio.getChannel()) {
-					continue;
-				}
-				if (dstRadio.getCurrentSignalStrength() < SS_STRONG) {
-					dstRadio.setCurrentSignalStrength(SS_STRONG);
-				}
+				if (not_same_chanel(source, dstRadio ) ) continue;
+
+				strength_powerup(dstRadio, SS_STRONG);
 			}
 		}
 		
 		/* Set signal strength to weak on interfered */
 		for (RadioConnection conn : conns) {
+			Radio source = conn.getSource();
+			
 			for (Radio intfRadio : conn.getInterfered()) {
-				if (intfRadio.getCurrentSignalStrength() < SS_STRONG) {
-					intfRadio.setCurrentSignalStrength(SS_STRONG);
-				}
-				if (conn.getSource().getChannel() >= 0 &&
-						intfRadio.getChannel() >= 0 &&
-						conn.getSource().getChannel() != intfRadio.getChannel()) {
-					continue;
-				}
+				strength_powerup(intfRadio, SS_STRONG);
+
+				if (not_same_chanel(source, intfRadio ) ) continue;
+
 				if (!intfRadio.isInterfered()) {
 					/*logger.warn("Radio was not interfered");*/
 					intfRadio.interfereAnyReception();
@@ -189,7 +196,7 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 	 *
 	 * @param radio Radio
 	 */
-	private void removeFromActiveConnections(Radio radio) {
+	protected void removeFromActiveConnections(Radio radio) {
 		/* This radio must not be a connection source */
 		RadioConnection connection = getActiveConnectionFrom(radio);
 		if (connection != null) {
@@ -207,7 +214,7 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 		}
 	}
 	
-	private RadioConnection getActiveConnectionFrom(Radio source) {
+	protected RadioConnection getActiveConnectionFrom(Radio source) {
 		for (RadioConnection conn : activeConnections) {
 			if (conn.getSource() == source) {
 				return conn;
