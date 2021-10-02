@@ -1175,15 +1175,18 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
                           ? RXTXRadioEvent.TRANSMITTING
                           : RXTXRadioEvent.INTERFERED
                   );
+              ev.rssi = moteRadio.getCurrentOutputPower();
             } else if (!moteRadio.isRadioOn()) {
               ev = new RadioRXTXEvent(
                   simulation.getSimulationTime(), RXTXRadioEvent.IDLE);
             } else if (moteRadio.isInterfered()) {
               ev = new RadioRXTXEvent(
                   simulation.getSimulationTime(), RXTXRadioEvent.INTERFERED);
+              ev.rssi = moteRadio.getCurrentSignalStrength();
             } else if (moteRadio.isReceiving()) {
               ev = new RadioRXTXEvent(
                   simulation.getSimulationTime(), RXTXRadioEvent.RECEIVING);
+              ev.rssi = moteRadio.getCurrentSignalStrength();
             } else {
               ev = new RadioRXTXEvent(
                   simulation.getSimulationTime(), RXTXRadioEvent.IDLE);
@@ -2062,6 +2065,8 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
   }
   class RadioRXTXEvent extends MoteEvent {
     RXTXRadioEvent state = null;
+    double  rssi;
+    
     public RadioRXTXEvent(long time, RXTXRadioEvent ev) {
       super(time);
       this.state = ev;
@@ -2101,15 +2106,23 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
         return null;
       }
     }
+    
+    private String labelRSSI() {
+    	  return String.format("(%1.1fdBm)", rssi);
+    }
+    
     public String toString() {
       if (state == RXTXRadioEvent.IDLE) {
         return "Radio idle from " + time + "<br>";
       } else if (state == RXTXRadioEvent.TRANSMITTING) {
-      	return "Radio transmitting from " + time + "<br>";
+      	return "Radio transmitting from " + time + "<br>"
+      			+ labelRSSI() + "<br>";
       } else if (state == RXTXRadioEvent.RECEIVING) {
-        return "Radio receiving from " + time + "<br>";
+        return "Radio receiving from " + time + "<br>"
+			+ labelRSSI() + "<br>";
       } else if (state == RXTXRadioEvent.INTERFERED) {
-        return "Radio interfered from " + time + "<br>";
+        return "Radio interfered from " + time + "<br>"
+			+ labelRSSI() + "<br>";
       } else {
         return "Unknown event<br>";
       }
@@ -2191,6 +2204,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
   class RadioChannelEvent extends MoteEvent {
     int channel;
     boolean radioOn;
+    
     public RadioChannelEvent(long time, int channel, boolean radioOn) {
       super(time);
       this.channel = channel;

@@ -235,10 +235,10 @@ public class RadioLogger extends VisPlugin
             return "-";
           }
           if (dests.length == 1) {
-            return "" + dests[0].getMote().getID();
+            return conn.labelMoteRSSI(0);
           }
           if (dests.length == 2) {
-            return "" + dests[0].getMote().getID() + ',' + dests[1].getMote().getID();
+            return conn.labelMote(0) + ',' + conn.labelMote(1);
           }
           return "[" + dests.length + " d]";
         } else if (col == COLUMN_DATA) {
@@ -324,8 +324,10 @@ public class RadioLogger extends VisPlugin
           } else {
             tip.append(dests.length).append(" destinations:<br>");
           }
-          for (Radio radio: dests) {
-            tip.append(radio.getMote()).append("<br>");
+          for (int i =0; i < dests.length; ++i) {
+            tip.append(dests[i].getMote());
+            tip.append( labelRSSI(conn.conn_rssi[i]) );
+            tip.append("<br>");
           }
           tip.append("</html>");
           return tip.toString();
@@ -542,7 +544,9 @@ public class RadioLogger extends VisPlugin
           return;
         loggedConn.startTime = conn.getStartTime();
         loggedConn.endTime = simulation.getSimulationTime();
-        loggedConn.connection = conn;
+        loggedConn.connection   = conn;
+        loggedConn.conn_rssi    = conn.getDestinationsStrengths();
+        
         java.awt.EventQueue.invokeLater(new Runnable() {
           @Override
           public void run() {
@@ -617,6 +621,12 @@ public class RadioLogger extends VisPlugin
     searchField.setBackground(Color.RED);
   }
 
+  static private 
+  String labelRSSI(double rssi) {
+  	  return String.format("(%1.1fdBm)", rssi);
+  }
+
+ 
   /**
    * Selects a logged radio packet close to the given time.
    *
@@ -919,7 +929,30 @@ public class RadioLogger extends VisPlugin
               + getDestString(this) + "\t"
               + data;
     }
+
+    
+    double[]        conn_rssi;
+    private 
+    Radio[]         dests_cache;
+    
+    Radio	dest(int idx) {
+        if (dests_cache == null) {
+            dests_cache = connection.getDestinations();
+        }
+        return dests_cache[idx];
+    }
+
+    public 
+    String labelMote( int idx ) {
+  	    return  "" + dest(idx).getMote().getID();
+    }
+
+    public 
+    String labelMoteRSSI( int idx ) {
+  	    return  "" + dest(idx).getMote().getID() + labelRSSI(conn_rssi[idx]);
+    }
   }
+
 
   private static String getDestString(RadioConnectionLog c) {
     Radio[] dests = c.connection.getDestinations();
@@ -927,11 +960,11 @@ public class RadioLogger extends VisPlugin
       return "-";
     }
     if (dests.length == 1) {
-      return "" + dests[0].getMote().getID();
+      return c.labelMoteRSSI(0);
     }
     StringBuilder sb = new StringBuilder();
-    for (Radio dest: dests) {
-      sb.append(dest.getMote().getID()).append(',');
+    for (int i = 0; i < c.conn_rssi.length ; ++i) {
+      sb.append(c.labelMoteRSSI(i)).append(',');
     }
     sb.setLength(sb.length() - 1);
     return sb.toString();

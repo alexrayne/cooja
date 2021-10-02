@@ -207,6 +207,14 @@ public class RadioConnection {
   public Radio[] getDestinations() {
     return destinationsNonInterfered.toArray(new Radio[0]);
   }
+  
+  public double[]  getDestinationsStrengths() {
+	  double[] res = new double[ destinationsNonInterfered.size() ];
+	  for( int i = 0; i < destinationsNonInterfered.size(); ++i ) {
+		  res[i] = destinationsNonInterfered.get(i).getCurrentSignalStrength();
+	  }
+	  return res;
+  }
 
   /**
    * @see #getDestinations()
