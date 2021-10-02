@@ -241,6 +241,9 @@ public abstract class Radio extends MoteInterface {
    */
   public abstract Mote getMote();
 
+  static public String printStrength(double rssi) {
+	  return String.format("%1.1fdBm", rssi);
+  } 
 
   public JPanel getInterfaceVisualizer() {
     JPanel panel = new JPanel(new BorderLayout());
@@ -261,7 +264,7 @@ public abstract class Radio extends MoteInterface {
     updateButton.addActionListener(new ActionListener() {
       public void actionPerformed(ActionEvent e) {
         ssLabel.setText("Signal strength (not auto-updated): "
-            + String.format("%1.1f", getCurrentSignalStrength()) + " dBm");
+            + printStrength(getCurrentSignalStrength()) );
       }
     });
 
@@ -277,7 +280,7 @@ public abstract class Radio extends MoteInterface {
 
         lastEventLabel.setText("Last event: " + getLastEvent());
         ssLabel.setText("Signal strength (not auto-updated): "
-            + String.format("%1.1f", getCurrentSignalStrength()) + " dBm");
+            + printStrength(getCurrentSignalStrength()) );
         if (getChannel() == -1) {
           channelLabel.setText("Current channel: ALL");
         } else {
