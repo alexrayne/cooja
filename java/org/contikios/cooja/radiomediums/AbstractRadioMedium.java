@@ -30,6 +30,8 @@
 
 package org.contikios.cooja.radiomediums;
 
+import java.lang.Runnable;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -134,6 +136,7 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 	 */
 	abstract public RadioConnection createConnections(Radio radio);
 
+	final
 	protected void strength_powerup(Radio dstRadio, double signalStrength) {
 		if (dstRadio.getCurrentSignalStrength() < signalStrength) {
 			dstRadio.setCurrentSignalStrength(signalStrength);
@@ -141,6 +144,7 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 	}
 
 	/* Fail if radios are on different (but configured) channels */
+	final
 	protected boolean not_same_chanel(Radio sender, Radio recv) {
 		return sender.getChannel() >= 0 &&
 				recv.getChannel() >= 0 &&
@@ -223,6 +227,30 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 		return null;
 	}
 	
+	@FunctionalInterface
+	interface RadioMethod {
+	    // abstract method
+	    void run(Radio x);
+	}
+
+
+	protected void invokeRemote(RadioConnection connection,  Radio radio, RadioMethod action) {
+		long delay = connection.getDestinationDelay(radio);
+			if (delay == 0) {
+				action.run(radio);
+			} else {
+				
+				/* EXPERIMENTAL: Simulating propagation delay */
+				final Radio delayedRadio = radio;
+				TimeEvent delayedEvent = new TimeEvent() {
+					public void execute(long t) {
+						action.run(delayedRadio);
+					}
+				};
+				simulation.scheduleEvent(delayedEvent, simulation.getSimulationTime() + delay);
+			}
+	}
+
 	/**
 	 * This observer is responsible for detecting radio interface events, for example
 	 * new transmissions.
@@ -273,22 +301,12 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 					
 					RadioConnection newConnection = createConnections(radio);
 					activeConnections.add(newConnection);
-					
+
 					for (Radio r : newConnection.getAllDestinations()) {
-						if (newConnection.getDestinationDelay(r) == 0) {
-							r.signalReceptionStart();
-						} else {
-							/* EXPERIMENTAL: Simulating propagation delay */
-							final Radio delayedRadio = r;
-							TimeEvent delayedEvent = new TimeEvent() {
-								public void execute(long t) {
-									delayedRadio.signalReceptionStart();
-								}
-							};
-							simulation.scheduleEvent(delayedEvent, simulation.getSimulationTime() + newConnection.getDestinationDelay(r));
-							
-						}
-					} /* Update signal strengths */
+						invokeRemote(newConnection, r, (x)->{ x.signalReceptionStart(); } );
+					}
+					
+					/* Update signal strengths before reception start */
 					updateSignalStrengths();
 					
 					/* Notify observers */
@@ -310,20 +328,7 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 					lastConnection = connection;
 					COUNTER_TX++;
 					for (Radio dstRadio : connection.getAllDestinations()) {
-						if (connection.getDestinationDelay(dstRadio) == 0) {
-							dstRadio.signalReceptionEnd();
-						} else {
-							
-							/* EXPERIMENTAL: Simulating propagation delay */
-							final Radio delayedRadio = dstRadio;
-							TimeEvent delayedEvent = new TimeEvent() {
-								public void execute(long t) {
-									delayedRadio.signalReceptionEnd();
-								}
-							};
-							simulation.scheduleEvent(delayedEvent,
-									simulation.getSimulationTime() + connection.getDestinationDelay(dstRadio));
-						}
+						invokeRemote(connection, dstRadio, (x)->{ x.signalReceptionEnd(); } );
 					}
 					COUNTER_RX += connection.getDestinations().length;
 					COUNTER_INTERFERED += connection.getInterfered().length;
@@ -364,22 +369,14 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 							continue;
 						}
 						
-						if (connection.getDestinationDelay(dstRadio) == 0) {
-							((CustomDataRadio) dstRadio).receiveCustomData(data);
-						} else {
-							
-							/* EXPERIMENTAL: Simulating propagation delay */
-							final CustomDataRadio delayedRadio = (CustomDataRadio) dstRadio;
-							final Object delayedData = data;
-							TimeEvent delayedEvent = new TimeEvent() {
-								public void execute(long t) {
-									delayedRadio.receiveCustomData(delayedData);
-								}
-							};
-							simulation.scheduleEvent(delayedEvent,
-									simulation.getSimulationTime() + connection.getDestinationDelay(dstRadio));
-							
-						}
+						invokeRemote(connection, dstRadio, 
+								new RadioMethod() {
+										final Object xdata = data;
+										public void run( Radio x) {
+											((CustomDataRadio) x).receiveCustomData(xdata);
+										}
+									} 
+								);
 					}
 					
 				}
@@ -408,23 +405,15 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 					    continue;
 					  }
 
-						
-						/* Forward radio packet */
-						if (connection.getDestinationDelay(dstRadio) == 0) {
-							dstRadio.setReceivedPacket(packet);
-						} else {
-							
-							/* EXPERIMENTAL: Simulating propagation delay */
-							final Radio delayedRadio = dstRadio;
-							final RadioPacket delayedPacket = packet;
-							TimeEvent delayedEvent = new TimeEvent() {
-								public void execute(long t) {
-									delayedRadio.setReceivedPacket(delayedPacket);
+					
+					invokeRemote(connection, dstRadio, 
+							new RadioMethod() {
+								final RadioPacket xPacket = packet;
+								public void run( Radio x) {
+									x.setReceivedPacket(xPacket);
 								}
-							};
-							simulation.scheduleEvent(delayedEvent,
-									simulation.getSimulationTime() + connection.getDestinationDelay(dstRadio));
-						}
+							} 
+						);
 						
 					}
 				}
