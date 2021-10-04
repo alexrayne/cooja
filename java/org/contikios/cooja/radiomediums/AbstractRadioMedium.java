@@ -302,12 +302,12 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 					RadioConnection newConnection = createConnections(radio);
 					activeConnections.add(newConnection);
 
-					for (Radio r : newConnection.getAllDestinations()) {
-						invokeRemote(newConnection, r, (x)->{ x.signalReceptionStart(); } );
-					}
-					
 					/* Update signal strengths before reception start */
 					updateSignalStrengths();
+					
+					for (Radio r : newConnection.getAllDestinations()) {
+						invokeRemote(newConnection, r, (x)->{ x.signalReceptionStart(); } );
+					} 
 					
 					/* Notify observers */
 					lastConnection = null;
@@ -339,11 +339,14 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 					  }
 					}
 					
+					/* Notify observers */
+					// TODO: observers takes old signal strengs for last transmited - right before finished
+					//		this gives observers sence rssi for receivers.
+					radioTransmissionObservable.setChangedAndNotify();
+
 					/* Update signal strengths */
 					updateSignalStrengths();
 					
-					/* Notify observers */
-					radioTransmissionObservable.setChangedAndNotify();
 				}
 				break;
 				case CUSTOM_DATA_TRANSMITTED: {
