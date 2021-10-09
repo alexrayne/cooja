@@ -172,7 +172,7 @@ The COOJA Simulator
         <pathelement path="${build}"/>
         <pathelement location="lib/jdom.jar"/>
         <pathelement location="lib/log4j.jar"/>
-        <pathelement location="lib/jsyntaxpane.jar"/>
+        <pathelement location="lib/syntaxpane-1.2.0.jar"/>
         <pathelement location="lib/swingx-all-1.6.4.jar"/>
       </classpath>
     </java>
