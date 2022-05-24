@@ -47,7 +47,8 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 import org.jdom.Element;
 
 import org.contikios.cooja.ClassDescription;
@@ -77,7 +78,7 @@ import org.contikios.cooja.interfaces.Radio;
 public class EventListener extends VisPlugin {
   private static final long serialVersionUID = 1L;
 
-  private static Logger logger = Logger.getLogger(EventListener.class);
+  private static final Logger logger = LogManager.getLogger(EventListener.class);
 
   private Simulation mySimulation;
 
@@ -93,7 +94,7 @@ public class EventListener extends VisPlugin {
 
   private JPanel generalPanel = null;
 
-  protected abstract class EventObserver implements Observer {
+  protected abstract static class EventObserver implements Observer {
     protected Observable myObservation = null;
 
     protected EventListener myParent = null;
@@ -128,6 +129,7 @@ public class EventListener extends VisPlugin {
       myMote = mote;
     }
 
+    @Override
     public void update(Observable obs, Object obj) {
       final MoteInterface moteInterface = (MoteInterface) obs;
       int moteID = myMote.getID();
@@ -137,6 +139,7 @@ public class EventListener extends VisPlugin {
           + "'" + " changed at time "
           + myParent.mySimulation.getSimulationTime(), new AbstractAction(
           "View interface visualizer") {
+        @Override
         public void actionPerformed(ActionEvent e) {
           MoteInterfaceViewer plugin =
             (MoteInterfaceViewer) mySimulation.getCooja().tryStartPlugin(
@@ -152,6 +155,7 @@ public class EventListener extends VisPlugin {
       super(parent, objectToObserve);
     }
 
+    @Override
     public void update(Observable obs, Object obj) {
       myParent.actOnChange("'" + Cooja.getDescriptionOf(obs.getClass()) + "'"
           + " changed at time " + myParent.mySimulation.getSimulationTime(),
@@ -263,6 +267,7 @@ public class EventListener extends VisPlugin {
     mySimulation.stopSimulation();
 
     SwingUtilities.invokeLater(new Runnable() {
+      @Override
       public void run() {
         messageLabel.setText(message);
         actionButton.setAction(action);
@@ -272,6 +277,7 @@ public class EventListener extends VisPlugin {
   }
 
   private ActionListener interfaceCheckBoxListener = new ActionListener() {
+    @Override
     public void actionPerformed(ActionEvent e) {
       Class<? extends MoteInterface> interfaceClass = (Class<? extends MoteInterface>) ((JCheckBox) e
           .getSource()).getClientProperty("interface_class");
@@ -302,6 +308,7 @@ public class EventListener extends VisPlugin {
   };
 
   private ActionListener generalCheckBoxListener = new ActionListener() {
+    @Override
     public void actionPerformed(ActionEvent e) {
       Observable observable = (Observable) ((JCheckBox) e.getSource())
           .getClientProperty("observable");
@@ -322,6 +329,7 @@ public class EventListener extends VisPlugin {
     }
   };
 
+  @Override
   public void closePlugin() {
     // Remove all existing observers
     for (EventObserver obs : allObservers) {
@@ -329,6 +337,7 @@ public class EventListener extends VisPlugin {
     }
   }
 
+  @Override
   public Collection<Element> getConfigXML() {
     Vector<Element> config = new Vector<Element>();
 
@@ -361,6 +370,7 @@ public class EventListener extends VisPlugin {
     return config;
   }
 
+  @Override
   public boolean setConfigXML(Collection<Element> configXML, boolean visAvailable) {
 
     /* Load general observers */

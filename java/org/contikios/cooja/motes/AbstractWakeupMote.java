@@ -30,7 +30,8 @@ package org.contikios.cooja.motes;
 
 import java.util.HashMap;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteTimeEvent;
@@ -38,13 +39,14 @@ import org.contikios.cooja.Simulation;
 import org.contikios.cooja.TimeEvent;
 
 public abstract class AbstractWakeupMote implements Mote {
-  private static Logger logger = Logger.getLogger(AbstractWakeupMote.class);
-  
+  private static final Logger logger = LogManager.getLogger(AbstractWakeupMote.class);
+
   protected Simulation simulation = null;
 
   private long nextWakeupTime = -1;
 
   private final TimeEvent executeMoteEvent = new MoteTimeEvent(this) {
+    @Override
     public void execute(long t) {
       AbstractWakeupMote.this.execute(t);
     }
@@ -53,11 +55,12 @@ public abstract class AbstractWakeupMote implements Mote {
         AbstractWakeupMote.this.kill();
     }
     public String toString() {
-      return "EXECUTE " + this.getClass().getName();
+      return "EXECUTE " + AbstractWakeupMote.this.getClass().getName();
     }
   };
 
   
+  @Override
   public Simulation getSimulation() {
       return simulation;
   }
@@ -95,22 +98,24 @@ public abstract class AbstractWakeupMote implements Mote {
       /* Schedule wakeup immediately */
       scheduleNextWakeup(t);
     }
-
-    /* Schedule wakeup asap */
-    simulation.invokeSimulationThread(new Runnable() {
-      public void run() {
+    else {
+      /* Schedule wakeup asap */
+      simulation.invokeSimulationThread(new Runnable() {
+        @Override
+        public void run() {
           scheduleNextWakeup(t);
-      }
-    });
+        }
+      });
+    }
   }
 
   /**
    * @return Next wakeup time, or -1 if not scheduled
    */
   public long getNextWakeupTime() {
-	  if (!executeMoteEvent.isScheduled()) {
-		  return -1;
-	  }
+    if (!executeMoteEvent.isScheduled()) {
+      return -1;
+    }
     return nextWakeupTime;
   }
   
@@ -147,16 +152,19 @@ public abstract class AbstractWakeupMote implements Mote {
     return true;
   }
 
+  @Override
   public void removed() {
   }
   
   private HashMap<String, Object> properties = null;
+  @Override
   public void setProperty(String key, Object obj) {
     if (properties == null) {
       properties = new HashMap<String, Object>();
     }
     properties.put(key, obj);
   }
+  @Override
   public Object getProperty(String key) {
     if (properties == null) {
       return null;

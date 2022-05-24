@@ -35,7 +35,8 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Point;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Mote;
@@ -52,26 +53,31 @@ import org.contikios.cooja.plugins.VisualizerSkin;
  */
 @ClassDescription("Mote IDs")
 public class IDVisualizerSkin implements VisualizerSkin {
-  private static Logger logger = Logger.getLogger(IDVisualizerSkin.class);
+  private static final Logger logger = LogManager.getLogger(IDVisualizerSkin.class);
 
   private Simulation simulation = null;
   private Visualizer visualizer = null;
 
+  @Override
   public void setActive(Simulation simulation, Visualizer vis) {
     this.simulation = simulation;
     this.visualizer = vis;
   }
 
+  @Override
   public void setInactive() {
   }
 
+  @Override
   public Color[] getColorOf(Mote mote) {
     return null;
   }
 
+  @Override
   public void paintBeforeMotes(Graphics g) {
   }
 
+  @Override
   public void paintAfterMotes(Graphics g) {
     FontMetrics fm = g.getFontMetrics();
     g.setColor(Color.BLACK);
@@ -88,6 +94,7 @@ public class IDVisualizerSkin implements VisualizerSkin {
     }
   }
 
+  @Override
   public Visualizer getVisualizer() {
     return visualizer;
   }

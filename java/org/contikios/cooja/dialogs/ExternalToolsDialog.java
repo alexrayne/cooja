@@ -35,6 +35,7 @@ import java.awt.event.*;
 import java.io.File;
 import javax.swing.*;
 import org.apache.log4j.Logger;
+import org.apache.log4j.LogManager;
 
 import org.contikios.cooja.*;
 
@@ -46,7 +47,7 @@ import org.contikios.cooja.*;
  */
 public class ExternalToolsDialog extends JDialog {
   private static final long serialVersionUID = 1L;
-  private static Logger logger = Logger.getLogger(ExternalToolsDialog.class);
+  private static final Logger logger = LogManager.getLogger(ExternalToolsDialog.class);
 
   private ExternalToolsEventHandler myEventHandler = new ExternalToolsEventHandler();
 
@@ -64,10 +65,6 @@ public class ExternalToolsDialog extends JDialog {
    *          Parent container for dialog
    */
   public static void showDialog(Container parentContainer) {
-    if (Cooja.isVisualizedInApplet()) {
-      return;
-    }
-
     ExternalToolsDialog myDialog = null;
     if (parentContainer instanceof Window) {
       myDialog = new ExternalToolsDialog((Window) parentContainer);
@@ -136,17 +133,6 @@ public class ExternalToolsDialog extends JDialog {
     // Some explanations
     Box explanations = Box.createVerticalBox();
     explanations.add(new JLabel("Special variables used in COMPILER_ARGS, LINK_COMMAND_[12] and AR_COMMAND_[12]:"));
-    String javaHome = System.getenv().get("JAVA_HOME");
-    if (javaHome != null) {
-      javaHome = javaHome.replace(File.separatorChar, '/');
-      JLabel javaHomeLabel = new JLabel("  $(JAVA_HOME) maps to the environment Java home: " + javaHome);
-      explanations.add(javaHomeLabel);
-    } else {
-      javaHome = "[null]";
-      JLabel javaHomeLabel = new JLabel("  $(JAVA_HOME) maps to the environment Java home: " + javaHome);
-      javaHomeLabel.setForeground(Color.RED);
-      explanations.add(javaHomeLabel);
-    }
     explanations.add(new JLabel("  $(LIBFILE) maps to the current library file being created (\"mtype1.library\")"));
     explanations.add(new JLabel("  $(MAPFILE) maps to the current map file being created (\"mtype1.map\")"));
     explanations.add(new JLabel("  $(ARFILE) maps to the current archive file being created (\"mtype1.a\")"));
@@ -217,12 +203,15 @@ public class ExternalToolsDialog extends JDialog {
       implements
         ActionListener,
         FocusListener {
+    @Override
     public void focusGained(FocusEvent e) {
       // NOP
     }
+    @Override
     public void focusLost(FocusEvent e) {
       compareWithDefaults();
     }
+    @Override
     public void actionPerformed(ActionEvent e) {
       if (e.getActionCommand().equals("reset")) {
         Cooja.loadExternalToolsDefaultSettings();

@@ -36,7 +36,8 @@ import java.util.Observable;
 import java.util.Observer;
 import java.util.Vector;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 import org.jdom.Element;
 
 import org.contikios.cooja.MoteType.MoteTypeCreationException;
@@ -53,7 +54,7 @@ import org.contikios.cooja.util.ArrayUtils;
  * @author Fredrik Osterlind
  */
 public class SimEventCentral {
-  private static Logger logger = Logger.getLogger(SimEventCentral.class);
+  private static final Logger logger = LogManager.getLogger(SimEventCentral.class);
 
   private Simulation simulation;
 
@@ -96,6 +97,7 @@ public class SimEventCentral {
       return time;
     }
 
+    @Override
     public String toString() {
       return "" + ID;
     }
@@ -132,6 +134,7 @@ public class SimEventCentral {
   }
   private MoteCountListener[] moteCountListeners;
   private Observer moteCountObserver = new Observer() {
+    @Override
     public void update(Observable obs, Object obj) {
       if (obj == null || !(obj instanceof Mote)) {
         return;
@@ -204,6 +207,7 @@ public class SimEventCentral {
   }
   private LogOutputListener[] logOutputListeners;
   private Observer logOutputObserver = new Observer() {
+    @Override
     public void update(Observable obs, Object obj) {
       Mote mote = (Mote) obj;
       String msg = ((Log) obs).getLastLogMessage();
@@ -332,6 +336,7 @@ public class SimEventCentral {
     }
   }
 
+  @Override
   public String toString() {
     return 
     "\nActive mote observations: " + moteObservations.size() +

@@ -58,7 +58,8 @@ import javax.swing.JLabel;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.RadioMedium;
@@ -71,7 +72,7 @@ import org.contikios.cooja.Simulation;
  */
 public class CreateSimDialog extends JDialog {
   private static final long serialVersionUID = 1L;
-  private static Logger logger = Logger.getLogger(CreateSimDialog.class);
+  private static final Logger logger = LogManager.getLogger(CreateSimDialog.class);
 
   private final static int LABEL_WIDTH = 170;
   private final static int LABEL_HEIGHT = 25;
@@ -97,6 +98,7 @@ public class CreateSimDialog extends JDialog {
     final CreateSimDialog dialog = new CreateSimDialog((Window) parent, simulation.getCooja());
     dialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
     dialog.addWindowListener(new WindowAdapter() {
+      @Override
       public void windowClosing(WindowEvent e) {
         dialog.cancelButton.doClick();
       }
@@ -152,6 +154,7 @@ public class CreateSimDialog extends JDialog {
     InputMap inputMap = dialog.getRootPane().getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
     inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0, false), "dispose");
     AbstractAction cancelAction = new AbstractAction(){
+      @Override
       public void actionPerformed(ActionEvent e) {
         dialog.cancelButton.doClick();
       }
@@ -188,6 +191,7 @@ public class CreateSimDialog extends JDialog {
 
     cancelButton = new JButton("Cancel");
     cancelButton.addActionListener(new ActionListener() {
+      @Override
       public void actionPerformed(ActionEvent e) {
         mySimulation = null;
         dispose();
@@ -304,6 +308,7 @@ public class CreateSimDialog extends JDialog {
     randomSeedGenerated = new JCheckBox();
     randomSeedGenerated.setToolTipText("Automatically generate random seed at simulation load");
     randomSeedGenerated.addActionListener(new ActionListener() {
+      @Override
       public void actionPerformed(ActionEvent e) {
         if (((JCheckBox)e.getSource()).isSelected()) {
           randomSeed.setEnabled(false);
@@ -336,6 +341,7 @@ public class CreateSimDialog extends JDialog {
   }
 
   private ActionListener createSimulationListener = new ActionListener() {
+    @Override
     public void actionPerformed(ActionEvent e) {
       mySimulation.setTitle(title.getText());
 

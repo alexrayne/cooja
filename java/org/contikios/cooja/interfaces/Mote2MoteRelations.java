@@ -40,7 +40,8 @@ import javax.swing.BoxLayout;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 import org.jdom.Element;
 
 import org.contikios.cooja.ClassDescription;
@@ -75,13 +76,14 @@ import org.contikios.cooja.SimEventCentral.MoteCountListener;
  */
 @ClassDescription("Mote2Mote Relations")
 public class Mote2MoteRelations extends MoteInterface {
-  private static Logger logger = Logger.getLogger(Mote2MoteRelations.class);
+  private static final Logger logger = LogManager.getLogger(Mote2MoteRelations.class);
   private Mote mote = null;
 
   private ArrayList<Mote> relations = new ArrayList<Mote>();
   private Cooja gui;
 
   private Observer logObserver = new Observer() {
+    @Override
     public void update(Observable o, Object arg) {
       String msg = ((Log) o).getLastLogMessage();
       handleNewLog(msg);
@@ -95,6 +97,7 @@ public class Mote2MoteRelations extends MoteInterface {
     this.gui = mote.getSimulation().getCooja();
   }
 
+  @Override
   public void added() {
     super.added();
     
@@ -107,9 +110,11 @@ public class Mote2MoteRelations extends MoteInterface {
 
     /* Observe other motes: if removed, remove our relations to them too */
     mote.getSimulation().getEventCentral().addMoteCountListener(moteCountListener = new MoteCountListener() {
+      @Override
       public void moteWasAdded(Mote mote) {
         /* Ignored */
       }
+      @Override
       public void moteWasRemoved(Mote mote) {
         /* This mote was removed - cleanup by removed() */
         if (Mote2MoteRelations.this.mote == mote) {
@@ -126,6 +131,7 @@ public class Mote2MoteRelations extends MoteInterface {
     });
   }
   
+  @Override
   public void removed() {
     super.removed();
 
@@ -238,6 +244,7 @@ public class Mote2MoteRelations extends MoteInterface {
     }
   }
 
+  @Override
   public JPanel getInterfaceVisualizer() {
     JPanel panel = new JPanel();
     panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
@@ -248,6 +255,7 @@ public class Mote2MoteRelations extends MoteInterface {
 
     Observer observer;
     this.addObserver(observer = new Observer() {
+      @Override
       public void update(Observable obs, Object obj) {
         countLabel.setText("Mote has " + relations.size() + " mote relations");
       }
@@ -259,6 +267,7 @@ public class Mote2MoteRelations extends MoteInterface {
     return panel;
   }
 
+  @Override
   public void releaseInterfaceVisualizer(JPanel panel) {
     Observer observer = (Observer) panel.getClientProperty("intf_obs");
     if (observer == null) {
@@ -268,10 +277,12 @@ public class Mote2MoteRelations extends MoteInterface {
     this.deleteObserver(observer);
   }
 
+  @Override
   public Collection<Element> getConfigXML() {
     return null;
   }
 
+  @Override
   public void setConfigXML(Collection<Element> configXML, boolean visAvailable) {
   }
 

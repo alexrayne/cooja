@@ -30,6 +30,10 @@
 
 package org.contikios.cooja.plugins;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.nio.file.StandardOpenOption.APPEND;
+import static java.nio.file.StandardOpenOption.CREATE;
+
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -49,12 +53,12 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.regex.PatternSyntaxException;
-
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.Box;
@@ -78,10 +82,8 @@ import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableModel;
 import javax.swing.table.TableRowSorter;
-
-import org.apache.log4j.Logger;
-import org.jdom.Element;
-
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.HasQuickHelp;
@@ -97,6 +99,7 @@ import org.contikios.cooja.dialogs.UpdateAggregator;
 import org.contikios.cooja.dialogs.HistoryUI;
 import org.contikios.cooja.util.ArrayQueue;
 import org.contikios.cooja.interfaces.TimeSelect;
+import org.jdom.Element;
 
 /**
  * A simple mote log listener.
@@ -109,7 +112,7 @@ import org.contikios.cooja.interfaces.TimeSelect;
 public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect 
 {
   private static final long serialVersionUID = 3294595371354857261L;
-  private static Logger logger = Logger.getLogger(LogListener.class);
+  private static final Logger logger = LogManager.getLogger(LogListener.class);
 
   private final Color[] BG_COLORS = new Color[] {
       new Color(200, 200, 200),
@@ -172,11 +175,13 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
   private static final int UPDATE_INTERVAL = 250;
   private UpdateAggregator<LogData> logUpdateAggregator = new UpdateAggregator<LogData>(UPDATE_INTERVAL) {
     private Runnable scroll = new Runnable() {
+      @Override
       public void run() {
         logTable.scrollRectToVisible(
             new Rectangle(0, logTable.getHeight() - 2, 1, logTable.getHeight()));
       }
     };
+    @Override
     protected void handle(List<LogData> ls) {
       boolean isVisible = true;
       if (logTable.getRowCount() > 0) {
@@ -241,6 +246,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
     colorCheckbox = new JCheckBoxMenuItem("Mote-specific coloring", backgroundColors);
     showMenu.add(colorCheckbox);
     colorCheckbox.addActionListener(new ActionListener() {
+      @Override
       public void actionPerformed(ActionEvent e) {
         backgroundColors = colorCheckbox.isSelected();
         repaint();
@@ -249,6 +255,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
     hideDebugCheckbox = new JCheckBoxMenuItem("Hide \"DEBUG: \" messages");
     showMenu.add(hideDebugCheckbox);
     hideDebugCheckbox.addActionListener(new ActionListener() {
+      @Override
       public void actionPerformed(ActionEvent e) {
         hideDebug = hideDebugCheckbox.isSelected();
         setFilter(getFilter());
@@ -258,6 +265,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
     inverseFilterCheckbox = new JCheckBoxMenuItem("Inverse filter");
     showMenu.add(inverseFilterCheckbox);
     inverseFilterCheckbox.addActionListener(new ActionListener() {
+      @Override
       public void actionPerformed(ActionEvent e) {
         inverseFilter = inverseFilterCheckbox.isSelected();
         if (inverseFilter) {
@@ -273,18 +281,22 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
     model = new AbstractTableModel() {
       private static final long serialVersionUID = 3065150390849332924L;
+      @Override
       public String getColumnName(int col) {
       	if (col == COLUMN_TIME && formatTimeString) {
     			return "Time";
       	}
         return COLUMN_NAMES[col];
       }
+      @Override
       public int getRowCount() {
         return logs.size();
       }
+      @Override
       public int getColumnCount() {
         return COLUMN_NAMES.length;
       }
+      @Override
       public Object getValueAt(int row, int col) {
         LogData log = logs.get(row);
         if (col == COLUMN_TIME) {
@@ -302,6 +314,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
     logTable = new JTable(model) {
       private static final long serialVersionUID = -930616018336483196L;
+      @Override
       public String getToolTipText(MouseEvent e) {
         java.awt.Point p = e.getPoint();
         int rowIndex = rowAtPoint(p);
@@ -328,6 +341,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
     };
     DefaultTableCellRenderer cellRenderer = new DefaultTableCellRenderer() {
       private static final long serialVersionUID = -340743275865216182L;
+      @Override
       public Component getTableCellRendererComponent(JTable table,
           Object value, boolean isSelected, boolean hasFocus, int row,
           int column) {
@@ -356,6 +370,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
     logTable.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
     logTable.setFont(new Font("Monospaced", Font.PLAIN, 12));
     logTable.addKeyListener(new KeyAdapter() {
+      @Override
       public void keyPressed(KeyEvent e) {
         if (e.getKeyCode() == KeyEvent.VK_SPACE) {
           showInAllAction.actionPerformed(null);
@@ -370,7 +385,8 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
     /* Toggle time format */
     logTable.getTableHeader().addMouseListener(new MouseAdapter() {
-    	public void mouseClicked(MouseEvent e) {
+      @Override
+      public void mouseClicked(MouseEvent e) {
         int colIndex = logTable.columnAtPoint(e.getPoint());
         int columnIndex = logTable.convertColumnIndexToModel(colIndex);
         if (columnIndex != COLUMN_TIME) {
@@ -382,8 +398,9 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 		});
     logTable.addMouseListener(new MouseAdapter() {
         long lastClick = -1;
-        
-    	public void mouseClicked(MouseEvent e) {
+
+      @Override
+      public void mouseClicked(MouseEvent e) {
         int colIndex = logTable.columnAtPoint(e.getPoint());
         int columnIndex = logTable.convertColumnIndexToModel(colIndex);
 
@@ -484,6 +501,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
         logs.add(data);
       }
       java.awt.EventQueue.invokeLater(new Runnable() {
+        @Override
         public void run() {
           model.fireTableDataChanged();
           logTable.scrollRectToVisible(
@@ -494,6 +512,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
     /* Column width adjustment */
     java.awt.EventQueue.invokeLater(new Runnable() {
+      @Override
       public void run() {
         /* Make sure this happens *after* adding history */
         adjuster.setDynamicAdjustment(true);
@@ -503,17 +522,21 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
     /* Start observing motes for new log output */
     logUpdateAggregator.start();
     simulation.getEventCentral().addLogOutputListener(logOutputListener = new LogOutputListener() {
+      @Override
       public void moteWasAdded(Mote mote) {
         /* Update title */
         updateTitle();
       }
+      @Override
       public void moteWasRemoved(Mote mote) {
         /* Update title */
         updateTitle();
       }
+      @Override
       public void newLogOutput(LogOutputEvent ev) {
         registerNewLogOutput(ev);
       }
+      @Override
       public void removedLogOutput(LogOutputEvent ev) {
       }
     });
@@ -527,6 +550,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
     filterPanel.add(filterLabel);
     filterPanel.add(filterTextField);
     filterTextField.addActionListener(new ActionListener() {
+      @Override
       public void actionPerformed(ActionEvent e) {
         String str = filterTextField.getText();
         filterHistory.add(str);
@@ -534,6 +558,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
         /* Autoscroll */
         SwingUtilities.invokeLater(new Runnable() {
+          @Override
           public void run() {
             int s = logTable.getSelectedRow();
             if (s < 0) {
@@ -598,6 +623,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
         + simulation.getEventCentral().getLogOutputObservationsCount() + " log interfaces");*/
   }
 
+  @Override
   public void closePlugin() {
     /* Stop observing motes */
     appendToFile(null, null);
@@ -605,6 +631,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
     simulation.getEventCentral().removeLogOutputListener(logOutputListener);
   }
 
+  @Override
   public Collection<Element> getConfigXML() {
     ArrayList<Element> config = new ArrayList<Element>();
     Element element;
@@ -641,12 +668,14 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
     return config;
   }
 
+  @Override
   public boolean setConfigXML(Collection<Element> configXML, boolean visAvailable) {
     for (Element element : configXML) {
       String name = element.getName();
       if ("filter".equals(name)) {
         final String str = element.getText();
         EventQueue.invokeLater(new Runnable() {
+          @Override
           public void run() {
             setFilter(str);
           }
@@ -698,7 +727,8 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
       	regexp = null;
       }
     	RowFilter<Object, Integer> wrapped = new RowFilter<Object, Integer>() {
-    		public boolean include(RowFilter.Entry<? extends Object, ? extends Integer> entry) {
+        @Override
+          public boolean include(RowFilter.Entry<? extends Object, ? extends Integer> entry) {
     		  if (regexp != null) {
     		        int row = entry.getIdentifier().intValue();
     		        LogData log = logs.get(row);
@@ -719,7 +749,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
     				}
     			}
     			return true;
-    		}
+          }
     	};
       logFilter.setRowFilter(wrapped);
       filterTextField.setBackground(filterTextFieldBackground);
@@ -734,6 +764,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
   public void trySelectTime(final long time) {
     java.awt.EventQueue.invokeLater(new Runnable() {
+      @Override
       public void run() {
         for (int i=0; i < logs.size(); i++) {
           if (logs.get(i).ev.getTime() < time) {
@@ -791,6 +822,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
   private Action saveAction = new AbstractAction("Save to file") {
     private static final long serialVersionUID = -4140706275748686944L;
 
+    @Override
     public void actionPerformed(ActionEvent e) {
       JFileChooser fc = new JFileChooser();
       File suggest = new File(Cooja.getExternalToolsSetting("LOG_LISTENER_SAVEFILE", "loglistener.txt"));
@@ -822,7 +854,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
       }
 
       try {
-        PrintWriter outStream = new PrintWriter(new FileWriter(saveFile));
+        PrintWriter outStream = new PrintWriter(Files.newBufferedWriter(saveFile.toPath(), UTF_8));
         for(LogData data : logs) {
           outStream.println(
               data.getTime() + "\t" +
@@ -858,7 +890,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
           appendStream.close();
           appendStream = null;
         }
-        appendStream = new PrintWriter(new FileWriter(file,true));
+        appendStream = new PrintWriter(Files.newBufferedWriter(file.toPath(), UTF_8, CREATE, APPEND));
         appendStreamFile = file;
         appendToFileWroteHeader = false;
       } catch (Exception ex) {
@@ -880,6 +912,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
   private Action appendAction = new AbstractAction("Append to file") {
     private static final long serialVersionUID = -3041714249257346688L;
+    @Override
     public void actionPerformed(ActionEvent e) {
       JCheckBoxMenuItem cb = (JCheckBoxMenuItem) e.getSource();
       appendToFile = cb.isSelected();
@@ -920,6 +953,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
   private Action timeLineAction = new AbstractAction("Timeline") {
     private static final long serialVersionUID = -6358463434933029699L;
+    @Override
     public void actionPerformed(ActionEvent e) {
       focusTimePlugins(TimeLine.class);
     }
@@ -927,6 +961,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
   private Action radioLoggerAction = new AbstractAction("Radio Logger") {
     private static final long serialVersionUID = -3041714249257346688L;
+    @Override
     public void actionPerformed(ActionEvent e) {
       focusTimePlugins(RadioLogger.class);
     }
@@ -949,6 +984,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
         putValue(ACCELERATOR_KEY, KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0, true));
     }
 
+    @Override
     public void actionPerformed(ActionEvent e) {
         int view = logTable.getSelectedRow();
         if (view < 0) {
@@ -963,6 +999,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
   private Action clearAction = new AbstractAction("Clear all messages") {
     private static final long serialVersionUID = -2115620313183440224L;
 
+    @Override
     public void actionPerformed(ActionEvent e) {
       clear();
     }
@@ -979,6 +1016,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
   private Action copyAction = new AbstractAction("Copy selected") {
     private static final long serialVersionUID = -8433490108577001803L;
 
+    @Override
     public void actionPerformed(ActionEvent e) {
       Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 
@@ -1002,6 +1040,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
   private Action copyAllAction = new AbstractAction("Copy all data") {
     private static final long serialVersionUID = -5038884975254178373L;
 
+    @Override
     public void actionPerformed(ActionEvent e) {
       Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 
@@ -1023,6 +1062,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
   private Action copyAllMessagesAction = new AbstractAction("Copy all messages") {
     private static final long serialVersionUID = -5038884975254178373L;
 
+    @Override
     public void actionPerformed(ActionEvent e) {
       Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 
@@ -1037,6 +1077,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
     }
   };
 
+  @Override
   public String getQuickHelp() {
     return
         "<b>Log Listener</b>" +
@@ -1063,12 +1104,15 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
     final LogData ld = new LogData(ev);
     RowFilter.Entry<? extends TableModel, ? extends Integer> entry = new RowFilter.Entry<TableModel, Integer>() {
+      @Override
       public TableModel getModel() {
         return model;
       }
+      @Override
       public int getValueCount() {
         return model.getColumnCount();
       }
+      @Override
       public Object getValue(int index) {
         if (index == COLUMN_TIME) {
           return ld.getTime();
@@ -1081,6 +1125,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
         }
         return null;
       }
+      @Override
       public Integer getIdentifier() {
         return null;
       }

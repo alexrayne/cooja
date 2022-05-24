@@ -38,7 +38,8 @@ import java.util.Vector;
 
 import javax.swing.JOptionPane;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 import org.jdom.Element;
 
 import org.contikios.cooja.dialogs.CreateSimDialog;
@@ -79,7 +80,7 @@ public class Simulation extends Observable implements Runnable {
 
   private RadioMedium currentRadioMedium = null;
 
-  private static Logger logger = Logger.getLogger(Simulation.class);
+  private static final Logger logger = LogManager.getLogger(Simulation.class);
 
   private boolean isRunning = false;
 
@@ -99,7 +100,7 @@ public class Simulation extends Observable implements Runnable {
 
   private boolean hasMillisecondObservers = false;
   private MillisecondObservable millisecondObservable = new MillisecondObservable();
-  private class MillisecondObservable extends Observable {
+  private static class MillisecondObservable extends Observable {
     private void newMillisecond(long time) {
       setChanged();
       notifyObservers(time);
@@ -149,6 +150,7 @@ public class Simulation extends Observable implements Runnable {
     hasMillisecondObservers = true;
 
     invokeSimulationThread(new Runnable() {
+      @Override
       public void run() {
         if (!millisecondEvent.isScheduled()) {
           scheduleEvent(
@@ -205,6 +207,7 @@ public class Simulation extends Observable implements Runnable {
   }
 
   private final TimeEvent delayEvent = new TimeEvent() {
+    @Override
     public void execute(long t) {
       if (speedLimitNone) {
         /* As fast as possible: no need to reschedule delay event */
@@ -233,12 +236,14 @@ public class Simulation extends Observable implements Runnable {
         speedLimitLastSimtime = getSimulationTime();
       }
     }
+    @Override
     public String toString() {
       return "DELAY";
     }
   };
 
   private final TimeEvent millisecondEvent = new TimeEvent() {
+    @Override
     public void execute(long t) {
       if (!hasMillisecondObservers) {
         return;
@@ -247,6 +252,7 @@ public class Simulation extends Observable implements Runnable {
       millisecondObservable.newMillisecond(getSimulationTime());
       scheduleEvent(this, t+MILLISECOND);
     }
+    @Override
     public String toString() {
       return "MILLISECOND: " + millisecondObservable.countObservers();
     }
@@ -257,9 +263,10 @@ public class Simulation extends Observable implements Runnable {
     pollRequests.clear();
   }
 
+  @Override
   public void run() {
     lastStartTime = System.currentTimeMillis();
-    logger.info("Simulation main loop started, system time: " + lastStartTime);
+    logger.debug("Simulation started, system time: " + lastStartTime);
     isRunning = true;
     speedLimitLastRealtime = System.currentTimeMillis();
     speedLimitLastSimtime = getSimulationTime();
@@ -320,7 +327,7 @@ public class Simulation extends Observable implements Runnable {
 
     this.setChanged();
     this.notifyObservers(this);
-    logger.info("Simulation main loop stopped, system time: " + System.currentTimeMillis() +
+    logger.info("Simulation completed, system time: " + System.currentTimeMillis() +
         "\tDuration: " + (System.currentTimeMillis() - lastStartTime) +
                 " ms" +
                 "\tSimulated time " + getSimulationTimeMillis() +
@@ -344,7 +351,6 @@ public class Simulation extends Observable implements Runnable {
     if (!isRunning()) {
       isRunning = true;
       simulationThread = new Thread(this);
-      simulationThread.setPriority(Thread.MIN_PRIORITY);
       simulationThread.start();
     }
   }
@@ -403,6 +409,7 @@ public class Simulation extends Observable implements Runnable {
       return;
     }
     TimeEvent stopEvent = new TimeEvent() {
+      @Override
       public void execute(long t) {
         /* Stop simulation */
         stopSimulation();
@@ -436,7 +443,10 @@ public class Simulation extends Observable implements Runnable {
   public void setRandomSeed(long randomSeed) {
     this.randomSeed = randomSeed;
     randomGenerator.setSeed(randomSeed);
-    logger.info("Simulation random seed: " + randomSeed);
+    String name =
+      cooja.currentConfigFile == null ? "(unnamed)"
+                                      : cooja.currentConfigFile.toString();
+    logger.info("Simulation " + name + " random seed: " + randomSeed);
   }
 
   /**
@@ -720,7 +730,7 @@ public class Simulation extends Observable implements Runnable {
         } else {
           logger
               .fatal("Mote type was not created: " + element.getText().trim());
-          throw new Exception("All mote types were not recreated");
+          return false;
         }
       }
 
@@ -785,6 +795,7 @@ public class Simulation extends Observable implements Runnable {
 
     /* Simulation is running, remove mote in simulation loop */
     Runnable removeMote = new Runnable() {
+      @Override
       public void run() {
         motes.remove(mote);
         motesUninit.remove(mote);
@@ -842,6 +853,7 @@ public class Simulation extends Observable implements Runnable {
    */
   public void addMote(final Mote mote) {
     Runnable addMote = new Runnable() {
+      @Override
       public void run() {
         if (mote.getInterfaces().getClock() != null) {
           if (maxMoteStartupDelay > 0) {
@@ -1029,6 +1041,7 @@ public class Simulation extends Observable implements Runnable {
    */
   public void setSpeedLimit(final Double newSpeedLimit) {
     Runnable r = new Runnable() {
+      @Override
       public void run() {
         if (newSpeedLimit == null) {
           speedLimitNone = true;

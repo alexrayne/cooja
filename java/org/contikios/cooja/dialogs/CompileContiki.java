@@ -30,6 +30,8 @@
 
 package org.contikios.cooja.dialogs;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -41,14 +43,14 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.regex.Pattern;
 import java.util.regex.Matcher;
-
+import java.util.regex.Pattern;
 import javax.swing.Action;
-
-import org.apache.log4j.Logger;
-
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.MoteType;
 import org.contikios.cooja.MoteType.MoteTypeCreationException;
@@ -61,7 +63,7 @@ import org.contikios.cooja.contikimote.ContikiMoteType;
  * @author Fredrik Osterlind
  */
 public class CompileContiki {
-  private static Logger logger = Logger.getLogger(CompileContiki.class);
+  private static final Logger logger = LogManager.getLogger(CompileContiki.class);
 
   /**
    * Executes a Contiki compilation command.
@@ -101,7 +103,7 @@ public class CompileContiki {
   }
 
   /**
-   * Executes a Contiki compilation command.
+   * Perform variable expansion and execute a Contiki compilation command.
    *
    * @param command Command
    * @param env (Optional) Environment. May be null.
@@ -115,7 +117,7 @@ public class CompileContiki {
    * @throws Exception If process returns error, or outputFile does not exist
    */
   public static Process compile(
-      final String command[],
+      final String commandIn[],
       final String[] env,
       final File outputFile,
       final File directory,
@@ -131,7 +133,12 @@ public class CompileContiki {
   	} else {
   		messageDialog = compilationOutput;
   	}
-  	
+    String cpus = Integer.toString(Runtime.getRuntime().availableProcessors());
+    // Perform compile command variable expansions.
+    String command[] = new String[commandIn.length];
+    for (int i = 0; i < commandIn.length; i++) {
+      command[i] = commandIn[i].replace("$(CPUS)", cpus);
+    }
     {
       String cmd = "";
       for (String c: command) {
@@ -149,9 +156,9 @@ public class CompileContiki {
       compileProcess = Runtime.getRuntime().exec(fixcmd, env, directory);
 
       final BufferedReader processNormal = new BufferedReader(
-          new InputStreamReader(compileProcess.getInputStream()));
+          new InputStreamReader(compileProcess.getInputStream(), UTF_8));
       final BufferedReader processError = new BufferedReader(
-          new InputStreamReader(compileProcess.getErrorStream()));
+          new InputStreamReader(compileProcess.getErrorStream(), UTF_8));
 
       if (outputFile != null) {
         if (outputFile.exists()) {
@@ -167,6 +174,7 @@ public class CompileContiki {
       }
 
       Thread readInput = new Thread(new Runnable() {
+        @Override
         public void run() {
           try {
             String readLine;
@@ -182,6 +190,7 @@ public class CompileContiki {
       }, "read input stream thread");
 
       Thread readError = new Thread(new Runnable() {
+        @Override
         public void run() {
           try {
             String readLine;
@@ -198,6 +207,7 @@ public class CompileContiki {
 
       final MoteTypeCreationException syncException = new MoteTypeCreationException("");
       Thread handleCompilationResultThread = new Thread(new Runnable() {
+        @Override
         public void run() {
 
           /* Wait for compilation to end */
@@ -363,19 +373,19 @@ public class CompileContiki {
       Reader reader;
       String mainTemplate = Cooja.getExternalToolsSetting("CONTIKI_MAIN_TEMPLATE_FILENAME");
       if ((new File(mainTemplate)).exists()) {
-        reader = new FileReader(mainTemplate);
+        reader = Files.newBufferedReader(Paths.get(mainTemplate), UTF_8);
       } else {
         /* Try JAR, or fail */
         InputStream input = CompileContiki.class.getResourceAsStream('/' + mainTemplate);
         if (input == null) {
           throw new FileNotFoundException(mainTemplate + " not found");
         }
-        reader = new InputStreamReader(input);
+        reader = new InputStreamReader(input, UTF_8);
       }
 
       templateReader = new BufferedReader(reader);
       sourceFileWriter = new BufferedWriter(new OutputStreamWriter(
-          new FileOutputStream(sourceFile)));
+          new FileOutputStream(sourceFile), UTF_8));
 
       // Replace special fields in template
       String line;
@@ -485,17 +495,6 @@ public class CompileContiki {
     ar2 = ar2.replace("$(ARFILE)", output_dir + "/" + archiveFile.getName());
     ccFlags = ccFlags.replace("$(ARFILE)", output_dir + "/" + archiveFile.getName());
 
-    /* Replace JAVA_HOME variable */
-    String javaHome = System.getenv().get("JAVA_HOME");
-    if (javaHome == null) {
-      javaHome = "";
-    }
-    link1 = link1.replace("$(JAVA_HOME)", javaHome);
-    link2 = link2.replace("$(JAVA_HOME)", javaHome);
-    ar1 = ar1.replace("$(JAVA_HOME)", javaHome);
-    ar2 = ar2.replace("$(JAVA_HOME)", javaHome);
-    ccFlags = ccFlags.replace("$(JAVA_HOME)", javaHome);
-
     /* Strip away contiki application .c extension */
     String contikiAppNoExtension = contikiApp.getName().substring(0, contikiApp.getName().length()-2);
 
@@ -517,6 +516,15 @@ public class CompileContiki {
     env.add(new String[] { "AR_COMMAND_2", ar2 });
     env.add(new String[] { "SYMBOLS", includeSymbols?"1":"" });
     env.add(new String[] { "PATH", System.getenv("PATH") });
+    // Pass through environment variables for the Contiki-NG CI.
+    String ci = System.getenv("CI");
+    if (ci != null) {
+      env.add(new String[] { "CI", ci });
+    }
+    String relstr = System.getenv("RELSTR");
+    if (relstr != null) {
+      env.add(new String[] { "RELSTR", relstr });
+    }
     return env.toArray(new String[0][0]);
   }
 

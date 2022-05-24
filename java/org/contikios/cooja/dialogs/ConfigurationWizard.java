@@ -30,6 +30,8 @@
 
 package org.contikios.cooja.dialogs;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.awt.BorderLayout;
 import java.awt.Container;
 import java.awt.Dimension;
@@ -49,9 +51,10 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintStream;
 import java.lang.reflect.Constructor;
-import java.util.Map;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashMap;
-
+import java.util.Map;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
@@ -63,14 +66,13 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
-
-import org.contikios.cooja.CoreComm;
 import org.contikios.cooja.Cooja;
+import org.contikios.cooja.CoreComm;
 import org.contikios.cooja.MoteType.MoteTypeCreationException;
-import org.contikios.cooja.mote.memory.SectionMoteMemory;
 import org.contikios.cooja.contikimote.ContikiMoteType;
 import org.contikios.cooja.contikimote.ContikiMoteType.SectionParser;
 import org.contikios.cooja.mote.memory.MemoryInterface.Symbol;
+import org.contikios.cooja.mote.memory.SectionMoteMemory;
 import org.contikios.cooja.mote.memory.VarMemory;
 
 /* TODO Test common section */
@@ -82,16 +84,16 @@ public class ConfigurationWizard extends JDialog {
   private static final String COMPILER_ARGS_suggestions[] = new String[] {
     "",
     "Windows cygwin:",
-    "-mno-cygwin -Wall -I'$(JAVA_HOME)/include' -I'$(JAVA_HOME)/include/win32' -fno-builtin-printf",
-    "-mno-cygwin -Wall -I'$(JAVA_HOME)/include' -I'$(JAVA_HOME)/include/win32'",
-    "-Wall -D_JNI_IMPLEMENTATION_ -I'$(JAVA_HOME)/include' -I'$(JAVA_HOME)/include/win32'",
-    "-mno-cygwin -I'$(JAVA_HOME)/include' -I'$(JAVA_HOME)/include/win32'",
+    "-mno-cygwin -Wall -fno-builtin-printf",
+    "-mno-cygwin -Wall",
+    "-Wall -D_JNI_IMPLEMENTATION_",
+    "-mno-cygwin",
 
     "Linux:",
-    "-I'$(JAVA_HOME)/include' -I'$(JAVA_HOME)/include/linux' -fno-builtin-printf -fPIC",
+    "-fno-builtin-printf -fPIC",
 
     "Mac OS X:",
-    "-Wall -I/System/Library/Frameworks/JavaVM.framework/Versions/CurrentJDK/Headers -dynamiclib -fno-common"
+    "-Wall -dynamiclib -fno-common"
   };
 
   private static final String LINK_COMMAND_1_suggestions[] = new String[] {
@@ -101,7 +103,7 @@ public class ConfigurationWizard extends JDialog {
     "gcc -shared -Wl,-Map=$(MAPFILE) -o $(LIBFILE)",
     "",
     "Linux:",
-    "gcc -I'$(JAVA_HOME)/include' -I'$(JAVA_HOME)/include/linux' -shared -Wl,-Map=$(MAPFILE) -o $(LIBFILE)",
+    "gcc -shared -Wl,-Map=$(MAPFILE) -o $(LIBFILE)",
     "ld -Map=$(MAPFILE) -shared --add-stdcall-alias /usr/lib/mingw/dllcrt2.o -o $(LIBFILE)",
     "gcc -shared -Wl,-Map=$(MAPFILE) -Wall -D_JNI_IMPLEMENTATION_ -Wl,--kill-at -o $(LIBFILE)",
     "",
@@ -146,9 +148,9 @@ public class ConfigurationWizard extends JDialog {
   private static String javaLibraryName;
   private static CoreComm javaLibrary;
   private static Map<String, Symbol> addresses;
-  private static int relDataSectionAddr;
+  private static long relDataSectionAddr;
   private static int dataSectionSize;
-  private static int relBssSectionAddr;
+  private static long relBssSectionAddr;
   private static int bssSectionSize;
 
   private static MessageListUI output;
@@ -157,10 +159,6 @@ public class ConfigurationWizard extends JDialog {
   private static JProgressBar progressBar;
 
   public static boolean startWizard(Container parentContainer, Cooja gui) {
-    if (Cooja.isVisualizedInApplet()) {
-      return false;
-    }
-
     /* Initial info message */
     if (!showWizardInfo(parentContainer, gui)) {
       return false;
@@ -240,6 +238,7 @@ public class ConfigurationWizard extends JDialog {
 
       /* Start test */
       new Thread(new Runnable() {
+        @Override
         public void run() {
           testCounter++;
           PrintStream normalStream = new PrintStream(output.getInputStream(MessageList.NORMAL));
@@ -295,6 +294,7 @@ public class ConfigurationWizard extends JDialog {
 
       /* Start test */
       new Thread(new Runnable() {
+        @Override
         public void run() {
           testCounter++;
           PrintStream normalStream = new PrintStream(output.getInputStream(MessageList.NORMAL));
@@ -351,6 +351,7 @@ public class ConfigurationWizard extends JDialog {
 
       /* Start test */
       new Thread(new Runnable() {
+        @Override
         public void run() {
           testCounter++;
           PrintStream normalStream = new PrintStream(output.getInputStream(MessageList.NORMAL));
@@ -406,6 +407,7 @@ public class ConfigurationWizard extends JDialog {
 
       /* Start test */
       new Thread(new Runnable() {
+        @Override
         public void run() {
           testCounter++;
           PrintStream normalStream = new PrintStream(output.getInputStream(MessageList.NORMAL));
@@ -445,6 +447,7 @@ public class ConfigurationWizard extends JDialog {
     JPanel progressPanel = new JPanel(new BorderLayout());
     button.setEnabled(false);
     button.addActionListener(new ActionListener() {
+      @Override
       public void actionPerformed(ActionEvent e) {
         if (progressDialog.isDisplayable()) {
           progressDialog.dispose();
@@ -493,6 +496,7 @@ public class ConfigurationWizard extends JDialog {
       }
     }
     combo.addItemListener(new ItemListener() {
+      @Override
       public void itemStateChanged(ItemEvent e) {
         Cooja.setExternalToolsSetting(name, (String) e.getItem());
       }
@@ -553,15 +557,19 @@ public class ConfigurationWizard extends JDialog {
     BufferedReader templateReader = null;
     try {
       if ((new File(testTemplate)).exists()) {
-        templateReader = new BufferedReader(new FileReader(testTemplate));
+        templateReader = Files.newBufferedReader(Paths.get(testTemplate), UTF_8);
       } else {
         InputStream input = ConfigurationWizard.class.getResourceAsStream('/' + testTemplate);
         if (input == null) {
           throw new FileNotFoundException("File not found: " + testTemplate);
         }
-        templateReader = new BufferedReader(new InputStreamReader(input));
+        templateReader = new BufferedReader(new InputStreamReader(input, UTF_8));
       }
     } catch (FileNotFoundException e) {
+      e.printStackTrace(errorStream);
+      testOutput.addMessage("### Error: " + e.getMessage(), MessageList.ERROR);
+      return false;
+    } catch (IOException e) {
       e.printStackTrace(errorStream);
       testOutput.addMessage("### Error: " + e.getMessage(), MessageList.ERROR);
       return false;
@@ -583,7 +591,7 @@ public class ConfigurationWizard extends JDialog {
     }
     BufferedWriter cLibraryWriter = null;
     try {
-      cLibraryWriter = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(cLibrarySourceFile)));
+      cLibraryWriter = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(cLibrarySourceFile), UTF_8));
       String line;
       while ((line = templateReader.readLine()) != null) {
         line = line.replaceFirst("\\[CLASS_NAME\\]", javaLibraryName);
@@ -785,16 +793,16 @@ public class ConfigurationWizard extends JDialog {
     dataSectionSize = dataSecParser.getSize();
     relBssSectionAddr = bssSecParser.getStartAddr();
     bssSectionSize = bssSecParser.getSize();
-    testOutput.addMessage("Data section address: 0x" + Integer.toHexString(relDataSectionAddr));
+    testOutput.addMessage("Data section address: 0x" + Long.toHexString(relDataSectionAddr));
     testOutput.addMessage("Data section size: 0x" + Integer.toHexString(dataSectionSize));
-    testOutput.addMessage("BSS section address: 0x" + Integer.toHexString(relBssSectionAddr));
+    testOutput.addMessage("BSS section address: 0x" + Long.toHexString(relBssSectionAddr));
     testOutput.addMessage("BSS section size: 0x" + Integer.toHexString(bssSectionSize));
     if (relDataSectionAddr < 0) {
-      testOutput.addMessage("Data section address < 0: 0x" + Integer.toHexString(relDataSectionAddr), MessageList.ERROR);
+      testOutput.addMessage("Data section address < 0: 0x" + Long.toHexString(relDataSectionAddr), MessageList.ERROR);
       return false;
     }
     if (relBssSectionAddr < 0) {
-      testOutput.addMessage("BSS section address < 0: 0x" + Integer.toHexString(relBssSectionAddr), MessageList.ERROR);
+      testOutput.addMessage("BSS section address < 0: 0x" + Long.toHexString(relBssSectionAddr), MessageList.ERROR);
       return false;
     }
     if (dataSectionSize <= 0) {
@@ -886,16 +894,16 @@ public class ConfigurationWizard extends JDialog {
     if (parserAddresses != null) {
         addresses.putAll(parserAddresses);
     }
-    testOutput.addMessage("Data section address: 0x" + Integer.toHexString(relDataSectionAddr));
+    testOutput.addMessage("Data section address: 0x" + Long.toHexString(relDataSectionAddr));
     testOutput.addMessage("Data section size: 0x" + Integer.toHexString(dataSectionSize));
-    testOutput.addMessage("BSS section address: 0x" + Integer.toHexString(relBssSectionAddr));
+    testOutput.addMessage("BSS section address: 0x" + Long.toHexString(relBssSectionAddr));
     testOutput.addMessage("BSS section size: 0x" + Integer.toHexString(bssSectionSize));
     if (relDataSectionAddr < 0) {
-      testOutput.addMessage("Data section address < 0: 0x" + Integer.toHexString(relDataSectionAddr), MessageList.ERROR);
+      testOutput.addMessage("Data section address < 0: 0x" + Long.toHexString(relDataSectionAddr), MessageList.ERROR);
       return false;
     }
     if (relBssSectionAddr < 0) {
-      testOutput.addMessage("BSS section address < 0: 0x" + Integer.toHexString(relBssSectionAddr), MessageList.ERROR);
+      testOutput.addMessage("BSS section address < 0: 0x" + Long.toHexString(relBssSectionAddr), MessageList.ERROR);
       return false;
     }
     if (dataSectionSize <= 0) {
@@ -972,7 +980,7 @@ public class ConfigurationWizard extends JDialog {
       testOutput.addMessage("Could not find address of referenceVar", MessageList.ERROR);
       return false;
     }
-    int relRefAddress = (int) addresses.get("referenceVar").addr;
+    long relRefAddress = addresses.get("referenceVar").addr;
     javaLibrary.setReferenceAddress(relRefAddress);
 
     testOutput.addMessage("### Creating data and BSS memory sections");

@@ -51,7 +51,8 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.KeyStroke;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.SimEventCentral;
@@ -59,16 +60,12 @@ import org.contikios.cooja.Simulation;
 
 public class BufferSettings extends JDialog {
   private static final long serialVersionUID = 7086171115472941104L;
-  private static Logger logger = Logger.getLogger(BufferSettings.class);
+  private static final Logger logger = LogManager.getLogger(BufferSettings.class);
   private final static Dimension LABEL_SIZE = new Dimension(150, 25);
 
   private SimEventCentral central;
 
   public static void showDialog(JDesktopPane parent, Simulation simulation) {
-    if (Cooja.isVisualizedInApplet()) {
-      return;
-    }
-
     BufferSettings dialog = new BufferSettings(simulation);
     dialog.setLocationRelativeTo(parent); 
     dialog.setVisible(true);
@@ -93,6 +90,7 @@ public class BufferSettings extends JDialog {
     JFormattedTextField value = addEntry(main, "Log output messages");
     value.setValue(central.getLogOutputBufferSize());
     value.addPropertyChangeListener("value", new PropertyChangeListener() {
+      @Override
       public void propertyChange(PropertyChangeEvent evt) {
         int newVal = ((Number)evt.getNewValue()).intValue();
         if (newVal < 1) {
@@ -132,6 +130,7 @@ public class BufferSettings extends JDialog {
   }
 
   private Action setDefaultAction = new AbstractAction("Set default") {
+    @Override
     public void actionPerformed(ActionEvent e) {
       Object[] options = { "Ok", "Cancel" };
 
@@ -150,6 +149,7 @@ public class BufferSettings extends JDialog {
   };
 
   private Action disposeAction = new AbstractAction("OK") {
+    @Override
     public void actionPerformed(ActionEvent e) {
       dispose();
     }

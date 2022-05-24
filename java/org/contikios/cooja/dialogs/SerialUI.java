@@ -60,7 +60,8 @@ import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JToggleButton;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 import org.jdom.Element;
 
 import org.contikios.cooja.Mote;
@@ -84,7 +85,7 @@ import org.contikios.cooja.util.StringUtils;
 public abstract class SerialUI extends SerialIO 
 	implements SerialPort 
 {
-  private static Logger logger = Logger.getLogger(SerialUI.class);
+  private static final Logger logger = LogManager.getLogger(SerialUI.class);
 
   private final static int MAX_LENGTH = 16*1024;
   private static final int LOG     = 0;
@@ -149,10 +150,11 @@ public abstract class SerialUI extends SerialIO
   }
 
   /* SerialPort */
-  private abstract class SerialDataObservable extends Observable {
+  private abstract static class SerialDataObservable extends Observable {
     public abstract void notifyNewData();
   }
   private SerialDataObservable serialDataObservable = new SerialDataObservable() {
+    @Override
     public void notifyNewData() {
       if (this.countObservers() == 0) {
         return;
@@ -161,12 +163,15 @@ public abstract class SerialUI extends SerialIO
       notifyObservers(SerialUI.this);
     }
   };
+  @Override
   public void addSerialDataObserver(Observer o) {
     serialDataObservable.addObserver(o);
   }
+  @Override
   public void deleteSerialDataObserver(Observer o) {
     serialDataObservable.deleteObserver(o);
   }
+  @Override
   public byte getLastSerialData() {
     return lastSerialData;
   }
@@ -285,6 +290,7 @@ public abstract class SerialUI extends SerialIO
   }
 
   /* Mote interface visualizer */
+  @Override
   public JPanel getInterfaceVisualizer() {
     JPanel panel = new JPanel(new BorderLayout());
 
@@ -314,6 +320,7 @@ public abstract class SerialUI extends SerialIO
     JButton sendButton = new JButton("Send data");
 
     ActionListener sendCommandAction = new ActionListener() {
+      @Override
       public void actionPerformed(ActionEvent e) {
         final String command = trim(commandField.getText());
         if (command == null) {
@@ -328,6 +335,7 @@ public abstract class SerialUI extends SerialIO
           commandField.setText("");
           if (getMote().getSimulation().isRunning()) {
             getMote().getSimulation().invokeSimulationThread(new Runnable() {
+              @Override
               public void run() {
                 writeString(command);
               }
@@ -355,6 +363,7 @@ public abstract class SerialUI extends SerialIO
     logTextPane.setOpaque(false);
     logTextPane.setEditable(false);
     logTextPane.addKeyListener(new KeyAdapter() {
+      @Override
       public void keyPressed(KeyEvent e) {
         if ((e.getModifiers() & (MouseEvent.SHIFT_MASK|MouseEvent.CTRL_MASK)) != 0) {
           return;
@@ -381,9 +390,11 @@ public abstract class SerialUI extends SerialIO
     /* Mote interface observer */
     Observer observer;
     this.addObserver(observer = new Observer() {
+      @Override
       public void update(Observable obs, Object obj) {
           if (obs == controlsInform ) {
               EventQueue.invokeLater(new Runnable() {
+          @Override
                   public void run() {
                       logButton.setSelected(isLogged());
                   }
@@ -423,6 +434,7 @@ public abstract class SerialUI extends SerialIO
     return panel;
   }
 
+  @Override
   public void releaseInterfaceVisualizer(JPanel panel) {
     Observer observer = (Observer) panel.getClientProperty("intf_obs");
     if (observer == null) {
@@ -434,6 +446,7 @@ public abstract class SerialUI extends SerialIO
     controlsInform.deleteObserver(observer);
   }
 
+  @Override
   public Collection<Element> getConfigXML() {
     ArrayList<Element> config = new ArrayList<Element>();
 
@@ -450,6 +463,7 @@ public abstract class SerialUI extends SerialIO
   private enum SerialCfg{ NONE, On, Off};
   private SerialCfg cfg_serial_ok = SerialCfg.NONE;
 
+  @Override
   public void setConfigXML(Collection<Element> configXML, boolean visAvailable) {
     cfg_serial_ok = SerialCfg.NONE;
     for (Element element : configXML) {
@@ -528,6 +542,7 @@ public abstract class SerialUI extends SerialIO
   public void close() {
   }
 
+  @Override
   public void flushInput() {
   }
 

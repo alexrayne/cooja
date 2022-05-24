@@ -45,7 +45,8 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 import org.jdom.Element;
 
 import org.contikios.cooja.AbstractionLevelDescription;
@@ -76,7 +77,7 @@ import org.contikios.cooja.interfaces.Position;
 @ClassDescription("MicaZ mote")
 @AbstractionLevelDescription("Emulated level")
 public class MicaZMoteType implements MoteType {
-  private static Logger logger = Logger.getLogger(MicaZMoteType.class);
+  private static final Logger logger = LogManager.getLogger(MicaZMoteType.class);
 
   private String identifier = null;
   private String description = null;
@@ -198,15 +199,13 @@ public class MicaZMoteType implements MoteType {
     smallPane.add(BorderLayout.EAST, textArea);
     panel.add(smallPane);
 
-    /* Icon (if available) */
-    if (!Cooja.isVisualizedInApplet()) {
-      Icon moteTypeIcon = getMoteTypeIcon();
-      if (moteTypeIcon != null) {
-        smallPane = new JPanel(new BorderLayout());
-        label = new JLabel(moteTypeIcon);
-        smallPane.add(BorderLayout.CENTER, label);
-        panel.add(smallPane);
-      }
+    /* Icon */
+    Icon moteTypeIcon = getMoteTypeIcon();
+    if (moteTypeIcon != null) {
+      smallPane = new JPanel(new BorderLayout());
+      label = new JLabel(moteTypeIcon);
+      smallPane.add(BorderLayout.CENTER, label);
+      panel.add(smallPane);
     }
 
     panel.add(Box.createRigidArea(new Dimension(0, 5)));

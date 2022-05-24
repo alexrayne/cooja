@@ -56,14 +56,16 @@ public abstract class MoteTimeEvent extends TimeEvent {
    *
    * @deprecated use {MoteTimeEvent(mote)} instead.  
    */
+  @Deprecated
   public MoteTimeEvent(Mote mote, long time) {
       super();
       this.mote = mote;
-    }
+  }
     
-    public MoteTimeEvent(Mote mote, long time, String name) {
+  @Deprecated
+  public MoteTimeEvent(Mote mote, long time, String name) {
       super();
       this.mote = mote;
-    }
+  }
 
 }

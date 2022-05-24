@@ -57,7 +57,8 @@ import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellEditor;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
@@ -85,7 +86,7 @@ import org.contikios.cooja.util.StringUtils;
 @SupportedArguments(radioMediums = {DirectedGraphMedium.class})
 public class DGRMConfigurator extends VisPlugin {
 	private static final long serialVersionUID = 4769638341635882051L;
-	private static Logger logger = Logger.getLogger(DGRMConfigurator.class);
+	private static final Logger logger = LogManager.getLogger(DGRMConfigurator.class);
 
   private final static int IDX_SRC = 0;
   private final static int IDX_DST = 1;
@@ -112,6 +113,7 @@ public class DGRMConfigurator extends VisPlugin {
 
     /* Listen for graph updates */
     radioMedium.addRadioTransmissionObserver(radioMediumObserver = new Observer() {
+      @Override
       public void update(Observable obs, Object obj) {
         model.fireTableDataChanged();
       }
@@ -120,7 +122,8 @@ public class DGRMConfigurator extends VisPlugin {
     /* Represent directed graph by table */
     graphTable = new JTable(model) {
 			private static final long serialVersionUID = -4680013510092815210L;
-			public TableCellEditor getCellEditor(int row, int column) {
+      @Override
+      public TableCellEditor getCellEditor(int row, int column) {
 				combo.removeAllItems();
         if (column == IDX_RATIO) {
           for (double d=1.0; d >= 0.0; d -= 0.1) {
@@ -147,7 +150,8 @@ public class DGRMConfigurator extends VisPlugin {
 
     graphTable.getColumnModel().getColumn(IDX_RATIO).setCellRenderer(new DefaultTableCellRenderer() {
 			private static final long serialVersionUID = 4470088575039698508L;
-			public void setValue(Object value) {
+      @Override
+      public void setValue(Object value) {
         if (!(value instanceof Double)) {
           setText(value.toString());
           return;
@@ -158,6 +162,7 @@ public class DGRMConfigurator extends VisPlugin {
     });
     graphTable.getColumnModel().getColumn(IDX_SIGNAL).setCellRenderer(new DefaultTableCellRenderer() {
 			private static final long serialVersionUID = -7170745293267593460L;
+			@Override
 			public void setValue(Object value) {
         if (!(value instanceof Long)) {
           setText(value.toString());
@@ -169,7 +174,8 @@ public class DGRMConfigurator extends VisPlugin {
     });
     graphTable.getColumnModel().getColumn(IDX_LQI).setCellRenderer(new DefaultTableCellRenderer() {
 		private static final long serialVersionUID = -4669897764928372246L;
-		public void setValue(Object value) {
+      @Override
+      public void setValue(Object value) {
 	    if (!(value instanceof Long)) {
 	      setText(value.toString());
 	      return;
@@ -180,7 +186,8 @@ public class DGRMConfigurator extends VisPlugin {
     });
     graphTable.getColumnModel().getColumn(IDX_DELAY).setCellRenderer(new DefaultTableCellRenderer() {
 			private static final long serialVersionUID = -4669897764928372246L;
-			public void setValue(Object value) {
+      @Override
+      public void setValue(Object value) {
         if (!(value instanceof Long)) {
           setText(value.toString());
           return;
@@ -200,6 +207,7 @@ public class DGRMConfigurator extends VisPlugin {
     JPanel southPanel = new JPanel(new GridLayout(1, 3));
     JButton button = new JButton("Add");
     button.addActionListener(new ActionListener() {
+      @Override
       public void actionPerformed(ActionEvent e) {
         doAddLink();
       }
@@ -207,6 +215,7 @@ public class DGRMConfigurator extends VisPlugin {
     southPanel.add(button);
     button = new JButton("Remove");
     button.addActionListener(new ActionListener() {
+      @Override
       public void actionPerformed(ActionEvent e) {
       	doRemoveSelectedLink();
       }
@@ -216,6 +225,7 @@ public class DGRMConfigurator extends VisPlugin {
     southPanel.add(button);
     button = new JButton("Import");
     button.addActionListener(new ActionListener() {
+      @Override
       public void actionPerformed(ActionEvent e) {
       	doImportFromFile();
       }
@@ -227,7 +237,8 @@ public class DGRMConfigurator extends VisPlugin {
     add(BorderLayout.SOUTH, southPanel);
 
     graphTable.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
-    	public void valueChanged(ListSelectionEvent e) {
+      @Override
+      public void valueChanged(ListSelectionEvent e) {
     		ListSelectionModel lsm = (ListSelectionModel)e.getSource();
     		if (e.getValueIsAdjusting()) {
     			return;
@@ -333,6 +344,7 @@ public class DGRMConfigurator extends VisPlugin {
 
 	private void importEdges(DirectedGraphMedium.Edge[] edges) {
 		Arrays.sort(edges, new Comparator<DirectedGraphMedium.Edge>() {
+			@Override
 			public int compare(Edge o1, Edge o2) {
 				return o1.source.getMote().getID() - o2.source.getMote().getID();
 			}
@@ -397,18 +409,22 @@ public class DGRMConfigurator extends VisPlugin {
 
   final AbstractTableModel model = new AbstractTableModel() {
 		private static final long serialVersionUID = 9101118401527171218L;
-		public String getColumnName(int column) {
+    @Override
+    public String getColumnName(int column) {
       if (column < 0 || column >= COLUMN_NAMES.length) {
         return "";
       }
       return COLUMN_NAMES[column];
     }
+    @Override
     public int getRowCount() {
       return radioMedium.getEdges().length;
     }
+    @Override
     public int getColumnCount() {
       return COLUMN_NAMES.length;
     }
+    @Override
     public Object getValueAt(int row, int column) {
       if (row < 0 || row >= radioMedium.getEdges().length) {
         return "";
@@ -437,6 +453,7 @@ public class DGRMConfigurator extends VisPlugin {
       }
       return "";
     }
+    @Override
     public void setValueAt(Object value, int row, int column) {
       if (row < 0 || row >= radioMedium.getEdges().length) {
         return;
@@ -465,6 +482,7 @@ public class DGRMConfigurator extends VisPlugin {
       }
     }
 
+    @Override
     public boolean isCellEditable(int row, int column) {
       if (row < 0 || row >= radioMedium.getEdges().length) {
         return false;
@@ -494,11 +512,13 @@ public class DGRMConfigurator extends VisPlugin {
       return false;
     }
 
+    @Override
     public Class<? extends Object> getColumnClass(int c) {
       return getValueAt(0, c).getClass();
     }
   };
 
+  @Override
   public void closePlugin() {
     radioMedium.deleteRadioTransmissionObserver(radioMediumObserver);
   }

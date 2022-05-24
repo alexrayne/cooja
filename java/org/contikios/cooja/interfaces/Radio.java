@@ -55,7 +55,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import org.jdom.Element;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Mote;
@@ -74,7 +75,7 @@ import org.contikios.cooja.contikimote.interfaces.ContikiRadio;
  */
 @ClassDescription("Radio")
 public abstract class Radio extends MoteInterface {
-  private static Logger logger = Logger.getLogger(Radio.class);
+  private static final Logger logger = LogManager.getLogger(Radio.class);
 
   /**
    * Events that radios should notify observers about.
@@ -245,6 +246,7 @@ public abstract class Radio extends MoteInterface {
 	  return String.format("%1.1fdBm", rssi);
   } 
 
+  @Override
   public JPanel getInterfaceVisualizer() {
     JPanel panel = new JPanel(new BorderLayout());
     Box box = Box.createVerticalBox();
@@ -262,6 +264,7 @@ public abstract class Radio extends MoteInterface {
     box.add(channelLabel);
 
     updateButton.addActionListener(new ActionListener() {
+      @Override
       public void actionPerformed(ActionEvent e) {
         ssLabel.setText("Signal strength (not auto-updated): "
             + printStrength(getCurrentSignalStrength()) );
@@ -269,6 +272,7 @@ public abstract class Radio extends MoteInterface {
     });
 
     final Observer observer = new Observer() {
+      @Override
       public void update(Observable obs, Object obj) {
         if (isTransmitting()) {
           statusLabel.setText("Transmitting");
@@ -323,6 +327,7 @@ public abstract class Radio extends MoteInterface {
     return panel;
   }
 
+  @Override
   public void releaseInterfaceVisualizer(JPanel panel) {
     Observer observer = (Observer) panel.getClientProperty("intf_obs");
     if (observer == null) {

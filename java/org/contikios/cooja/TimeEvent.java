@@ -60,7 +60,6 @@ public abstract class TimeEvent {
   }
 
   public abstract void execute(long t);
-
   //kills event execution - signal to execution thread  
   public void kill() {};
 
@@ -72,7 +71,6 @@ public abstract class TimeEvent {
   @Deprecated
   public TimeEvent(long time) {
   }
-
   @Deprecated
   public TimeEvent(long time, String name) {
   }

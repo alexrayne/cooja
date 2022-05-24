@@ -60,7 +60,8 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.Mote;
@@ -78,7 +79,7 @@ import org.contikios.cooja.interfaces.Position;
 public class AddMoteDialog extends JDialog {
 
   private static final long serialVersionUID = 1L;
-  private static Logger logger = Logger.getLogger(AddMoteDialog.class);
+  private static final Logger logger = LogManager.getLogger(AddMoteDialog.class);
 
   private AddMotesEventHandler myEventHandler = new AddMotesEventHandler();
 
@@ -427,21 +428,26 @@ public class AddMoteDialog extends JDialog {
         ActionListener,
         FocusListener,
         PropertyChangeListener {
+    @Override
     public void propertyChange(PropertyChangeEvent e) {
       checkSettings();
     }
+    @Override
     public void focusGained(final FocusEvent e) {
       if (e.getSource() instanceof JFormattedTextField) {
         SwingUtilities.invokeLater(new Runnable() {
+          @Override
           public void run() {
             ((JFormattedTextField) e.getSource()).selectAll();
           }
         });
       }
     }
+    @Override
     public void focusLost(FocusEvent e) {
       checkSettings();
     }
+    @Override
     public void actionPerformed(ActionEvent e) {
       if (e.getActionCommand().equals("cancel")) {
         newMotes = null;

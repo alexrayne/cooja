@@ -41,9 +41,10 @@ public final class EventQueue {
 
   private long count = 0;
 
-  public final class Pair implements Comparable<Pair> {
+  public static final class Pair implements Comparable<Pair> {
     public final TimeEvent event;
     public final long time;
+
     private final long uuid;
 
     public Pair(TimeEvent event, long time, long uuid) {
@@ -52,6 +53,7 @@ public final class EventQueue {
       this.uuid = uuid;
     }
 
+    @Override
     public final int compareTo(Pair other) {
       if (time < other.time)
       {
@@ -167,6 +169,7 @@ public final class EventQueue {
     return queue.removeIf((Pair p) -> pred.test(p.event));
   }
 
+  @Override
   public String toString() {
     return "EventQueue with " + queue.size() + " events";
   }

@@ -94,7 +94,8 @@ import javax.swing.PopupFactory;
 import javax.swing.ProgressMonitor;
 import javax.swing.filechooser.FileFilter;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 import org.jdom.Element;
 
 import org.contikios.cooja.ClassDescription;
@@ -126,7 +127,7 @@ import org.contikios.mrm.ChannelModel.TxPair;
 @SupportedArguments(radioMediums = {MRM.class})
 public class AreaViewer extends VisPlugin {
   private static final long serialVersionUID = 1L;
-  private static Logger logger = Logger.getLogger(AreaViewer.class);
+  private static final Logger logger = LogManager.getLogger(AreaViewer.class);
 
   private final JPanel canvas;
 
@@ -358,9 +359,6 @@ public class AreaViewer extends VisPlugin {
     JRadioButton customButton = new JRadioButton("From bitmap");
     customButton.setActionCommand("set custom bitmap");
     customButton.addActionListener(obstacleHandler);
-    if (Cooja.isVisualizedInApplet()) {
-      customButton.setEnabled(false);
-    }
 
     group = new ButtonGroup();
     group.add(noneButton);

@@ -57,7 +57,8 @@ import java.awt.event.KeyEvent;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 import org.jdom.Element;
 
 import org.contikios.cooja.Mote;
@@ -96,7 +97,7 @@ import org.contikios.cooja.mote.memory.UnknownVariableException;
  * @author Fredrik Osterlind
  */
 public class ContikiClock extends Clock implements ContikiMoteInterface, PolledBeforeActiveTicks, PolledAfterAllTicks {
-  private static Logger logger = Logger.getLogger(ContikiClock.class);
+  private static final Logger logger = LogManager.getLogger(ContikiClock.class);
 
   private Simulation simulation;
   private ContikiMote mote;
@@ -158,6 +159,7 @@ public class ContikiClock extends Clock implements ContikiMoteInterface, PolledB
     return new String[]{"clock_interface"};
   }
 
+  @Override
   public void setTime(long newTime) {
     moteTime = newTime;
     if (moteTime > 0) {
@@ -165,6 +167,7 @@ public class ContikiClock extends Clock implements ContikiMoteInterface, PolledB
     }
   }
 
+  @Override
   public void setDrift(long drift) {
     //adjust drift so that it simTime+drift == rtcTime(); 
     long currentSimulationTime = simulation.getSimulationTime();
@@ -174,18 +177,22 @@ public class ContikiClock extends Clock implements ContikiMoteInterface, PolledB
     setTime(rtcTime() + timeDrift);
   }
 
+  @Override
   public long getDrift() {
     return timeDrift;
   }
 
+  @Override
   public long getTime() {
     return moteTime;
   }
   
+  @Override
   public void setDeviation(double deviation) {
     logger.fatal("Can't change deviation");;
   }
 
+  @Override
   public double getDeviation() {
   	return 1.0;
   }
@@ -230,6 +237,7 @@ public class ContikiClock extends Clock implements ContikiMoteInterface, PolledB
       return rTime + drift;
   }
 
+  @Override
   public void doActionsBeforeTick() {
     /* Update time */
 
@@ -252,6 +260,7 @@ public class ContikiClock extends Clock implements ContikiMoteInterface, PolledB
     }
   }
 
+  @Override
   public void doActionsAfterTick() {
     controlsInform.refresh(this);
 
@@ -408,6 +417,7 @@ public class ContikiClock extends Clock implements ContikiMoteInterface, PolledB
       }
   }
 
+  @Override
   public JPanel getInterfaceVisualizer() {
       JPanel panel = new JPanel();
       panel.setLayout(new BoxLayout(panel, BoxLayout.PAGE_AXIS ));
@@ -586,6 +596,7 @@ public class ContikiClock extends Clock implements ContikiMoteInterface, PolledB
       return panel;
     }
 
+  @Override
     public void releaseInterfaceVisualizer(JPanel panel) {
       Observer observer = (Observer) panel.getClientProperty("intf_obs");
       if (observer == null) {
@@ -632,7 +643,8 @@ public class ContikiClock extends Clock implements ContikiMoteInterface, PolledB
             this.setText(String.valueOf(x));
         }
     };
-    
+
+  @Override
   public Collection<Element> getConfigXML() {
       ArrayList<Element> config = new ArrayList<Element>();
       Element element;
@@ -666,6 +678,7 @@ public class ContikiClock extends Clock implements ContikiMoteInterface, PolledB
       return null;
   }
 
+  @Override
   public void setConfigXML(Collection<Element> configXML, boolean visAvailable) {
       for (Element element : configXML) {
           if (element.getName().equals("rtimerResolution_khz")) {
