@@ -2248,10 +2248,14 @@ public class TimeLine extends VisPlugin implements HasQuickHelp {
           continue;
         }
 
+        int w = 4; /* Pixel width */
+        if( w < paintEventMinWidth)
+            w = paintEventMinWidth;
+
         g.setColor(color);
         g.fillRect(
             (int)(ev.time/currentPixelDivisor), lineHeightOffset,
-            4, EVENT_PIXEL_HEIGHT
+            w, EVENT_PIXEL_HEIGHT
         );
         g.setColor(Color.BLACK);
         g.fillRect(
@@ -2292,6 +2296,9 @@ public class TimeLine extends VisPlugin implements HasQuickHelp {
       MoteEvent ev = this;
       while (ev != null && ev.time < end) {
         int w = 2; /* Watchpoints are always two pixels wide */
+
+        if( w < paintEventMinWidth)
+            w = paintEventMinWidth;
 
         Color color = ev.getEventColor();
         if (color == null) {
