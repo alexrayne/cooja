@@ -2459,9 +2459,9 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
     public void paintInterval(Graphics g, int lineHeightOffset, long end) {
       LogEvent ev = this;
       long time_start = -1;
+      LogEvent nextev = null;
       
       while (ev != null && ev.time < end) {
-          int position = (int)(ev.time/currentPixelDivisor);
           if (ev.time < time_start ){
               /* Skip painting event over alredy painted one*/
               ev = (LogEvent) ev.next;
@@ -2493,16 +2493,41 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
           continue;
         }
 
+        int position = (int)(ev.time/currentPixelDivisor);
         // upper bound of start position
         time_start = (long)((position+1)*currentPixelDivisor);
 
+        // seek event visible at next position
+        nextev = (LogEvent)ev.next;
+        while ((nextev != null) && (nextev.time < time_start))
+            nextev = (LogEvent)nextev.next;
+
+        int w = 4; /* Pixel width */
+        if( w < paintEventMinWidth)
+            w = paintEventMinWidth;
+
+        if (nextev == null) {
+            w = paintEventMinWidth*4;
+        }
+        else
+        if (nextev.time > (long)((position+w*2)*currentPixelDivisor)) {
+            w = (int)(nextev.time / currentPixelDivisor) - position -1;
+            // limit width of element enough for leader line= paintEventMinWidth
+            if (w > paintEventMinWidth*4)
+                w = paintEventMinWidth*4;
+        }
+            
         g.setColor(color);
-        g.fillRect( position, lineHeightOffset, 4, EVENT_PIXEL_HEIGHT );
+        g.fillRect( position, lineHeightOffset, w, EVENT_PIXEL_HEIGHT );
 
+        w = w/4;
+        if (w < 1)
+            w = 1;
+        
         g.setColor(Color.BLUE);
-        g.fillRect( position, lineHeightOffset, 1, EVENT_PIXEL_HEIGHT );
+        g.fillRect( position, lineHeightOffset, w, EVENT_PIXEL_HEIGHT );
 
-        ev = (LogEvent) ev.next;
+        ev = nextev;
       }
     }
     @Override
@@ -2539,6 +2564,9 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
       MoteEvent ev = this;
       while (ev != null && ev.time < end) {
         int w = 2; /* Watchpoints are always two pixels wide */
+
+        if( w < paintEventMinWidth)
+            w = paintEventMinWidth;
 
         Color color = ev.getEventColor();
         if (color == null) {
