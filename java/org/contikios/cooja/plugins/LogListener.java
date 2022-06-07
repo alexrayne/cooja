@@ -730,13 +730,20 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
         @Override
           public boolean include(RowFilter.Entry<? extends Object, ? extends Integer> entry) {
     		  if (regexp != null) {
-    		        int row = entry.getIdentifier().intValue();
-    		        LogData log = logs.get(row);
-    		        boolean pass = (log.filtered == FilterState.PASS);
-    		        if (log.filtered == FilterState.NONE) {
+                    boolean pass;
+                    if (entry.getIdentifier() != null) {
+                        // entry alredy in logs, so can check is it filetred?
+                        int row = entry.getIdentifier().intValue();
+                        LogData log = logs.get(row);
+                        pass = (log.filtered == FilterState.PASS);
+                        if (log.filtered == FilterState.NONE) {
+                            pass = regexp.include(entry);
+                            log.setFiltered(pass);
+                        }
+                    }
+                    else {
                         pass = regexp.include(entry);
-                        log.setFiltered(pass);
-    		        }
+                    }
     				if (inverseFilter && pass) {
     					return false;
     				} else if (!inverseFilter && !pass) {
@@ -783,7 +790,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
     });
   }
 
-  private enum  FilterState { NONE, PASS, REJECTED };
+  static private enum  FilterState { NONE, PASS, REJECTED };
   private class LogData {
     public final LogOutputEvent ev;
     public       FilterState    filtered;
