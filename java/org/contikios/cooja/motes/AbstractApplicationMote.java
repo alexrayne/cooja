@@ -120,7 +120,7 @@ public abstract class AbstractApplicationMote extends AbstractWakeupMote impleme
   }
 
   public void setMemory(SectionMoteMemory memory) {
-    this.memory = (SectionMoteMemory) memory;
+    this.memory = memory;
   }
 
   @Override

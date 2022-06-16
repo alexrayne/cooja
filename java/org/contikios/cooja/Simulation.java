@@ -112,7 +112,7 @@ public class Simulation extends Observable implements Runnable {
 
   /* Poll requests */
   private boolean hasPollRequests = false;
-  private ArrayDeque<Runnable> pollRequests = new ArrayDeque<Runnable>();
+  private final ArrayDeque<Runnable> pollRequests = new ArrayDeque<>();
 
 
   /**
@@ -290,7 +290,7 @@ public class Simulation extends Observable implements Runnable {
           throw new RuntimeException("No more events");
         }
         if (nextEvent.time < currentSimulationTime) {
-          throw new RuntimeException("Next event is in the past: " + nextEvent.time + " < " + currentSimulationTime + ": " + nextEvent);
+          throw new RuntimeException("Next event is in the past: " + nextEvent.time + " < " + currentSimulationTime + ": " + nextEvent.event);
         }
         currentSimulationEvent= nextEvent.event;
         currentSimulationTime = nextEvent.time;
@@ -1051,7 +1051,7 @@ public class Simulation extends Observable implements Runnable {
         speedLimitNone = false;
         speedLimitLastRealtime = System.currentTimeMillis();
         speedLimitLastSimtime = getSimulationTime();
-        speedLimit = newSpeedLimit.doubleValue();
+        speedLimit = newSpeedLimit;
 
         if (delayEvent.isScheduled()) {
           delayEvent.remove();
@@ -1077,7 +1077,7 @@ public class Simulation extends Observable implements Runnable {
     if (speedLimitNone) {
       return null;
     }
-    return new Double(speedLimit);
+    return speedLimit;
   }
 
   /**
@@ -1131,8 +1131,8 @@ public class Simulation extends Observable implements Runnable {
   public void setRadioMedium(RadioMedium radioMedium) {
     // Remove current radio medium from observing motes
     if (currentRadioMedium != null) {
-      for (int i = 0; i < motes.size(); i++) {
-        currentRadioMedium.unregisterMote(motes.get(i), this);
+      for (Mote mote : motes) {
+        currentRadioMedium.unregisterMote(mote, this);
       }
     }
 
@@ -1144,8 +1144,8 @@ public class Simulation extends Observable implements Runnable {
     this.currentRadioMedium = radioMedium;
 
     // Add all current motes to the new radio medium
-    for (int i = 0; i < motes.size(); i++) {
-      currentRadioMedium.registerMote(motes.get(i), this);
+    for (Mote mote : motes) {
+      currentRadioMedium.registerMote(mote, this);
     }
   }
 

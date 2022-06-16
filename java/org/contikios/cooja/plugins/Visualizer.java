@@ -68,7 +68,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Observable;
@@ -906,7 +905,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
           Class<VisualizerSkin> skinClass
                   = (Class<VisualizerSkin>) menuItem.getClientProperty("skinclass");
           if (skinClass == null) {
-            logger.fatal("Unknown visualizer skin class: " + skinClass);
+            logger.fatal("Unknown visualizer skin class");
             return;
           }
 

@@ -56,7 +56,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -2391,9 +2390,7 @@ public class Cooja extends Observable {
         }
         PROGRESS_WARNINGS.clear();
 
-      } catch (UnsatisfiedLinkError e) {
-        shouldRetry = showErrorDialog(Cooja.getTopParentContainer(), "Simulation load error", e, true);
-      } catch (SimulationCreationException e) {
+      } catch (UnsatisfiedLinkError | SimulationCreationException e) {
         shouldRetry = showErrorDialog(Cooja.getTopParentContainer(), "Simulation load error", e, true);
       }
     } while (shouldRetry);
@@ -2445,7 +2442,7 @@ public class Cooja extends Observable {
             shouldRetry = false;
             cooja.doRemoveSimulation(false);
             PROGRESS_WARNINGS.clear();
-            Simulation newSim = loadSimulationConfig(root, true, new Long(randomSeed));
+            Simulation newSim = loadSimulationConfig(root, true, randomSeed);
             cooja.setSimulation(newSim, false);
 
             if (autoStart) {
@@ -2461,11 +2458,7 @@ public class Cooja extends Observable {
             }
             PROGRESS_WARNINGS.clear();
 
-          } catch (UnsatisfiedLinkError e) {
-            shouldRetry = showErrorDialog(frame, "Simulation reload error", e, true);
-
-            cooja.doRemoveSimulation(false);
-          } catch (SimulationCreationException e) {
+          } catch (UnsatisfiedLinkError | SimulationCreationException e) {
             shouldRetry = showErrorDialog(frame, "Simulation reload error", e, true);
 
             cooja.doRemoveSimulation(false);
@@ -2715,17 +2708,16 @@ public class Cooja extends Observable {
   }
 
     public static String resolvePathIdentifiers(String path) {
-        for(int i = 0; i < PATH_IDENTIFIER.length; i++) {
-            if(path.contains(PATH_IDENTIFIER[i][0])) {
-                String p = Cooja.getExternalToolsSetting(PATH_IDENTIFIER[i][1]);
-                if (p != null) {
-                    path = path.replace(PATH_IDENTIFIER[i][0], p);
-                } else {
-                    logger.warn("could not resolve path identifier " +
-                                PATH_IDENTIFIER[i][0]);
-                }
-            }
+      for (String[] pair : PATH_IDENTIFIER) {
+        if (path.contains(pair[0])) {
+          String p = Cooja.getExternalToolsSetting(pair[1]);
+          if (p != null) {
+            path = path.replace(pair[0], p);
+          } else {
+            logger.warn("could not resolve path identifier " + pair[0]);
+          }
         }
+      }
         return path;
     }
 
@@ -2910,8 +2902,6 @@ public class Cooja extends Observable {
         setExternalToolsSetting(key, settings.getProperty(key));
       }
       logger.info("External tools user settings: " + externalToolsUserSettingsFile);
-    } catch (FileNotFoundException e) {
-      logger.warn("Error when reading user settings from: " + externalToolsUserSettingsFile);
     } catch (IOException e) {
       logger.warn("Error when reading user settings from: " + externalToolsUserSettingsFile);
     }
@@ -3014,15 +3004,13 @@ public class Cooja extends Observable {
     if (callingObject != null) {
       try {
         return callingObject.getClass().getClassLoader().loadClass(className).asSubclass(classType);
-      } catch (ClassNotFoundException e) {
-      } catch (UnsupportedClassVersionError e) {
+      } catch (ClassNotFoundException | UnsupportedClassVersionError e) {
       }
     }
 
     try {
       return Class.forName(className).asSubclass(classType);
-    } catch (ClassNotFoundException e) {
-    } catch (UnsupportedClassVersionError e) {
+    } catch (ClassNotFoundException | UnsupportedClassVersionError e) {
     }
 
     try {
@@ -3030,9 +3018,7 @@ public class Cooja extends Observable {
         return projectDirClassLoader.loadClass(className).asSubclass(
             classType);
       }
-    } catch (NoClassDefFoundError e) {
-    } catch (ClassNotFoundException e) {
-    } catch (UnsupportedClassVersionError e) {
+    } catch (NoClassDefFoundError | UnsupportedClassVersionError | ClassNotFoundException e) {
     }
 
     return null;
@@ -3071,7 +3057,7 @@ public class Cooja extends Observable {
     for (COOJAProject project: projects) {
     	File projectDir = project.dir;
       try {
-        urls.add((new File(projectDir, "java")).toURI().toURL());
+        urls.add(new File(projectDir, "java").toURI().toURL());
 
         // Read configuration to check if any JAR files should be loaded
         ProjectConfig projectConfig = new ProjectConfig(false);
@@ -3469,7 +3455,7 @@ public class Cooja extends Observable {
    * Saves current simulation configuration to given file and notifies
    * observers.
    *
-   * @see #loadSimulationConfig(File, boolean)
+   * @see #loadSimulationConfig(File, boolean, Long)
    * @param file
    *          File to write
    */
@@ -3767,7 +3753,7 @@ public class Cooja extends Observable {
           if (plugin.getClientProperty("zorder") == null) {
           	continue;
           }
-          int zOrder = ((Integer) plugin.getClientProperty("zorder")).intValue();
+          int zOrder = (Integer) plugin.getClientProperty("zorder");
           if (zOrder != z) {
           	continue;
           }
@@ -4024,9 +4010,7 @@ public class Cooja extends Observable {
             val = RunnableInEDT.this.work();
           }
         });
-      } catch (InterruptedException e) {
-        e.printStackTrace();
-      } catch (InvocationTargetException e) {
+      } catch (InterruptedException | InvocationTargetException e) {
         e.printStackTrace();
       }
 
@@ -4138,9 +4122,7 @@ public class Cooja extends Observable {
   }
 
   public File createPortablePath(File file, boolean allowConfigRelativePaths) {
-    File portable = null;
-
-    portable = createContikiRelativePath(file);
+    File portable = createContikiRelativePath(file);
     if (portable != null) {
       logger.info("Generated Contiki relative path '" + file.getPath() + "' to '" + portable.getPath() + "'");
       return portable;
@@ -4172,8 +4154,7 @@ public class Cooja extends Observable {
       return file;
     }
 
-    File absolute = null;
-    absolute = restoreContikiRelativePath(file);
+    File absolute = restoreContikiRelativePath(file);
     if (absolute != null) {
       logger.info("Restored Contiki relative path '" + file.getPath() + "' to '" + absolute.getPath() + "'");
       return absolute;
@@ -4194,7 +4175,7 @@ public class Cooja extends Observable {
 	  {"[COOJA_DIR]","PATH_COOJA",""},
 	  {"[APPS_DIR]","PATH_APPS","apps"}
   };
-  
+
   private File createContikiRelativePath(File file) {
     try {
     	int elem = PATH_IDENTIFIER.length;
@@ -4716,8 +4697,8 @@ public class Cooja extends Observable {
       boolean show = ((JCheckBoxMenuItem) e.getSource()).isSelected();
       quickHelpTextPane.setVisible(show);
       quickHelpScroll.setVisible(show);
-      setExternalToolsSetting("SHOW_QUICKHELP", new Boolean(show).toString());
-      ((JPanel)frame.getContentPane()).revalidate();
+      setExternalToolsSetting("SHOW_QUICKHELP", Boolean.toString(show));
+      frame.getContentPane().revalidate();
       updateDesktopSize(getDesktopPane());
     }
 

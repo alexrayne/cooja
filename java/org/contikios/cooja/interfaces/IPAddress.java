@@ -32,7 +32,6 @@ package org.contikios.cooja.interfaces;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Observable;
 import java.util.Observer;
@@ -115,7 +114,7 @@ public class IPAddress extends MoteInterface {
             for (int i = 0; i < IPv6_MAX_ADDRESSES; i++) {
               long addr_of_ip = moteMem.getVariableAddress("uip_ds6_if") // start address of interface
                       + ipv6_addr_list_offset // offset to ip address region
-                      + i * ipv6_addr_size // offset to ith ip address 
+                      + i * ((long) ipv6_addr_size) // offset to ith ip address
                       + 1 + memory.getLayout().getPaddingBytesFor(
                               MemoryLayout.DataType.INT8,
                               MemoryLayout.DataType.INT16); // skip 'isused'

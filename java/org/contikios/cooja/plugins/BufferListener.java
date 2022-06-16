@@ -51,7 +51,6 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -97,7 +96,6 @@ import org.contikios.cooja.TimeEvent;
 import org.contikios.cooja.VisPlugin;
 import org.contikios.cooja.dialogs.TableColumnAdjuster;
 import org.contikios.cooja.dialogs.UpdateAggregator;
-import org.contikios.cooja.interfaces.IPAddress;
 import org.contikios.cooja.interfaces.TimeSelect;
 import org.contikios.cooja.mote.memory.MemoryBuffer;
 import org.contikios.cooja.mote.memory.MemoryInterface;
@@ -391,11 +389,7 @@ public class BufferListener extends VisPlugin
           char last = d.getID().charAt(d.getID().length()-1);
           if (last >= '0' && last <= '9') {
             bgColor = BG_COLORS[last - '0'];
-          } else {
-            bgColor = null;
           }
-        } else {
-          bgColor = null;
         }
         if (isSelected) {
           bgColor = table.getSelectionBackground();
@@ -1346,10 +1340,7 @@ public class BufferListener extends VisPlugin
     Parser bp = null;
     try {
       bp = bpClass.newInstance();
-    } catch (InstantiationException e) {
-      logger.warn("Could not create buffer parser: " + e.getMessage(), e);
-      return;
-    } catch (IllegalAccessException e) {
+    } catch (InstantiationException | IllegalAccessException e) {
       logger.warn("Could not create buffer parser: " + e.getMessage(), e);
       return;
     }
@@ -1402,10 +1393,7 @@ public class BufferListener extends VisPlugin
   private static Buffer createBufferInstance(Class<? extends Buffer> btClass) {
     try {
       return btClass.newInstance();
-    } catch (InstantiationException e) {
-      logger.warn("Could not create buffer type: " + e.getMessage(), e);
-      return null;
-    } catch (IllegalAccessException e) {
+    } catch (InstantiationException | IllegalAccessException e) {
       logger.warn("Could not create buffer type: " + e.getMessage(), e);
       return null;
     }
@@ -1438,8 +1426,6 @@ public class BufferListener extends VisPlugin
 
   public static interface Parser {
     /**
-     * @param mm Memory monitor
-     * @param address Address that changed. May not contain all changes
      * @param ba Buffer Access object
      * @return String or custom graphical object
      */

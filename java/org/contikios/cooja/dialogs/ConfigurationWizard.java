@@ -44,7 +44,6 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -565,10 +564,6 @@ public class ConfigurationWizard extends JDialog {
         }
         templateReader = new BufferedReader(new InputStreamReader(input, UTF_8));
       }
-    } catch (FileNotFoundException e) {
-      e.printStackTrace(errorStream);
-      testOutput.addMessage("### Error: " + e.getMessage(), MessageList.ERROR);
-      return false;
     } catch (IOException e) {
       e.printStackTrace(errorStream);
       testOutput.addMessage("### Error: " + e.getMessage(), MessageList.ERROR);

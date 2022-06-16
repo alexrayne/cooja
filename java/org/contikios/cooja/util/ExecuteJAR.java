@@ -57,7 +57,6 @@ import org.contikios.cooja.Simulation;
 import org.contikios.cooja.dialogs.CompileContiki;
 import org.contikios.cooja.dialogs.MessageContainer;
 import org.contikios.cooja.dialogs.MessageListUI;
-import org.contikios.cooja.plugins.ScriptRunner;
 import org.contikios.cooja.PluginType;
 
 public class ExecuteJAR {
@@ -437,9 +436,8 @@ public class ExecuteJAR {
       );
     } catch (Exception e) {
       logger.warn("Building executable JAR error: " + e.getMessage());
-      MessageContainer[] err = errors.getMessages();
-      for (int i=0; i < err.length; i++) {
-        logger.fatal(">> " + err[i]);
+      for (MessageContainer msgs : errors.getMessages()) {
+        logger.fatal(">> " + msgs);
       }
       
       /* Forward exception */
@@ -487,7 +485,7 @@ public class ExecuteJAR {
           throw new RuntimeException("Error when copying file: " + file);
         }
         logger.info("Simconfig: Copied file: " + file.getAbsolutePath() + " -> " + ("[CONFIG_DIR]/" + newFilename));
-        ((Element)c).setText("[CONFIG_DIR]/" + newFilename);
+        c.setText("[CONFIG_DIR]/" + newFilename);
       } else if (a != null && a.getValue().equals("discard")) {
         /* Remove config element */
         e.removeChild(c.getName());

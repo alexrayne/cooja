@@ -142,7 +142,7 @@ public abstract class CoreComm {
       String mainTemplate = Cooja
           .getExternalToolsSetting("CORECOMM_TEMPLATE_FILENAME");
 
-      if ((new File(mainTemplate)).exists()) {
+      if (new File(mainTemplate).exists()) {
         reader = Files.newBufferedReader(Paths.get(mainTemplate), UTF_8);
       } else {
         InputStream input = CoreComm.class
@@ -242,13 +242,7 @@ public abstract class CoreComm {
         return;
       }
 
-    } catch (IOException e) {
-      MoteTypeCreationException exception = (MoteTypeCreationException) new MoteTypeCreationException(
-          "Could not compile corecomm source file: " + className + ".java")
-          .initCause(e);
-      exception.setCompilationOutput(compilationOutput);
-      throw exception;
-    } catch (InterruptedException e) {
+    } catch (IOException | InterruptedException e) {
       MoteTypeCreationException exception = (MoteTypeCreationException) new MoteTypeCreationException(
           "Could not compile corecomm source file: " + className + ".java")
           .initCause(e);
@@ -279,11 +273,7 @@ public abstract class CoreComm {
       loadedClass = urlClassLoader.loadClass("org.contikios.cooja.corecomm."
           + className);
 
-    } catch (MalformedURLException e) {
-      throw (MoteTypeCreationException) new MoteTypeCreationException(
-          "Could not load corecomm class file: " + className + ".class")
-          .initCause(e);
-    } catch (ClassNotFoundException e) {
+    } catch (MalformedURLException | ClassNotFoundException e) {
       throw (MoteTypeCreationException) new MoteTypeCreationException(
           "Could not load corecomm class file: " + className + ".class")
           .initCause(e);

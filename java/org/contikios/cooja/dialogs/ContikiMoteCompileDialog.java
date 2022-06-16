@@ -120,7 +120,7 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
     String output_dir = Cooja.getExternalToolsSetting("PATH_CONTIKI_NG_BUILD_DIR", "build/cooja");
     
     /* Create variables used for compiling Contiki */
-    ((ContikiMoteType)moteType).setContikiSourceFile(source);
+    moteType.setContikiSourceFile(source);
     ((ContikiMoteType)moteType).libSource = new File(
         source.getParentFile(),
         output_dir + "/" + moteType.getIdentifier() + ".c"
@@ -210,9 +210,7 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
             updateForSource(source);
           }
         });
-      } catch (InvocationTargetException e) {
-        logger.fatal("Error when updating for source " + source + ": " + e.getMessage(), e);
-      } catch (InterruptedException e) {
+      } catch (InvocationTargetException | InterruptedException e) {
         logger.fatal("Error when updating for source " + source + ": " + e.getMessage(), e);
       }
     }
@@ -358,7 +356,7 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
       @Override
       public void actionPerformed(ActionEvent e) {
         ((ContikiMoteType)moteType).setNetworkStack((NetworkStack)netStackComboBox.getSelectedItem());
-        netStackHeaderBox.setVisible((NetworkStack)netStackComboBox.getSelectedItem() == NetworkStack.MANUAL);
+        netStackHeaderBox.setVisible(netStackComboBox.getSelectedItem() == NetworkStack.MANUAL);
         setDialogState(DialogState.SELECTED_SOURCE);
       }
     });
@@ -367,7 +365,7 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
     netStackBox.add(label);
     netStackBox.add(Box.createHorizontalStrut(20));
     netStackBox.add(netStackComboBox);
-    netStackHeaderBox.setVisible((NetworkStack)netStackComboBox.getSelectedItem() == NetworkStack.MANUAL);
+    netStackHeaderBox.setVisible(netStackComboBox.getSelectedItem() == NetworkStack.MANUAL);
 
 
     /* Advanced tab */
@@ -411,7 +409,7 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
         SwingUtilities.invokeLater(new Runnable() {
           @Override
           public void run() {
-            getDefaultCompileCommands(((ContikiMoteType)moteType).getContikiSourceFile());
+            getDefaultCompileCommands(moteType.getContikiSourceFile());
             for (int i=0; i < tabbedPane.getTabCount(); i++) {
               if (tabbedPane.getTitleAt(i).equals("Environment")) {
                 tabbedPane.setSelectedIndex(i);
@@ -466,18 +464,6 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
     String[] coreInterfaces =
       ContikiMoteType.getRequiredCoreInterfaces(getSelectedMoteInterfaceClasses());
     ((ContikiMoteType)moteType).setCoreInterfaces(coreInterfaces);
-
-    /* Generate Contiki main source */
-    /*try {
-      CompileContiki.generateSourceFile(
-          ((ContikiMoteType)moteType).libSource,
-          ((ContikiMoteType)moteType).javaClassName,
-          ((ContikiMoteType)moteType).getSensors(),
-          ((ContikiMoteType)moteType).getCoreInterfaces()
-      );
-    } catch (Exception e) {
-      throw (Exception) new Exception("Error when generating Contiki main source").initCause(e);
-    }*/
 
     /* Start compiling */
     super.compileContiki();

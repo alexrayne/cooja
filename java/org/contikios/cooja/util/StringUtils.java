@@ -32,7 +32,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.Throwable;
 import java.io.InputStreamReader;
@@ -203,7 +202,7 @@ public class StringUtils {
         }
       }
       
-      if (sb != null && sb.length() > 0) {
+      if (sb.length() > 0) {
         return sb.toString();
       }
       return null;

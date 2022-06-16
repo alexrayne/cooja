@@ -283,19 +283,6 @@ public class ContikiMoteType implements MoteType {
       archiveFile.delete();
       mapFile.delete();
 
-      /* Generate Contiki main source */
-      /*try {
-       CompileContiki.generateSourceFile(
-       libSource,
-       javaClassName,
-       getSensors(),
-       getCoreInterfaces()
-       );
-       } catch (Exception e) {
-       throw (MoteTypeCreationException) new MoteTypeCreationException(
-       "Error when generating Contiki main source").initCause(e);
-       }*/
-
       /* Prepare compiler environment */
       String[][] env;
       try {
@@ -493,10 +480,8 @@ public class ContikiMoteType implements MoteType {
       try {
         long referenceVar = varMem.getVariable("referenceVar").addr;
         myCoreComm.setReferenceAddress(referenceVar);
-      } catch (UnknownVariableException e) {
-        throw new MoteTypeCreationException("Error setting reference variable: " + e.getMessage(), e);
       } catch (RuntimeException e) {
-          throw new MoteTypeCreationException("Error setting reference variable: " + e.getMessage(), e);
+        throw new MoteTypeCreationException("Error setting reference variable: " + e.getMessage(), e);
       }
 
       getCoreMemory(tmp);
@@ -644,8 +629,8 @@ public class ContikiMoteType implements MoteType {
       for (String line : getData()) {
         Matcher matcher = pattern.matcher(line);
         if (matcher.find()) {
-          if (Long.decode(matcher.group(1)).longValue() >= getStartAddr() &&
-              Long.decode(matcher.group(1)).longValue() <= getStartAddr() + getSize()) {
+          if (Long.decode(matcher.group(1)) >= getStartAddr() &&
+              Long.decode(matcher.group(1)) <= getStartAddr() + getSize()) {
             String varName = matcher.group(2);
             varNames.put(varName, new Symbol(
                     Symbol.Type.VARIABLE,
@@ -1114,7 +1099,7 @@ public class ContikiMoteType implements MoteType {
     boolean okID = false;
 
     while (!okID) {
-      testID = ID_PREFIX + (new Random().nextInt(1000));
+      testID = ID_PREFIX + new Random().nextInt(1000);
       okID = true;
 
       // Check if identifier is reserved
@@ -1236,7 +1221,7 @@ public class ContikiMoteType implements MoteType {
     }
 
     element = new Element("symbols");
-    element.setText(new Boolean(hasSystemSymbols()).toString());
+    element.setText(Boolean.toString(hasSystemSymbols()));
     config.add(element);
 
     if (getNetworkStack() != NetworkStack.DEFAULT) {

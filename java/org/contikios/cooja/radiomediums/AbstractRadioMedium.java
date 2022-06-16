@@ -39,7 +39,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Observable;
 import java.util.Observer;
-import java.util.WeakHashMap;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
@@ -97,8 +96,8 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 	
 	/**
 	 * Two Observables to observe the radioMedium and radioTransmissions
-	 * @see addRadioTransmissionObserver
-	 * @see addRadioMediumObserver
+	 * @see #addRadioTransmissionObserver
+	 * @see #addRadioMediumObserver
 	 */
 	protected ScnObservable radioMediumObservable = new ScnObservable();
 	protected ScnObservable radioTransmissionObservable = new ScnObservable();
@@ -539,7 +538,7 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 	 * Register an observer that gets notified when the radiotransmissions changed.
 	 * E.g. creating new connections.
 	 * This does not include changes in the settings and (de-)registration of radios.
-	 * @see addRadioMediumObserver
+	 * @see #addRadioMediumObserver
 	 * @param observer the Observer to register
 	 */
 	@Override
@@ -562,7 +561,7 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 	 * This includes changes in the settings and (de-)registration of radios. 
 	 * This does not include transmissions, etc as these are part of the radio
 	 * and not the radio medium itself.
-	 * @see addRadioTransmissionObserver
+	 * @see #addRadioTransmissionObserver
 	 * @param observer the Observer to register
 	 */
 	public void addRadioMediumObserver(Observer observer) {

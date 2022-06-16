@@ -101,6 +101,7 @@ public class MoteInterfaceHandler {
    *
    * Usage: getInterfaceOfType(Radio.class)
    *
+   * @param <N>
    * @param interfaceType Class of interface to return
    * @return Mote interface, or null if no interface exists of given type
    */
@@ -118,7 +119,6 @@ public class MoteInterfaceHandler {
    * Returns the first interface with a class name that ends with the given arguments.
    * Example: mote.getInterfaces().get("Temperature");
    * 
-   * @param <N>
    * @param classname
    * @return
    */

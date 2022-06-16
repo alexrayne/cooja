@@ -38,7 +38,6 @@ import org.jdom.Element;
 
 import org.contikios.cooja.contikimote.ContikiMoteType;
 import org.contikios.cooja.dialogs.MessageList;
-import org.contikios.cooja.dialogs.MessageListUI;
 import org.contikios.cooja.util.ArrayUtils;
 
 /**
@@ -277,7 +276,7 @@ public interface MoteType {
    * depending on the given arguments. This may include recompiling and loading
    * libraries.
    *
-   * @see #getConfigXML()
+   * @see #getConfigXML(Simulation)
    * @param simulation
    *          Simulation that will hold the mote type
    * @param configXML
