@@ -33,8 +33,8 @@ package org.contikios.cooja;
 import java.io.*;
 import java.util.*;
 
-import org.apache.log4j.Logger;
-import org.apache.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
  * A project configuration may hold the configuration for one or several project
