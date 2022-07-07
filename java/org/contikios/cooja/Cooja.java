@@ -48,6 +48,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -259,8 +260,8 @@ public class Cooja extends Observable {
     "PATH_MAKE",
     "PATH_SHELL",
     "PATH_C_COMPILER", "COMPILER_ARGS",
-    "PATH_LINKER", "LINK_COMMAND_1", "LINK_COMMAND_2",
-    "PATH_AR", "AR_COMMAND_1", "AR_COMMAND_2",
+    "PATH_LINKER",
+    "PATH_AR",
     "PATH_OBJDUMP", "OBJDUMP_ARGS",
     "PATH_OBJCOPY",
     "PATH_JAVAC",
@@ -493,19 +494,11 @@ public class Cooja extends Observable {
    * @return True if simulator is visualized
    */
   public static boolean isVisualized() {
-    return isVisualizedInFrame();
+    return frame != null;
   }
 
   public static Container getTopParentContainer() {
-    if (isVisualizedInFrame()) {
-      return frame;
-    }
-
-    return null;
-  }
-
-  public static boolean isVisualizedInFrame() {
-    return frame != null;
+    return frame;
   }
 
   public File getLastOpenedFile() {
@@ -2184,7 +2177,7 @@ public class Cooja extends Observable {
     updateGUIComponentState();
 
     // Reset frame title
-    if (isVisualizedInFrame()) {
+    if (isVisualized()) {
       frame.setTitle(WINDOW_TITLE);
     }
 
@@ -2633,7 +2626,7 @@ public class Cooja extends Observable {
     }
 
     /* Store frame size and position */
-    if (isVisualizedInFrame()) {
+    if (isVisualized()) {
       setExternalToolsSetting("FRAME_SCREEN", frame.getGraphicsConfiguration().getDevice().getIDstring());
       setExternalToolsSetting("FRAME_POS_X", "" + frame.getLocationOnScreen().x);
       setExternalToolsSetting("FRAME_POS_Y", "" + frame.getLocationOnScreen().y);
@@ -3105,13 +3098,6 @@ public class Cooja extends Observable {
       });
     } else if (options.action.quickstart != null) {
       String contikiApp = options.action.quickstart;
-
-      /* Cygwin fix */
-      if (contikiApp.startsWith("/cygdrive/")) {
-        char driveCharacter = contikiApp.charAt("/cygdrive/".length());
-        contikiApp = contikiApp.replace("/cygdrive/" + driveCharacter + "/", driveCharacter + ":/");
-      }
-
       Simulation sim = null;
       if (contikiApp.endsWith(".csc")) {
         sim = quickStartSimulationConfig(new File(contikiApp), true, options.randomSeed, logDirectory);
@@ -4288,7 +4274,7 @@ public class Cooja extends Observable {
     }
     public abstract boolean shouldBeEnabled();
   }
-  GUIAction newSimulationAction = new GUIAction("New simulation...", KeyEvent.VK_N, KeyStroke.getKeyStroke(KeyEvent.VK_N, ActionEvent.CTRL_MASK)) {
+  GUIAction newSimulationAction = new GUIAction("New simulation...", KeyEvent.VK_N, KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK)) {
 		private static final long serialVersionUID = 5053703908505299911L;
     @Override
     public void actionPerformed(ActionEvent e) {
@@ -4310,7 +4296,7 @@ public class Cooja extends Observable {
       return getSimulation() != null;
     }
   };
-  GUIAction reloadSimulationAction = new GUIAction("Reload with same random seed", KeyEvent.VK_K, KeyStroke.getKeyStroke(KeyEvent.VK_R, ActionEvent.CTRL_MASK)) {
+  GUIAction reloadSimulationAction = new GUIAction("Reload with same random seed", KeyEvent.VK_K, KeyStroke.getKeyStroke(KeyEvent.VK_R, InputEvent.CTRL_DOWN_MASK)) {
 		private static final long serialVersionUID = 66579555555421977L;
     @Override
     public void actionPerformed(ActionEvent e) {
@@ -4332,7 +4318,7 @@ public class Cooja extends Observable {
       return true;
     }
   };
-  GUIAction reloadRandomSimulationAction = new GUIAction("Reload with new random seed", KeyEvent.VK_N, KeyStroke.getKeyStroke(KeyEvent.VK_R, ActionEvent.CTRL_MASK | ActionEvent.SHIFT_MASK)) {
+  GUIAction reloadRandomSimulationAction = new GUIAction("Reload with new random seed", KeyEvent.VK_N, KeyStroke.getKeyStroke(KeyEvent.VK_R, InputEvent.SHIFT_DOWN_MASK | InputEvent.CTRL_DOWN_MASK)) {
 		private static final long serialVersionUID = -4494402222740250203L;
     @Override
     public void actionPerformed(ActionEvent e) {
@@ -4464,7 +4450,7 @@ public class Cooja extends Observable {
       return true;
     }
   };
-  GUIAction startStopSimulationAction = new GUIAction("Start simulation", KeyStroke.getKeyStroke(KeyEvent.VK_S, ActionEvent.CTRL_MASK)) {
+  GUIAction startStopSimulationAction = new GUIAction("Start simulation", KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK)) {
 		private static final long serialVersionUID = 6750107157493939710L;
     @Override
     public void actionPerformed(ActionEvent e) {

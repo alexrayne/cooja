@@ -216,7 +216,7 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
     }
 
     /*"make clean TARGET=cooja\n" + */
-    final String target = getExpectedFirmwareFile(source).getName();
+    final String target = getExpectedFirmwareFile(moteType.getIdentifier(), source).getName();
     String command = setCommandTarget(save_command, target);
 
     final String newstack = ((ContikiMoteType) moteType).getNetworkStack().getHeaderFile(); 
@@ -277,7 +277,14 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
 
   @Override
   public File getExpectedFirmwareFile(File source) {
-    return ContikiMoteType.getExpectedFirmwareFile(source);
+    logger.warn("Called getExpectedFirmwareFile(File)");
+    //throw new RuntimeException("This method should not be called on ContikiMotes");
+    return ContikiMoteType.getExpectedFirmwareFile(moteType.getIdentifier(), source);
+  }
+
+  @Override
+  public File getExpectedFirmwareFile(String moteId, File source) {
+    return ContikiMoteType.getExpectedFirmwareFile(moteId, source);
   }
 
   @Override
