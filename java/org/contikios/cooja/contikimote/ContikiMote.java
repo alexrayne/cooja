@@ -227,7 +227,7 @@ public class ContikiMote extends AbstractWakeupMote implements Mote {
    */
   @Override
   public Collection<Element> getConfigXML() {
-    ArrayList<Element> config = new ArrayList<Element>();
+    ArrayList<Element> config = new ArrayList<>();
     Element element;
 
     /* Mote interfaces */

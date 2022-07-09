@@ -99,16 +99,15 @@ The COOJA Simulator
     <mkdir dir="${build}"/>
     <copy todir="${build}">
       <fileset dir="${config}"/>
+      <fileset dir="images"/>
     </copy>
   </target>
 
   <target name="clean">
     <delete dir="${build}"/>
     <delete dir="${dist}"/>
-    <ant antfile="build.xml" dir="apps/mrm" target="clean" inheritAll="false"/>
     <ant antfile="build.xml" dir="apps/mspsim" target="clean" inheritAll="false"/>
     <ant antfile="build.xml" dir="apps/avrora" target="clean" inheritAll="false"/>
-    <ant antfile="build.xml" dir="apps/serial_socket" target="clean" inheritAll="false"/>
     <ant antfile="build.xml" dir="apps/powertracker" target="clean" inheritAll="false"/>
   </target>
 
@@ -173,10 +172,8 @@ The COOJA Simulator
   </target>
 
   <target name="jar" depends="jar_cooja">
-    <ant antfile="build.xml" dir="apps/mrm" target="jar" inheritAll="false"/>
     <ant antfile="build.xml" dir="apps/mspsim" target="jar" inheritAll="false"/>
     <ant antfile="build.xml" dir="apps/avrora" target="jar" inheritAll="false"/>
-    <ant antfile="build.xml" dir="apps/serial_socket" target="jar" inheritAll="false"/>
     <ant antfile="build.xml" dir="apps/powertracker" target="jar" inheritAll="false"/>
   </target>
 

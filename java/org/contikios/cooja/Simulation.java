@@ -34,7 +34,6 @@ import java.util.Collection;
 import java.util.Observable;
 import java.util.Observer;
 import java.util.Random;
-import java.util.Vector;
 
 import javax.swing.JOptionPane;
 
@@ -59,10 +58,10 @@ public class Simulation extends Observable implements Runnable {
 
   /*private static long EVENT_COUNTER = 0;*/
 
-  private Vector<Mote> motes = new Vector<Mote>();
-  private Vector<Mote> motesUninit = new Vector<Mote>();
+  private final ArrayList<Mote> motes = new ArrayList<>();
+  private final ArrayList<Mote> motesUninit = new ArrayList<>();
   
-  private Vector<MoteType> moteTypes = new Vector<MoteType>();
+  private final ArrayList<MoteType> moteTypes = new ArrayList<>();
 
   /* If true, run simulation at full speed */
   private boolean speedLimitNone = true;
@@ -96,10 +95,10 @@ public class Simulation extends Observable implements Runnable {
 
   private long maxMoteStartupDelay = 1000*MILLISECOND;
 
-  private SafeRandom randomGenerator;
+  private final SafeRandom randomGenerator;
 
   private boolean hasMillisecondObservers = false;
-  private MillisecondObservable millisecondObservable = new MillisecondObservable();
+  private final MillisecondObservable millisecondObservable = new MillisecondObservable();
   private static class MillisecondObservable extends Observable {
     private void newMillisecond(long time) {
       setChanged();
@@ -108,7 +107,7 @@ public class Simulation extends Observable implements Runnable {
   }
 
   /* Event queue */
-  private EventQueue eventQueue = new EventQueue();
+  private final EventQueue eventQueue = new EventQueue();
 
   /* Poll requests */
   private boolean hasPollRequests = false;
@@ -481,7 +480,7 @@ public class Simulation extends Observable implements Runnable {
     this.maxMoteStartupDelay = Math.max(0, maxMoteStartupDelay);
   }
 
-  private SimEventCentral eventCentral = new SimEventCentral(this);
+  private final SimEventCentral eventCentral = new SimEventCentral(this);
   public SimEventCentral getEventCentral() {
     return eventCentral;
   }
@@ -493,7 +492,7 @@ public class Simulation extends Observable implements Runnable {
    * @return Current simulation config
    */
   public Collection<Element> getConfigXML() {
-    ArrayList<Element> config = new ArrayList<Element>();
+    ArrayList<Element> config = new ArrayList<>();
 
     Element element;
 
@@ -505,7 +504,7 @@ public class Simulation extends Observable implements Runnable {
     /* Max simulation speed */
     if (!speedLimitNone) {
       element = new Element("speedlimit");
-      element.setText("" + getSpeedLimit());
+      element.setText(String.valueOf(getSpeedLimit()));
       config.add(element);
     }
 
@@ -556,7 +555,7 @@ public class Simulation extends Observable implements Runnable {
 
       Collection<Element> moteConfig = mote.getConfigXML();
       if (moteConfig == null) {
-        moteConfig = new ArrayList<Element>();
+        moteConfig = new ArrayList<>();
       }
 
       /* Add mote type identifier */

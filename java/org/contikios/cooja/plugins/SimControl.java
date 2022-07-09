@@ -68,12 +68,14 @@ import org.contikios.cooja.VisPlugin;
 public class SimControl extends VisPlugin implements HasQuickHelp {
   private static final int LABEL_UPDATE_INTERVAL = 150;
 
-  private Simulation simulation;
+  private final Simulation simulation;
 
-  private JButton startButton, stopButton;
-  private JLabel simulationTime, simulationSpeedup;
+  private final JButton startButton;
+  private final JButton stopButton;
+  private final JLabel simulationTime;
+  private final JLabel simulationSpeedup;
 
-  private Observer simObserver;
+  private final Observer simObserver;
 
   private long lastSimulationTimeTimestamp;
   private long lastSystemTimeTimestamp;
@@ -198,12 +200,7 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
     simulation.addObserver(simObserver = new Observer() {
       @Override
       public void update(Observable obs, Object obj) {
-        SwingUtilities.invokeLater(new Runnable() {
-          @Override
-          public void run() {
-            updateValues();
-          }
-        });
+        SwingUtilities.invokeLater(() -> updateValues());
       }
     });
     /* Set initial values */
@@ -221,7 +218,7 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
   }
 
   private class ChangeMaxSpeedLimitAction extends AbstractAction {
-    private Double maxSpeed;
+    private final Double maxSpeed;
     public ChangeMaxSpeedLimitAction(String name, Double maxSpeed) {
       super(name);
       this.maxSpeed = maxSpeed;
@@ -287,7 +284,7 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
     updateLabelTimer.stop();
   }
 
-  private Timer updateLabelTimer = new Timer(LABEL_UPDATE_INTERVAL, new ActionListener() {
+  private final Timer updateLabelTimer = new Timer(LABEL_UPDATE_INTERVAL, new ActionListener() {
     @Override
     public void actionPerformed(ActionEvent e) {
       simulationTime.setText(getTimeString());
@@ -310,21 +307,21 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
     }
   });
 
-  private Action startAction = new AbstractAction("Start") {
+  private final Action startAction = new AbstractAction("Start") {
     @Override
     public void actionPerformed(ActionEvent e) {
       simulation.startSimulation();
       stopButton.requestFocus();
     }
   };
-  private Action stopAction = new AbstractAction("Pause") {
+  private final Action stopAction = new AbstractAction("Pause") {
     @Override
     public void actionPerformed(ActionEvent e) {
       simulation.stopSimulation();
       startButton.requestFocus();
     }
   };
-  private Action stepAction = new AbstractAction("Step") {
+  private final Action stepAction = new AbstractAction("Step") {
     @Override
     public void actionPerformed(ActionEvent e) {
       simulation.stepMillisecondSimulation();
@@ -336,7 +333,7 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
         stopButton.requestFocus();
       }
     };
-  private Action reloadAction = new AbstractAction("Reload") {
+  private final Action reloadAction = new AbstractAction("Reload") {
     @Override
     public void actionPerformed(ActionEvent e) {
       simulation.getCooja().reloadCurrentSimulation();

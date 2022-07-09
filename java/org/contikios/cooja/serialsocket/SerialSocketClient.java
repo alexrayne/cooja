@@ -87,7 +87,6 @@ import org.contikios.cooja.interfaces.SerialPort;
 @ClassDescription("Serial Socket (CLIENT)")
 @PluginType(PluginType.MOTE_PLUGIN)
 public class SerialSocketClient extends VisPlugin implements MotePlugin {
-  private static final long serialVersionUID = 1L;
   private static final Logger logger = LogManager.getLogger(SerialSocketClient.class);
 
   private static final String SERVER_DEFAULT_HOST = "localhost";
@@ -239,7 +238,7 @@ public class SerialSocketClient extends VisPlugin implements MotePlugin {
       add(BorderLayout.SOUTH, statusBarPanel);
 
       /* Mote serial port */
-      serialPort = (SerialPort) mote.getInterfaces().getLog();
+      serialPort = (SerialPort) mote.getInterfaces().getSerial();
       if (serialPort == null) {
         throw new RuntimeException("No mote serial port");
       }
@@ -415,15 +414,13 @@ public class SerialSocketClient extends VisPlugin implements MotePlugin {
 
           if (numRead >= 0) {
             final int finalNumRead = numRead;
-            final byte[] finalData = data;
+            final byte[] finalData = Arrays.copyOf(data, finalNumRead);
             /* We are not on the simulation thread */
             simulation.invokeSimulationThread(new Runnable() {
 
               @Override
               public void run() {
-                for (int i = 0; i < finalNumRead; i++) {
-                  serialPort.writeByte(finalData[i]);
-                }
+                serialPort.writeArray(finalData)
               }
             });
 

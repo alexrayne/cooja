@@ -243,7 +243,7 @@ public class MessageListUI extends JList implements MessageList {
     addMessage(message, NORMAL);
   }
 
-  private ArrayList<MessageContainer> messages = new ArrayList<MessageContainer>();
+  private final ArrayList<MessageContainer> messages = new ArrayList<>();
 
   @Override
   public MessageContainer[] getMessages() {
@@ -294,12 +294,7 @@ public class MessageListUI extends JList implements MessageList {
   {
     messages.add(msg);
 
-    java.awt.EventQueue.invokeLater(new Runnable() {
-      @Override
-      public void run() {
-        updateModel();
-      }
-    });
+    java.awt.EventQueue.invokeLater(() -> updateModel());
   }
 
   @Override
@@ -387,7 +382,7 @@ public class MessageListUI extends JList implements MessageList {
               if (hideNormal && msg.type == NORMAL) {
                 continue;
               }
-              sb.append(msg + "\n");
+              sb.append(msg).append("\n");
             }
 
             StringSelection stringSelection = new StringSelection(sb.toString());

@@ -42,6 +42,7 @@ import java.awt.event.ItemListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Observable;
@@ -97,7 +98,7 @@ public abstract class SerialUI extends SerialIO
   private int    recvLen = 0;
   private byte lastSerialData = 0; /* SerialPort */
   private String lastLogMessage = ""; /* Log */
-  private StringBuilder newMessage = new StringBuilder(); /* Log */
+  private final StringBuilder newMessage = new StringBuilder(); /* Log */
 
   private byte[] lastSendingData = null;
 
@@ -153,7 +154,7 @@ public abstract class SerialUI extends SerialIO
   private abstract static class SerialDataObservable extends Observable {
     public abstract void notifyNewData();
   }
-  private SerialDataObservable serialDataObservable = new SerialDataObservable() {
+  private final SerialDataObservable serialDataObservable = new SerialDataObservable() {
     @Override
     public void notifyNewData() {
       if (this.countObservers() == 0) {
@@ -181,7 +182,7 @@ public abstract class SerialUI extends SerialIO
 		  return;
       /* Notify observers of new log */
       lastLogMessage = newMessage.toString();
-      lastLogMessage = lastLogMessage.replaceAll("[^\\p{Print}\\p{Blank}]", "");
+      lastLogMessage = lastLogMessage.replaceAll("[^\\p{Print}[ \\t]]", "");
       newMessage.setLength(0);
       is_recv = true;
       this.setChanged();
@@ -233,7 +234,7 @@ public abstract class SerialUI extends SerialIO
     if (!flushed)
     	this.receiveFlush();
     is_recv = true;
-}
+  }
 
   protected void sendFlush() {
 	  is_recv = false;
@@ -334,12 +335,7 @@ public abstract class SerialUI extends SerialIO
           appendToTextArea(logTextPane, "> " + command);
           commandField.setText("");
           if (getMote().getSimulation().isRunning()) {
-            getMote().getSimulation().invokeSimulationThread(new Runnable() {
-              @Override
-              public void run() {
-                writeString(command);
-              }
-            });
+            getMote().getSimulation().invokeSimulationThread(() -> writeString(command));
           } else {
             writeString(command);
           }
@@ -394,7 +390,7 @@ public abstract class SerialUI extends SerialIO
       public void update(Observable obs, Object obj) {
           if (obs == controlsInform ) {
               EventQueue.invokeLater(new Runnable() {
-          @Override
+                  @Override
                   public void run() {
                       logButton.setSelected(isLogged());
                   }
@@ -448,7 +444,7 @@ public abstract class SerialUI extends SerialIO
 
   @Override
   public Collection<Element> getConfigXML() {
-    ArrayList<Element> config = new ArrayList<Element>();
+    ArrayList<Element> config = new ArrayList<>();
 
     Element element = history.getConfigXML("history");
     if (element != null) {

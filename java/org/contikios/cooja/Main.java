@@ -41,7 +41,7 @@ import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
-import java.awt.*;
+import java.awt.GraphicsEnvironment;
 import java.io.File;
 import java.net.URI;
 import java.nio.file.Files;
@@ -126,27 +126,50 @@ class Main {
   boolean versionRequested;
 
   @Option(names = {"-h", "--help"}, usageHelp = true, description = "display a help message")
-  private boolean helpRequested;
+  boolean helpRequested;
 
   public static void main(String[] args) {
     Main options = new Main();
     CommandLine commandLine = new CommandLine(options);
-    commandLine.setUnmatchedArgumentsAllowed(false);
-    commandLine.parseArgs(args);
+    try {
+      commandLine.parseArgs(args);
+    } catch (CommandLine.ParameterException e) {
+      System.err.println(e.getMessage());
+      System.exit(1);
+    }
 
-    if (commandLine.isUsageHelpRequested()) {
+    if (options.helpRequested) {
       commandLine.usage(System.out);
       return;
     }
-    if (commandLine.isVersionHelpRequested()) {
+    if (options.versionRequested) {
       commandLine.printVersionHelp(System.out);
       return;
     }
 
-    if (options.action != null && options.action.quickstart == null &&
-        options.action.nogui == null && GraphicsEnvironment.isHeadless()) {
+    if ((options.action == null || options.action.nogui == null) &&
+        GraphicsEnvironment.isHeadless()) {
       System.err.println("Trying to start GUI in headless environment, aborting");
       System.exit(1);
+    }
+
+    if (options.action != null && options.action.nogui != null) {
+      // Ensure no UI is used by Java
+      System.setProperty("java.awt.headless", "true");
+    }
+
+    // Verify soundness of -nogui/-quickstart argument.
+    if (options.action != null) {
+      String file = options.action.nogui == null ? options.action.quickstart : options.action.nogui;
+      if (!file.endsWith(".csc")) {
+        String option = options.action.nogui == null ? "-quickstart" : "-nogui";
+        System.err.println("Cooja " + option + " expects a filename extension of '.csc'");
+        System.exit(1);
+      }
+      if (!Files.exists(Path.of(file))) {
+        System.err.println("File '" + file + "' does not exist");
+        System.exit(1);
+      }
     }
 
     if (options.logConfigFile != null && !Files.exists(Path.of(options.logConfigFile))) {

@@ -43,7 +43,6 @@ import javax.swing.Action;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.contikios.cooja.Cooja;
-import org.contikios.cooja.MoteType;
 import org.contikios.cooja.MoteType.MoteTypeCreationException;
 import org.contikios.cooja.contikimote.ContikiMoteType;
 
@@ -82,7 +81,7 @@ public class CompileContiki {
   throws Exception {
     Pattern p = Pattern.compile("([^\\s\"']+|\"[^\"]*\"|'[^']*')");
     Matcher m = p.matcher(command);
-    ArrayList<String> commandList = new ArrayList<String>();
+    ArrayList<String> commandList = new ArrayList<>();
     while(m.find()) {
       String arg = m.group();
       if (arg.length() > 1 && (arg.charAt(0) == '"' || arg.charAt(0) == '\'')) {
@@ -262,22 +261,19 @@ public class CompileContiki {
           if (e instanceof InterruptedException) {
             msg = "Aborted by user";
           }
-          throw (MoteTypeCreationException) new MoteTypeCreationException(
-              "Compilation error: " + msg).initCause(e);
+          throw new MoteTypeCreationException("Compilation error: " + msg, e);
         }
 
         /* Detect error manually */
         if (syncException.hasCompilationOutput()) {
-          throw (MoteTypeCreationException) new MoteTypeCreationException(
-          "Bad return value").initCause(syncException);
+          throw new MoteTypeCreationException("Bad return value", syncException);
         }
       }
     } catch (IOException ex) {
       if (onFailure != null) {
         onFailure.actionPerformed(null);
       }
-      throw (MoteTypeCreationException) new MoteTypeCreationException(
-          "Compilation error: " + ex.getMessage()).initCause(ex);
+      throw new MoteTypeCreationException("Compilation error: " + ex.getMessage(), ex);
     }
 
     return compileProcess;
@@ -286,45 +282,54 @@ public class CompileContiki {
   /**
    * Generate compiler environment using external tools settings.
    * Used by Contiki Mote Type.
-   * 
-   * @param identifier Mote type identifier, "mtype123"
-   * @param contikiApp Contiki application source, "hello-world.c"
-   * @param mapFile Output map file, "mtype123.map"
-   * @param libFile Output JNI library, "mtype123.cooja"
-   * @param archiveFile Output archive, "mtype123.a"
+   *
+   * @param mote      Mote type
    * @param javaClass Java JNI library class, "Lib4"
    * @return Compilation environment
    * @throws Exception At errors
    */
   public static String[][] createCompilationEnvironment(
-      String identifier,
-      File contikiApp,
-      File mapFile,
-      File libFile,
-      File archiveFile,
+      ContikiMoteType mote,
       String javaClass)
   throws Exception {
 
-    if (identifier == null) {
-      throw new Exception("No identifier specified");
+    if (mote == null) {
+      throw new Exception("No mote specified");
     }
     if (javaClass == null) {
       throw new Exception("No Java library class name specified");
     }
 
+    String sources = "";
+    String dirs = "";
+    // Check whether Cooja projects include additional sources.
+    String[] coojaSources = mote.getConfig().getStringArrayValue(ContikiMoteType.class, "C_SOURCES");
+    if (coojaSources != null) {
+      for (String s : coojaSources) {
+        if (s.trim().isEmpty()) {
+          continue;
+        }
+        File p = mote.getConfig().getUserProjectDefining(ContikiMoteType.class, "C_SOURCES", s);
+        if (p == null) {
+          logger.warn("Project defining C_SOURCES$" + s + " not found");
+          continue;
+        }
+        sources += s + " ";
+        dirs += p.getPath() + " ";
+      }
+    }
     /* Fetch configuration from external tools */
     String ccFlags = Cooja.getExternalToolsSetting("COMPILER_ARGS", "");
 
     /* Create environment */
-    ArrayList<String[]> env = new ArrayList<String[]>();
-    env.add(new String[] { "LIBNAME", "$(BUILD_DIR_BOARD)/" + identifier + ".cooja" });
+    ArrayList<String[]> env = new ArrayList<>();
+    env.add(new String[] { "LIBNAME", "$(BUILD_DIR_BOARD)/" + mote.getIdentifier() + ".cooja" });
     // COOJA_VERSION is used to detect incompatibility with the Contiki-NG
     // build system. The format is <YYYY><MM><DD><2 digit sequence number>.
     env.add(new String[] { "COOJA_VERSION", "2022052601" });
     env.add(new String[] { "CLASSNAME", javaClass });
-    // WARNING: COOJA_SOURCE* are updated by redefineCOOJASources().
-    env.add(new String[] { "COOJA_SOURCEDIRS", "" });
-    env.add(new String[] { "COOJA_SOURCEFILES", "" });
+    env.add(new String[] { "COOJA_SOURCEDIRS", dirs.replace("\\", "/") });
+    env.add(new String[] { "COOJA_SOURCEFILES", sources });
     env.add(new String[] { "CC", Cooja.getExternalToolsSetting("PATH_C_COMPILER") });
     env.add(new String[] { "OBJCOPY", Cooja.getExternalToolsSetting("PATH_OBJCOPY") });
     env.add(new String[] { "EXTRA_CC_ARGS", ccFlags });
@@ -342,49 +347,4 @@ public class CompileContiki {
     }
     return env.toArray(new String[0][0]);
   }
-
-	public static void redefineCOOJASources(MoteType moteType, String[][] env) {
-    if (moteType == null || env == null) {
-    	return;
-    }
-
-    /* Check whether cooja projects include additional sources */
-    String[] coojaSources = moteType.getConfig().getStringArrayValue(ContikiMoteType.class, "C_SOURCES");
-    if (coojaSources == null) {
-    	return;
-    }
-
-    String sources = "";
-    String dirs = "";
-    for (String s: coojaSources) {
-    	if (s.trim().isEmpty()) {
-    		continue;
-    	}
-    	File p = moteType.getConfig().getUserProjectDefining(ContikiMoteType.class, "C_SOURCES", s);
-    	if (p == null) {
-    		logger.warn("Project defining C_SOURCES$" + s + " not found");
-    		continue;
-    	}
-    	/* Redefine sources. TODO Move to createCompilationEnvironment. */
-    	sources += s + " ";
-    	dirs += p.getPath() + " ";
-    }
-
-    if (!sources.trim().isEmpty()) {
-    	for (int i=0; i < env.length; i++) {
-    		if (env[i][0].equals("COOJA_SOURCEFILES")) {
-    			env[i][1] = sources;
-    			break;
-    		}
-    	}
-    }
-    if (!dirs.trim().isEmpty()) {
-    	for (int i=0; i < env.length; i++) {
-    		if (env[i][0].equals("COOJA_SOURCEDIRS")) {
-    			env[i][1] = dirs.replace("\\", "/");
-    			break;
-    		}
-    	}
-    }
-	}
 }

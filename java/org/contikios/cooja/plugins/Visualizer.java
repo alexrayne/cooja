@@ -102,9 +102,9 @@ import org.contikios.cooja.Cooja;
 import org.contikios.cooja.Cooja.MoteRelation;
 import org.contikios.cooja.HasQuickHelp;
 import org.contikios.cooja.Mote;
+import org.contikios.cooja.RadioMedium;
 import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.PluginType;
-import org.contikios.cooja.RadioMedium;
 import org.contikios.cooja.SimEventCentral.MoteCountListener;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.SupportedArguments;
@@ -141,8 +141,6 @@ import org.contikios.cooja.plugins.skins.UDGMVisualizerSkin;
 @ClassDescription("Network")
 @PluginType(PluginType.SIM_STANDARD_PLUGIN)
 public class Visualizer extends VisPlugin implements HasQuickHelp {
-
-  private static final long serialVersionUID = 1L;
   private static final Logger logger = LogManager.getLogger(Visualizer.class);
 
   public static final int MOTE_RADIUS = 8;
@@ -156,7 +154,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
   private final JMenu viewMenu;
 
   /* Viewport */
-  private AffineTransform viewportTransform;
+  private final AffineTransform viewportTransform;
   public int resetViewport = 0;
 
   private static final int SELECT_MASK = Event.CTRL_MASK;
@@ -179,7 +177,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
   }
 
   /* All selected motes */
-  public Set<Mote> selectedMotes = new HashSet<>();
+  public final Set<Mote> selectedMotes = new HashSet<>();
   /* Mote that was under curser while mouse press */
   Mote cursorMote;
 
@@ -187,10 +185,9 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
   /* Position where mouse button was pressed */
   Position pressedPos;
 
-  private Set<Mote> movedMotes = null;
-  private long moveStartTime = -1;
+  private final Set<Mote> movedMotes = null;
   private static final Cursor MOVE_CURSOR = new Cursor(Cursor.MOVE_CURSOR);
-  private Selection selection;
+  private final Selection selection;
 
   /* Visualizers */
   private static final ArrayList<Class<? extends VisualizerSkin>> visualizerSkins
@@ -208,13 +205,13 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     registerVisualizerSkin(MoteTypeVisualizerSkin.class);
     registerVisualizerSkin(AttributeVisualizerSkin.class);
   }
-  private ArrayList<VisualizerSkin> currentSkins = new ArrayList<>();
+  private final ArrayList<VisualizerSkin> currentSkins = new ArrayList<>();
 
   /* Generic visualization */
-  private MoteCountListener newMotesListener;
+  private final MoteCountListener newMotesListener;
   private Observer posObserver = null;
   private Observer moteHighligtObserver = null;
-  private ArrayList<Mote> highlightedMotes = new ArrayList<>();
+  private final ArrayList<Mote> highlightedMotes = new ArrayList<>();
   private final static Color HIGHLIGHT_COLOR = Color.CYAN;
   private final static Color MOVE_COLOR = Color.WHITE;
   private Observer moteRelationsObserver = null;
@@ -238,9 +235,9 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     public void doAction(Visualizer visualizer, Mote mote);
   }
 
-  private ArrayList<Class<? extends SimulationMenuAction>> simulationMenuActions
+  private final ArrayList<Class<? extends SimulationMenuAction>> simulationMenuActions
           = new ArrayList<>();
-  private ArrayList<Class<? extends MoteMenuAction>> moteMenuActions
+  private final ArrayList<Class<? extends MoteMenuAction>> moteMenuActions
           = new ArrayList<>();
 
   public Visualizer(Simulation simulation, Cooja gui) {
@@ -324,7 +321,6 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     selection = new Selection();
     /* Main canvas */
     canvas = new JPanel() {
-      private static final long serialVersionUID = 1L;
 
       {
         ToolTipManager.sharedInstance().registerComponent(this);
@@ -366,16 +362,14 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
         } else {
           fileName = file.getName();
         }
-        StringBuilder sb = new StringBuilder()
-                .append("<html><table cellspacing=\"0\" cellpadding=\"1\">")
-                .append("<tr><td>Type:</td><td>")
-                .append(motes[0].getType().getIdentifier())
-                .append("</td></tr>")
-                .append("<tr><td>Runs:</td><td>")
-                .append(fileName)
-                .append("</td></tr>")
-                .append("</table></html>");
-        return sb.toString();
+        return "<html><table cellspacing=\"0\" cellpadding=\"1\">" +
+                "<tr><td>Type:</td><td>" +
+                motes[0].getType().getIdentifier() +
+                "</td></tr>" +
+                "<tr><td>Runs:</td><td>" +
+                fileName +
+                "</td></tr>" +
+                "</table></html>";
       }
 
     };
@@ -839,12 +833,6 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
 
     /* Visualizer skin actions */
     menu.add(new JSeparator());
-    /*JMenu skinMenu = new JMenu("Visualizers");
-     populateSkinMenu(skinMenu);
-     menu.add(skinMenu);
-     makeSkinsDefaultAction.putValue(Action.NAME, "Set default visualizers");
-     JMenuItem skinDefaultItem = new JMenuItem(makeSkinsDefaultAction);
-     menu.add(skinDefaultItem);*/
 
     /* Show menu */
     menu.setLocation(new Point(
@@ -952,8 +940,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     boolean showMenuItem = true;
     if (skinClass.getAnnotation(SupportedArguments.class) != null) {
       showMenuItem = false;
-      Class<? extends RadioMedium>[] radioMediums = skinClass.getAnnotation(SupportedArguments.class).radioMediums();
-      for (Class<? extends Object> o : radioMediums) {
+      for (Class<? extends RadioMedium> o : skinClass.getAnnotation(SupportedArguments.class).radioMediums()) {
         if (o.isAssignableFrom(simulation.getRadioMedium().getClass())) {
           showMenuItem = true;
           break;
@@ -1011,7 +998,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     repaint();
   }
 
-  Map<Mote, double[]> moveStartPositions = new HashMap<>();
+  final Map<Mote, double[]> moveStartPositions = new HashMap<>();
 
   private void handleMouseDrag(MouseEvent e, boolean stop) {
     Position currPos = transformPixelToPosition(e.getPoint());
@@ -1067,8 +1054,8 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
         int pressedY = transformToPixelY(pressedPos.getYCoordinate());
         int currX = transformToPixelX(currPos.getXCoordinate());
         int currY = transformToPixelY(currPos.getYCoordinate());
-        int startX = pressedX < currX ? pressedX : currX;
-        int startY = pressedY < currY ? pressedY : currY;
+        int startX = Math.min(pressedX, currX);
+        int startY = Math.min(pressedY, currY);
         int width = Math.abs(pressedX - currX);
         int height = Math.abs(pressedY - currY);
 
@@ -1130,11 +1117,9 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
   }
 
   private void beginMoveRequest(Mote selectedMote, boolean withTiming, boolean confirm) {
+    long moveStartTime = -1;
     if (withTiming) {
       moveStartTime = System.currentTimeMillis();
-    }
-    else {
-      moveStartTime = -1;
     }
     /* Save start positions and set move-start position to clicked mote */
     for (Mote m : selectedMotes) {
@@ -1327,7 +1312,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     }
   }
 
-  private Polygon arrowPoly = new Polygon();
+  private final Polygon arrowPoly = new Polygon();
 
   private void drawArrow(Graphics g, int xSource, int ySource, int xDest, int yDest, int delta) {
     double dx = xSource - xDest;
@@ -1350,11 +1335,11 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     g.fillPolygon(arrowPoly);
   }
 
-  private int yCor(int len, double dir) {
+  private static int yCor(int len, double dir) {
     return (int) (0.5 + len * Math.cos(dir));
   }
 
-  private int xCor(int len, double dir) {
+  private static int xCor(int len, double dir) {
     return (int) (0.5 + len * Math.sin(dir));
   }
 
@@ -1600,12 +1585,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
                   /* Backwards compatibility */
                   || wanted.equals(Cooja.getDescriptionOf(skinClass))) {
             final Class<? extends VisualizerSkin> skin = skinClass;
-            SwingUtilities.invokeLater(new Runnable() {
-              @Override
-              public void run() {
-                generateAndActivateSkin(skin);
-              }
-            });
+            SwingUtilities.invokeLater(() -> generateAndActivateSkin(skin));
             wanted = null;
             break;
           }
@@ -1641,7 +1621,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     return true;
   }
 
-  private AbstractAction makeSkinsDefaultAction = new AbstractAction() {
+  private final AbstractAction makeSkinsDefaultAction = new AbstractAction() {
     @Override
     public void actionPerformed(ActionEvent e) {
       StringBuilder sb = new StringBuilder();
@@ -1672,7 +1652,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     public void doAction(Visualizer visualizer, Mote mote) {
       mote.getInterfaces().getButton().clickButton();
     }
-  };
+  }
 
   protected static class DeleteMoteMenuAction implements MoteMenuAction {
 
@@ -1703,7 +1683,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
       /* Invoke 'delete_motes' action */
       visualizer.canvas.getActionMap().get("delete_motes").actionPerformed(null);
     }
-  };
+  }
 
   protected static class ShowLEDMoteMenuAction implements MoteMenuAction {
 
@@ -1740,7 +1720,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
       viewer.setSelectedInterface(desc);
       viewer.pack();
     }
-  };
+  }
 
   protected static class ShowSerialMoteMenuAction implements MoteMenuAction {
 
@@ -1789,7 +1769,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
       viewer.setSelectedInterface(desc);
       viewer.pack();
     }
-  };
+  }
 
   protected static class MoveMoteMenuAction implements MoteMenuAction {
 
@@ -1817,7 +1797,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
       }
       visualizer.beginMoveRequest(mote, false, false);
     }
-  };
+  }
 
   protected static class ResetViewportAction implements SimulationMenuAction {
 
@@ -1836,7 +1816,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     public boolean isEnabled(Visualizer visualizer, Simulation simulation) {
       return true;
     }
-  };
+  }
 
   protected static class ToggleDecorationsMenuAction implements SimulationMenuAction {
 
@@ -1857,12 +1837,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
         ui.getNorthPane().setPreferredSize(new Dimension(0, 0));
       }
       visualizer.revalidate();
-      SwingUtilities.invokeLater(new Runnable() {
-        @Override
-        public void run() {
-          visualizer.repaint();
-        }
-      });
+      SwingUtilities.invokeLater(() -> visualizer.repaint());
     }
 
     @Override
