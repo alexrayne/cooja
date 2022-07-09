@@ -113,8 +113,8 @@ public class SerialSocketServer extends VisPlugin implements MotePlugin {
   private ServerSocket serverSocket;
   private Socket clientSocket;
 
-  private Mote mote;
-  private Simulation simulation;
+  private final Mote mote;
+  private final Simulation simulation;
 
   public SerialSocketServer(Mote mote, Simulation simulation, final Cooja gui) {
     super("Serial Socket (SERVER) (" + mote + ")", gui, false);
@@ -154,13 +154,11 @@ public class SerialSocketServer extends VisPlugin implements MotePlugin {
       socketPanel.add(listenPortField, c);
 
       serverStartButton = new JButton("Start") { // Button for label toggeling
-        private final String altString = "Stop";
-        
         @Override
         public Dimension getPreferredSize() {
           String origText = getText();
           Dimension origDim = super.getPreferredSize();
-          setText(altString);
+          setText("Stop");
           Dimension altDim = super.getPreferredSize();
           setText(origText);
           return new Dimension(Math.max(origDim.width, altDim.width), origDim.height);
@@ -269,7 +267,7 @@ public class SerialSocketServer extends VisPlugin implements MotePlugin {
             public void run() {
               System.out.println("onServerStarted");
               socketStatusLabel.setForeground(COLOR_NEUTRAL);
-              socketStatusLabel.setText("Listening on port " + String.valueOf(port));
+              socketStatusLabel.setText("Listening on port " + port);
               listenPortField.setEnabled(false);
               serverStartButton.setText("Stop");
             }
@@ -299,7 +297,7 @@ public class SerialSocketServer extends VisPlugin implements MotePlugin {
               // XXX check why needed
               if (serverSocket != null) {
                 socketStatusLabel.setForeground(COLOR_NEUTRAL);
-                socketStatusLabel.setText("Listening on port " + String.valueOf(serverSocket.getLocalPort()));
+                socketStatusLabel.setText("Listening on port " + serverSocket.getLocalPort());
               }
             }
           });
@@ -336,7 +334,7 @@ public class SerialSocketServer extends VisPlugin implements MotePlugin {
 
   }
 
-  private List<ServerListener> listeners = new LinkedList<>();
+  private final List<ServerListener> listeners = new LinkedList<>();
   
   public interface ServerListener {
     void onServerStarted(int port);
@@ -546,7 +544,7 @@ public class SerialSocketServer extends VisPlugin implements MotePlugin {
     if (serverSocket == null || !serverSocket.isBound()) {
       try {
         listenPortField.commitEdit();
-        element.setText(String.valueOf((Long) listenPortField.getValue()));
+        element.setText(String.valueOf(listenPortField.getValue()));
       } catch (ParseException ex) {
         logger.error(ex.getMessage());
         listenPortField.setText("null");
@@ -640,7 +638,7 @@ public class SerialSocketServer extends VisPlugin implements MotePlugin {
   }
 
   private static final int UPDATE_INTERVAL = 150;
-  private Timer updateTimer = new Timer(UPDATE_INTERVAL, new ActionListener() {
+  private final Timer updateTimer = new Timer(UPDATE_INTERVAL, new ActionListener() {
     @Override
 	  public void actionPerformed(ActionEvent e) {
 	  	if (Cooja.isVisualized()) {

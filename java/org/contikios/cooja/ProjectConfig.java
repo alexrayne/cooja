@@ -53,7 +53,7 @@ import org.apache.logging.log4j.LogManager;
  * Values can be fetched as String, Boolean, Integer, Double or String array.
  *
  * Several configurations can be merged, together forming a final overall
- * configuration. The order of the how configurations are merged matter - later
+ * configuration. The merge order of configurations matter - later
  * values will overwrite earlier. For example merging two configurations with
  * the key 'SOMEKEY' in the following order:
  *
@@ -186,6 +186,7 @@ public class ProjectConfig {
       for (String element : array) {
         if (element.equals(arrayElement)) {
           foundValue = true;
+          break;
         }
       }
       if (!foundValue) {
@@ -243,7 +244,7 @@ public class ProjectConfig {
   public boolean appendConfigFile(File propertyFile)
       throws FileNotFoundException, IOException {
     if (!propertyFile.exists()) {
-      logger.warn("Trying to import non-existant project configuration: " + propertyFile.toString());
+      logger.warn("Trying to import non-existant project configuration: " + propertyFile);
       return true;
     }
 
@@ -280,7 +281,7 @@ public class ProjectConfig {
     configFileStream.close();
 
     // Read new properties
-    Enumeration en = newProps.keys();
+    var en = newProps.keys();
     while (en.hasMoreElements()) {
       String key = (String) en.nextElement();
       String property = newProps.getProperty(key);

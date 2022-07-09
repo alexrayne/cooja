@@ -41,5 +41,5 @@ import org.contikios.cooja.contikimote.interfaces.ContikiLog;
  * @author Fredrik Osterlind
  */
 public interface PolledAfterActiveTicks {
-  public void doActionsAfterTick();
+  void doActionsAfterTick();
 }

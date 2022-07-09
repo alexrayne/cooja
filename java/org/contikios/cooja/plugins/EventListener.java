@@ -67,7 +67,7 @@ import org.contikios.cooja.interfaces.Position;
 import org.contikios.cooja.interfaces.Radio;
 
 /**
- * Allows a user to observe several different parts of the simulator, stopping a
+ * Allows a user to observe several parts of the simulator, stopping a
  * simulation whenever an object changes.
  *
  * @author Fredrik Osterlind
@@ -162,8 +162,6 @@ public class EventListener extends VisPlugin {
    * @param simulationToControl
    *          Simulation to control
    */
-  private class MoteInterfaceList extends ArrayList<Class<? extends MoteInterface>>; 
-  
   public EventListener(Simulation simulationToControl, Cooja gui) {
     super("Event Listener", gui);
 
@@ -171,8 +169,8 @@ public class EventListener extends VisPlugin {
     myPlugin = this;
 
     /* Create selectable interfaces list (only supports Contiki mote types) */
-    MoteInterfaceList allInterfaces     = new ArrayList<Class<? extends MoteInterface>>();
-    MoteInterfaceList allInterfacesDups = new ArrayList<Class<? extends MoteInterface>>();
+    ArrayList<Class<? extends MoteInterface>> allInterfaces     = new ArrayList<Class<? extends MoteInterface>>();
+    ArrayList<Class<? extends MoteInterface>> allInterfacesDups = new ArrayList<Class<? extends MoteInterface>>();
 
     // Add standard interfaces
     allInterfacesDups.add(Button.class);

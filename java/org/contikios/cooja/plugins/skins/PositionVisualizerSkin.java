@@ -47,7 +47,7 @@ import org.contikios.cooja.plugins.VisualizerSkin;
 /**
  * Visualizer skin for mote positions.
  *
- * Paints the three dimensional mote position on the right-hand side of the mote.
+ * Paints the three-dimensional mote position on the right-hand side of the mote.
  *
  * @author Fredrik Osterlind
  */
@@ -122,7 +122,7 @@ public class PositionVisualizerSkin implements VisualizerSkin {
       String[] parts;
 
       /* X */
-      posString = String.valueOf(pos.getXCoordinate()) + "000";
+      posString = pos.getXCoordinate() + "000";
       parts = posString.split("\\.");
       if (parts[0].length() >= 4) {
         msg += parts[0];
@@ -132,7 +132,7 @@ public class PositionVisualizerSkin implements VisualizerSkin {
       
       /* Y */
       msg += ", ";
-      posString = String.valueOf(pos.getYCoordinate()) + "000";
+      posString = pos.getYCoordinate() + "000";
       parts = posString.split("\\.");
       if (parts[0].length() >= 4) {
         msg += parts[0];
@@ -143,7 +143,7 @@ public class PositionVisualizerSkin implements VisualizerSkin {
       /* Z */
       if (pos.getZCoordinate() != 0) {
         msg += ", ";
-        posString = String.valueOf(pos.getZCoordinate()) + "000";
+        posString = pos.getZCoordinate() + "000";
         parts = posString.split("\\.");
         if (parts[0].length() >= 4) {
           msg += parts[0];

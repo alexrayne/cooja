@@ -31,10 +31,10 @@ package org.contikios.cooja.mote.memory;
 import java.util.Map;
 
 /**
- * A minimal interface to a motes memory.
+ * A minimal interface to a mote memory.
  * 
  * Allows reading and writing memory, obtaining symbol information
- * and provides some basic inforation about size, layout, etc.
+ * and provides some basic information about size, layout, etc.
  *
  * @author Enrico Jorns
  */
@@ -43,7 +43,7 @@ public interface MemoryInterface {
   /**
    * Represents a symbol in memory (variable / function)
    */
-  public static class Symbol {
+  class Symbol {
 
     public final Type type;
     public final String name;
@@ -82,7 +82,7 @@ public interface MemoryInterface {
   /**
    * Class represents memory access exceptions.
    */
-  public class MoteMemoryException extends RuntimeException {
+  class MoteMemoryException extends RuntimeException {
 
     public MoteMemoryException(String message, Object... args) {
       super(String.format(message, args));
@@ -94,7 +94,7 @@ public interface MemoryInterface {
    * @return Memory byte array
    * @throws org.contikios.cooja.mote.memory.MemoryInterface.MoteMemoryException 
    */
-  public byte[] getMemory() throws MoteMemoryException;
+  byte[] getMemory() throws MoteMemoryException;
 
   /**
    * Reads a segment from memory.
@@ -103,7 +103,7 @@ public interface MemoryInterface {
    * @param size Size to read [bytes]
    * @return Byte array
    */
-  public byte[] getMemorySegment(long addr, int size) throws MoteMemoryException;
+  byte[] getMemorySegment(long addr, int size) throws MoteMemoryException;
 
   /**
    * Sets a segment of memory.

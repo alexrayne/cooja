@@ -41,17 +41,17 @@ package org.contikios.cooja.interfaces;
  *
  * COOJA's radio mediums may or may not choose to respect noise source radios.
  *
- * See MRM in the apps directory.
+ * @see org.contikios.mrm.MRM
  *
  * @author Fredrik Osterlind
  */
 public interface NoiseSourceRadio {
-	public int getNoiseLevel();
+	int getNoiseLevel();
 
-	public void addNoiseLevelListener(NoiseLevelListener l);
-	public void removeNoiseLevelListener(NoiseLevelListener l);
+	void addNoiseLevelListener(NoiseLevelListener l);
+	void removeNoiseLevelListener(NoiseLevelListener l);
 
-	public interface NoiseLevelListener {
-		public void noiseLevelChanged(NoiseSourceRadio radio, int signal);
+	interface NoiseLevelListener {
+		void noiseLevelChanged(NoiseSourceRadio radio, int signal);
 	}
 }

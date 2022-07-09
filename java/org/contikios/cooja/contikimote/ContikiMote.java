@@ -74,9 +74,9 @@ import org.contikios.cooja.contikimote.interfaces.ContikiRadio;
 public class ContikiMote extends AbstractWakeupMote implements Mote {
   private static final Logger logger = LogManager.getLogger(ContikiMote.class);
 
-  private ContikiMoteType myType = null;
-  private SectionMoteMemory myMemory = null;
-  private MoteInterfaceHandler myInterfaceHandler = null;
+  private final ContikiMoteType myType;
+  private SectionMoteMemory myMemory;
+  private MoteInterfaceHandler myInterfaceHandler;
   public enum MoteState{ STATE_OK, STATE_EXEC, STATE_HANG};
   public MoteState execute_state = MoteState.STATE_OK;
 
@@ -125,16 +125,11 @@ public class ContikiMote extends AbstractWakeupMote implements Mote {
     return myType;
   }
 
-  public void setType(MoteType type) {
-    myType = (ContikiMoteType) type;
-    execute_state = MoteState.STATE_OK;
-  }
-
   /**
    * Ticks mote once. This is done by first polling all interfaces
    * and letting them act on the stored memory before the memory is set. Then
    * the mote is ticked, and the new memory is received.
-   * Finally all interfaces are allowing to act on the new memory in order to
+   * Finally, all interfaces are allowing to act on the new memory in order to
    * discover relevant changes. This method also schedules the next mote tick time
    * depending on Contiki specifics; pending timers and polled processes.
    *
@@ -228,11 +223,10 @@ public class ContikiMote extends AbstractWakeupMote implements Mote {
   @Override
   public Collection<Element> getConfigXML() {
     ArrayList<Element> config = new ArrayList<>();
-    Element element;
 
     /* Mote interfaces */
     for (MoteInterface moteInterface: getInterfaces().getInterfaces()) {
-      element = new Element("interface_config");
+      var element = new Element("interface_config");
       element.setText(moteInterface.getClass().getName());
 
       Collection<Element> interfaceXML = moteInterface.getConfigXML();
@@ -254,9 +248,7 @@ public class ContikiMote extends AbstractWakeupMote implements Mote {
     for (Element element: configXML) {
       String name = element.getName();
 
-      if (name.equals("motetype_identifier")) {
-        /* Ignored: handled by simulation */
-      } else if (name.equals("interface_config")) {
+      if (name.equals("interface_config")) {
         String intfClass = element.getText().trim();
 
         /* Backwards compatibility: se.sics -> org.contikios */

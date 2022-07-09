@@ -62,7 +62,8 @@ public class ImportAppMoteType extends AbstractApplicationMoteType {
 
   private File moteClassPath = null;
   private String moteClassName = null;
-  private Constructor<? extends AbstractApplicationMote> moteConstructor = null;
+  //private Constructor<? extends AbstractApplicationMote> moteConstructor = null;
+  private Constructor<? extends Mote> moteConstructor = null;
 
   public ImportAppMoteType() {
     super();

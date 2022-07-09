@@ -2,9 +2,7 @@
 build
 /dist
 /javadoc
-/apps/mspsim/lib
 /apps/avrora/cooja-avrora.jar
-/apps/powertracker/powertracker.jar
 /tools/coffee-manager/coffee.jar
 .hg
 /.hgignore

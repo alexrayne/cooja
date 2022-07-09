@@ -46,12 +46,12 @@ import java.net.Socket;
 import java.text.NumberFormat;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Observable;
 import java.util.Observer;
-import java.util.logging.Level;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -160,13 +160,11 @@ public class SerialSocketClient extends VisPlugin implements MotePlugin {
       serverSelectPanel.add(serverPortField, c);
 
       serverSelectButton = new JButton("Connect") { // Button for label toggeling
-        private final String altString = "Disconnect";
-        
         @Override
         public Dimension getPreferredSize() {
           String origText = getText();
           Dimension origDim = super.getPreferredSize();
-          setText(altString);
+          setText("Disconnect");
           Dimension altDim = super.getPreferredSize();
           setText(origText);
           return new Dimension(Math.max(origDim.width, altDim.width), origDim.height);
@@ -331,7 +329,7 @@ public class SerialSocketClient extends VisPlugin implements MotePlugin {
     pack();
   }
   
-  private List<ClientListener> listeners = new LinkedList<>();
+  private final List<ClientListener> listeners = new LinkedList<>();
   
   public interface ClientListener {
     void onError(String msg);
@@ -420,7 +418,7 @@ public class SerialSocketClient extends VisPlugin implements MotePlugin {
 
               @Override
               public void run() {
-                serialPort.writeArray(finalData)
+                serialPort.writeArray(finalData);
               }
             });
 
@@ -457,7 +455,7 @@ public class SerialSocketClient extends VisPlugin implements MotePlugin {
     if (socket == null || !socket.isBound()) {
       try {
         serverPortField.commitEdit();
-        element.setText(String.valueOf((Long) serverPortField.getValue()));
+        element.setText(String.valueOf(serverPortField.getValue()));
       } catch (ParseException ex) {
         logger.error(ex.getMessage());
         serverPortField.setText("null");

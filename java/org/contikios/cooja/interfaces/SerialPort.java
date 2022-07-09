@@ -37,22 +37,22 @@ import org.contikios.cooja.ClassDescription;
 @ClassDescription("Serial port")
 public interface SerialPort {
 
-  public void writeByte(byte b);
-  public void writeArray(byte[] s);
-  public void writeString(String s);
+  void writeByte(byte b);
+  void writeArray(byte[] s);
+  void writeString(String s);
 
   // this is notify on getLastSerialData avail new byte
-  public void addSerialDataObserver(Observer o);
-  public void deleteSerialDataObserver(Observer o);
+  void addSerialDataObserver(Observer o);
+  void deleteSerialDataObserver(Observer o);
 
-  public byte getLastSerialData();
+  byte getLastSerialData();
 
   // TODO implemet this Bufered api for better connect perfomance 
   //public void addSerialBufObserver(Observer o);
   //public void deleteSerialBufObserver(Observer o);
   //public byte[] getLastSerialBuf();
 
-  public void flushInput();
+  void flushInput();
 
-  public void close();
+  void close();
 }

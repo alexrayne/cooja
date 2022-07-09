@@ -65,7 +65,7 @@ public final class EventQueue {
       }
       else
       {
-        // Tie breaker, to prioritise events based on insertion order
+        // Tiebreaker, to prioritise events based on insertion order
         if (uuid < other.uuid)
         {
           return -1;
