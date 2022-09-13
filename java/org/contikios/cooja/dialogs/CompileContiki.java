@@ -59,7 +59,6 @@ public class CompileContiki {
    *
    * @param commandIn Command
    * @param env (Optional) Environment. May be null.
-   * @param outputFile Expected output. May be null.
    * @param directory Directory in which to execute command
    * @param onSuccess Action called if compilation succeeds
    * @param onFailure Action called if compilation fails
@@ -71,7 +70,6 @@ public class CompileContiki {
   public static Process compile(
       final String commandIn,
       final String[] env,
-      final File outputFile,
       final File directory,
       final Action onSuccess,
       final Action onFailure,
@@ -121,19 +119,6 @@ public class CompileContiki {
           new InputStreamReader(compileProcess.getInputStream(), UTF_8));
       final BufferedReader processError = new BufferedReader(
           new InputStreamReader(compileProcess.getErrorStream(), UTF_8));
-
-      if (outputFile != null) {
-        if (outputFile.exists()) {
-          outputFile.delete();
-        }
-        if (outputFile.exists()) {
-          messageDialog.addMessage("Error when deleting old " + outputFile.getName(), MessageList.ERROR);
-          if (onFailure != null) {
-            onFailure.actionPerformed(null);
-          }
-          throw new MoteTypeCreationException("Error when deleting old " + outputFile.getName());
-        }
-      }
 
       Thread readInput = new Thread(new Runnable() {
         @Override
@@ -189,26 +174,6 @@ public class CompileContiki {
             return;
           }
 
-          if (outputFile == null) {
-            /* No firmware to generate: OK */
-            if (onSuccess != null) {
-              onSuccess.actionPerformed(null);
-            }
-            return;
-          }
-
-          if (!outputFile.exists()) {
-            messageDialog.addMessage("No firmware file: " + outputFile, MessageList.ERROR);
-            if (onFailure != null) {
-              onFailure.actionPerformed(null);
-            }
-            syncException.setCompilationOutput(MessageContainer.createMessageList(true));
-            syncException.fillInStackTrace();
-            return;
-          }
-
-          messageDialog.addMessage("", MessageList.NORMAL);
-          messageDialog.addMessage("Compilation succeeded", MessageList.NORMAL);
           if (onSuccess != null) {
             onSuccess.actionPerformed(null);
           }

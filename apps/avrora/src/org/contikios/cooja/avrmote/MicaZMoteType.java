@@ -137,7 +137,9 @@ public class MicaZMoteType implements MoteType {
     moteInterfaceClasses = classes;
   }
 
-  public final Mote generateMote(Simulation simulation) {
+  public final Mote generateMote(Simulation simulation) 
+                              throws MoteType.MoteTypeCreationException 
+  {
     MicaZMote mote = new MicaZMote(simulation, this);
     mote.initMote();
     return mote;
@@ -377,7 +379,6 @@ public class MicaZMoteType implements MoteType {
           CompileContiki.compile(
               cmd,
               null,
-              null /* Do not observe output firmware file */,
               getContikiSourceFile().getParentFile(),
               null,
               null,

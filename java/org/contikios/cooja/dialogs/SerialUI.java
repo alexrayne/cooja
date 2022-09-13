@@ -49,6 +49,7 @@ import java.util.Observable;
 import java.util.Observer;
 import java.util.Arrays;
 
+import java.util.regex.Pattern;
 import javax.swing.JButton;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -98,6 +99,7 @@ public abstract class SerialUI extends SerialIO
   private int    recvLen = 0;
   private byte lastSerialData = 0; /* SerialPort */
   private String lastLogMessage = ""; /* Log */
+  private final Pattern nonPrintable = Pattern.compile("[^\\p{Print}[ \\t]]");
   private final StringBuilder newMessage = new StringBuilder(); /* Log */
 
   private byte[] lastSendingData = null;
@@ -181,8 +183,9 @@ public abstract class SerialUI extends SerialIO
 	  if (recvLen <= 0)
 		  return;
       /* Notify observers of new log */
-      lastLogMessage = newMessage.toString();
-      lastLogMessage = lastLogMessage.replaceAll("[^\\p{Print}[ \\t]]", "");
+      // FIXME: Never add the nonPrintable characters to newMessage in the first place
+      //        instead of removing them at the end.
+      lastLogMessage = nonPrintable.matcher(newMessage.toString()).replaceAll("");
       newMessage.setLength(0);
       is_recv = true;
       this.setChanged();
@@ -207,7 +210,8 @@ public abstract class SerialUI extends SerialIO
 	      newMessage.append((char) x);
 	      if (newMessage.length() > MAX_LENGTH) {
 	        /*logger.warn("Dropping too large log message (>" + MAX_LENGTH + " bytes).");*/
-	        lastLogMessage = "# [1024 bytes, no line ending]: " + newMessage.substring(0, 20) + "...";
+	        lastLogMessage = "# [1024 bytes, no line ending]: " + 
+	            nonPrintable.matcher(newMessage.substring(0, 20)).replaceAll("") + "...";
 			this.receiveFlush();
 			flushed = true;
 	      }
@@ -530,9 +534,16 @@ public abstract class SerialUI extends SerialIO
 
           logType = ApplicationLogPort.class;
       }
+      try {
       getMote().getInterfaces().setLog( 
                   (Log)MoteInterface.generateInterface(logType, getMote()) 
                   );
+      }
+      catch (MoteType.MoteTypeCreationException e) { 
+          logger.fatal("Crushed assign interface LogUI" + 
+                  "for project mote type " + getMote().getID() );
+          return; 
+      }
   }
 
   public void close() {

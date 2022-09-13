@@ -414,7 +414,7 @@ public class ExecuteJAR {
       CompileContiki.compile(
           "jar cfm " + outputFile.getAbsolutePath() + " manifest.tmp .",
           null,
-          outputFile,
+          //outputFile,
           workingDir,
           null,
           null,

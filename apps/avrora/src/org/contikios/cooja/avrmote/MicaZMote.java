@@ -118,7 +118,9 @@ public class MicaZMote extends AbstractEmulatedMote implements Mote {
     stopNextInstruction = true;
   }
 
-  private MoteInterfaceHandler createMoteInterfaceHandler() {
+  private MoteInterfaceHandler createMoteInterfaceHandler() 
+                                      throws MoteType.MoteTypeCreationException 
+  {
     return new MoteInterfaceHandler(this, getType().getMoteInterfaceClasses());
   }
 
@@ -126,7 +128,8 @@ public class MicaZMote extends AbstractEmulatedMote implements Mote {
     return micaZ;
   }
 
-  protected void initMote() {
+  protected void initMote() throws MoteType.MoteTypeCreationException 
+  {
     if (myMoteType != null) {
       initEmulator(myMoteType.getContikiFirmwareFile());
       myMoteInterfaceHandler = createMoteInterfaceHandler();
@@ -234,7 +237,12 @@ public class MicaZMote extends AbstractEmulatedMote implements Mote {
   public boolean setConfigXML(Simulation simulation, Collection<Element> configXML, boolean visAvailable) {
     setSimulation(simulation);
     initEmulator(myMoteType.getContikiFirmwareFile());
+    try {
     myMoteInterfaceHandler = createMoteInterfaceHandler();
+    }
+    catch (MoteType.MoteTypeCreationException e) {
+        return false;
+    }
 
     for (Element element: configXML) {
       String name = element.getName();

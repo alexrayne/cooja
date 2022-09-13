@@ -3,7 +3,6 @@ build
 /dist
 /javadoc
 /apps/avrora/cooja-avrora.jar
-/tools/coffee-manager/coffee.jar
 .hg
 /.hgignore
 /.hgsub

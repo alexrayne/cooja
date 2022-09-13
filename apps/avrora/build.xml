@@ -6,10 +6,25 @@
   <property name="lib" location="lib"/>
   <property name="javadoc" location="javadoc"/>
   <property name="cooja" location="../.."/>
+  <property name="languageversion" value="11" />
 
   <property name="cooja_jar" value="${cooja}/dist/cooja.jar"/>
   <property name="avrora_jar" value="${lib}/avrora-small.jar"/>
   <property name="cooja_avrora_jar" value="cooja-avrora.jar"/>
+
+  <property name="log4j.version" value="2.17.2" />
+
+  <path id="cooja.classpath">
+    <pathelement path="${build}"/>
+    <pathelement location="lib/jdom.jar"/>
+    <pathelement location="lib/log4j-core-${log4j.version}.jar"/>
+    <pathelement location="lib/log4j-api-${log4j.version}.jar"/>
+    <!-- Downloaded from
+         https://mvnrepository.com/artifact/info.picocli/picocli/4.6.3 -->
+    <pathelement location="lib/picocli-4.6.3.jar"/>
+    <pathelement location="lib/syntaxpane-1.2.0.jar"/>
+    <pathelement location="lib/swingx-all-1.6.4.jar"/>
+  </path>
 
   <target name="init">
     <tstamp/>
@@ -25,10 +40,11 @@
   <target name="compile" depends="init">
     <javac srcdir="${src}" destdir="${build}" debug="on"
            includeantruntime="false">
+      <classpath refid="cooja.classpath" />
       <classpath>
         <pathelement location="${avrora_jar}"/>
         <pathelement location="${cooja_jar}"/>
-        <pathelement location="${cooja}/apps/mspsim/build"/>
+        <pathelement location="${cooja}/mspsim/build"/>
       </classpath>
     </javac>
   </target>
@@ -38,6 +54,7 @@
     <mkdir dir="${javadoc}/"/>
     <javadoc destdir="${javadoc}">
       <fileset dir="${src}/" includes="**/*.java"/>
+      <classpath refid="cooja.classpath" />
       <classpath>
         <pathelement location="${avrora_jar}"/>
         <pathelement location="${cooja_jar}"/>
@@ -45,10 +62,20 @@
     </javadoc>
   </target>
 
+  <pathconvert property="manifest.classpath" pathsep=" ">
+    <path refid="cooja.classpath"/>
+    <mapper>
+      <chainedmapper>
+        <flattenmapper/>
+        <globmapper from="*.jar" to="lib/*.jar"/>
+      </chainedmapper>
+    </mapper>
+  </pathconvert>
+
   <target name="jar" depends="init, compile">
     <jar destfile="${cooja_avrora_jar}" basedir="${build}">
       <manifest>
-        <attribute name="Class-Path" value="."/>
+        <attribute name="Class-Path" value=". ${manifest.classpath}"/>
       </manifest>
     </jar>
   </target>
