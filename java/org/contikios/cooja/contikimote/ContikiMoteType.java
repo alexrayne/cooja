@@ -508,12 +508,17 @@ public class ContikiMoteType implements MoteType {
   static abstract class SectionParser {
 
     private final String[] mapFileData;
+    protected int startLine;
+    protected int endLine;
     protected long startAddr;
     protected int size;
     protected Map<String, Symbol> variables;
+    protected MutchedText foundLine;
 
     public SectionParser(String[] mapFileData) {
       this.mapFileData = mapFileData;
+      this.startLine = 0;
+      this.endLine   = mapFileData.length-1;
     }
 
     public String[] getData() {
@@ -538,14 +543,75 @@ public class ContikiMoteType implements MoteType {
 
     abstract Map<String, Symbol> parseSymbols(long offset);
 
-    protected static long parseFirstHexLong(String regexp, String[] data) {
-      String retString = getFirstMatchGroup(data, regexp);
+    static class MutchedText {
+        public final Matcher mutch;
+        public final String  text;
+        public final int     idx;
+        
+        MutchedText(Matcher mutch, final String text, int idx){
+          this.mutch = mutch;
+          this.text  = text;
+          this.idx   = idx;
+        }
+    }
+    
+    protected MutchedText getFirstMatch(String regexp) {
+        if (regexp == null) {
+          return null;
+        }
+        String[] lines = getData();
+        Pattern pattern = Pattern.compile(regexp);
+        for (int idx = startLine; idx < endLine; idx++) {
+          String line = lines[idx];
+          Matcher matcher = pattern.matcher(line);
+          if (matcher.find()) {
+            return new MutchedText(matcher, line, idx);
+          }
+        }
+        return null;
+    }
 
-      if (retString == null || retString.equals("")) {
-        return -1;
-      }
+    protected String getFirstMatchGroup(String regexp) {
+        if (regexp == null) {
+          return null;
+        }
 
-      return Long.parseUnsignedLong(retString.trim(), 16);
+        MutchedText matcher = getFirstMatch(regexp);
+        if (matcher == null)
+            return null;
+
+        return matcher.mutch.group(1);
+    }
+
+    // @return this.foundLine - found line 
+    protected long parseFirstHexLong(String regexp) {
+        foundLine = null;
+        MutchedText found = getFirstMatch(regexp);
+        if (found == null)
+            return -1;
+
+        String retString = found.mutch.group(1);
+        if (retString.equals("")) {
+          return -1;
+        }
+
+        foundLine = found;
+
+        return Long.parseUnsignedLong(retString.trim(), 16);
+    }
+
+    protected long parseHexLong(String regexp, final String line) {
+        Pattern pattern = Pattern.compile(regexp);
+        Matcher matcher = pattern.matcher(line);
+        if (!matcher.find())
+            return -1;
+
+        String retString = matcher.group(1);
+        if (retString.equals("")) {
+          return -1;
+        }
+
+        return Long.parseUnsignedLong(retString.trim(), 16);
     }
 
     public MemoryInterface parse(long offset) {
@@ -590,6 +656,7 @@ public class ContikiMoteType implements MoteType {
 
     private final String startRegExp;
     private final String sizeRegExp;
+    private String section;
 
     public MapSectionParser(String[] mapFileData, String startRegExp, String sizeRegExp) {
       super(mapFileData);
@@ -603,7 +670,14 @@ public class ContikiMoteType implements MoteType {
         startAddr = -1;
         return;
       }
-      startAddr = parseFirstHexLong(startRegExp, getData());
+      startAddr = parseFirstHexLong(startRegExp);
+      
+      // 1st word of found line assume as section name 
+      String[] words = foundLine.text.split("[ \t]+", 2);
+      if ( words.length > 0) {
+          section = words[0];
+          startLine = foundLine.idx;
+      }
     }
 
     @Override
@@ -612,29 +686,86 @@ public class ContikiMoteType implements MoteType {
         size = -1;
         return;
       }
-      size = (int) parseFirstHexLong(sizeRegExp, getData());
+      
+      if (foundLine != null)
+      if (foundLine.text.matches(sizeRegExp))
+      {
+          // try looks section size in same line as found by addr parseing
+          size = (int) parseHexLong(sizeRegExp, foundLine.text);
+          if (size >= 0)
+              return;
+      }
+
+      size = (int) parseFirstHexLong(sizeRegExp);
     }
 
+    boolean addrInSection(long addr) {
+        return ( addr >= getStartAddr()) 
+                &&  (addr <= getStartAddr() + getSize())
+                ;
+    }
+    
+    private
+    boolean mutches_var_name(final String sec, final String var) {
+        if ( sec.equals(var) )
+            return true;
+        return sec.endsWith("."+var);
+    }
+    
     @Override
     public Map<String, Symbol> parseSymbols(long offset) {
       Map<String, Symbol> varNames = new HashMap<>();
 
       Pattern pattern = Pattern.compile(Cooja.getExternalToolsSetting("MAPFILE_VAR_NAME"));
 
-      for (String line : getData()) {
+      Pattern full_pattern = Pattern.compile(
+              Cooja.getExternalToolsSetting("MAPFILE_VAR_NAME_ADDRESS_SIZE")
+                      .replace("SECTION", section));
+
+      String[] mapFileData = getData();
+      for (int idx = startLine; idx < endLine; idx++) {
+        String line = mapFileData[idx];
         Matcher matcher = pattern.matcher(line);
         if (matcher.find()) {
-          if (Long.decode(matcher.group(1)) >= getStartAddr() &&
-              Long.decode(matcher.group(1)) <= getStartAddr() + getSize()) {
-            String varName = matcher.group(2);
+          long addr = Long.decode(matcher.group(1));
+          if ( addrInSection(addr) ) {
+              String varName = matcher.group(2);
+              
+              /* GCC with data-sections provides mapfile info about objects like:
+               * 
+               *    section.obj_name.\n
+               *        adress  size  object_file_name\n
+               *        adress  obj_name\n
+               *        
+               *    so when we found obj declarattion like last line, we expects size of same section
+               *        with pair of lines before
+               * */
+            if (idx > 2) {
+                String secString = mapFileData[idx - 2] + mapFileData[idx - 1];
+                Matcher gcc_matcher = full_pattern.matcher(secString);
+                if (gcc_matcher.find()) {
+                    long secAddr = Long.decode(gcc_matcher.group("address"));
+                    String secName = gcc_matcher.group("symbol");
+                    if (secAddr == addr) 
+                    if ( mutches_var_name(secName, varName) ) 
+                    {
+                        int varSize = Integer.decode(gcc_matcher.group("size"));
+                        varNames.put(varName, new Symbol(
+                                Symbol.Type.VARIABLE,
+                                varName,  addr + offset, varSize));
+                    }
+                    continue;
+                }
+            }
+            
+            long   varAddr = getMapFileVarAddress(idx, varName);
+            int    varSize = getMapFileVarSize(idx, varName);
             varNames.put(varName, new Symbol(
                     Symbol.Type.VARIABLE,
-                    varName,
-                    getMapFileVarAddress(getData(), varName) + offset,
-                    getMapFileVarSize(getData(), varName)));
-          }
+                    varName,  varAddr + offset, varSize));
+          } // if ( addrInSection(addr) )
         }
-      }
+      } //for (int idx
       return varNames;
     }
 
@@ -644,12 +775,14 @@ public class ContikiMoteType implements MoteType {
      * @param varName Name of variable
      * @return Relative memory address of variable or -1 if not found
      */
-    private static long getMapFileVarAddress(String[] mapFileData, String varName) {
+    private long getMapFileVarAddress(int lineno, String varName) {
+      String[] mapFileData = getData();
 
       String regExp = Cooja.getExternalToolsSetting("MAPFILE_VAR_ADDRESS_1")
               + varName
               + Cooja.getExternalToolsSetting("MAPFILE_VAR_ADDRESS_2");
-      String retString = getFirstMatchGroup(mapFileData, regExp);
+      
+      String retString = getFirstMatchGroup(regExp);
 
       if (retString != null) {
         return Long.parseUnsignedLong(retString.trim(), 16);
@@ -658,19 +791,21 @@ public class ContikiMoteType implements MoteType {
       }
     }
 
-    private static int getMapFileVarSize(String[] mapFileData, String varName) {
+    private int getMapFileVarSize(int lineno, String varName) {
+      String[] mapFileData = getData();
       Pattern pattern = Pattern.compile(
               Cooja.getExternalToolsSetting("MAPFILE_VAR_SIZE_1")
               + varName
               + Cooja.getExternalToolsSetting("MAPFILE_VAR_SIZE_2"));
-      for (int idx = 0; idx < mapFileData.length; idx++) {
+      
+      for (int idx = startLine; idx < endLine; idx++) {
         String parseString = mapFileData[idx];
         Matcher matcher = pattern.matcher(parseString);
         if (matcher.find()) {
           return Integer.decode(matcher.group(1));
         }
         // second approach with lines joined
-        if (idx < mapFileData.length - 1) {
+        if (idx < endLine- 1) {
           parseString += mapFileData[idx + 1];
         }
         matcher = pattern.matcher(parseString);
@@ -713,7 +848,7 @@ public class ContikiMoteType implements MoteType {
         startAddr = -1;
         return;
       }
-      startAddr = parseFirstHexLong(startRegExp, getData());
+      startAddr = parseFirstHexLong(startRegExp);
     }
 
     @Override
@@ -728,7 +863,7 @@ public class ContikiMoteType implements MoteType {
         return;
       }
 
-      long end = parseFirstHexLong(endRegExp, getData());
+      long end = parseFirstHexLong(endRegExp);
       if (end < 0) {
         size = -1;
         return;
@@ -887,20 +1022,6 @@ public class ContikiMoteType implements MoteType {
    */
   public NetworkStack getNetworkStack() {
     return netStack;
-  }
-
-  private static String getFirstMatchGroup(String[] lines, String regexp) {
-    if (regexp == null) {
-      return null;
-    }
-    Pattern pattern = Pattern.compile(regexp);
-    for (String line : lines) {
-      Matcher matcher = pattern.matcher(line);
-      if (matcher.find()) {
-        return matcher.group(1);
-      }
-    }
-    return null;
   }
 
   private static String[] loadMapFile(File mapFile) {
