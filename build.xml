@@ -36,6 +36,14 @@
     <pathelement location="lib/jdom.jar"/>
     <pathelement location="lib/log4j-core-${log4j.version}.jar"/>
     <pathelement location="lib/log4j-api-${log4j.version}.jar"/>
+    
+    <!-- https://search.maven.org/artifact/org.openjdk.nashorn/nashorn-core/15.4/jar -->
+    <pathelement location="lib/nashorn-core-15.4.jar"/>
+    <pathelement location="lib/asm-9.3.jar"/>
+    <pathelement location="lib/asm-util-9.3.jar"/>
+    <pathelement location="lib/asm-commons-9.3.jar"/>
+    <pathelement location="lib/asm-tree-9.3.jar"/>
+    
     <!-- Downloaded from
          https://mvnrepository.com/artifact/info.picocli/picocli/4.6.3 -->
     <pathelement location="lib/picocli-4.6.3.jar"/>
