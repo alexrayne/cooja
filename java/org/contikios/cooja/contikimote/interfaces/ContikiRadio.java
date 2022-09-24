@@ -260,7 +260,7 @@ public class ContikiRadio extends Radio implements ContikiMoteInterface, PolledA
   @Override
   public double getCurrentOutputPower() {
     /* TODO Implement method */
-    logger.warn("Not implemented, always returning 0 dBm");
+    // logger.warn("Not implemented, always returning 0 dBm");
     return 0;
   }
 
