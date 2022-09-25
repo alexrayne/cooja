@@ -228,7 +228,7 @@ public class MessageListUI extends JList implements MessageList {
           }
         }
 
-      });
+      }, "MessageListUI read thread");
       readThread.start();
 
       return new PrintStream(output);

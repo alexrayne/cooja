@@ -128,13 +128,19 @@ public class Simulation extends Observable implements Runnable {
     }
   }
 
-  private Runnable popSimulationInvokes() {
-    Runnable r;
+  private void runSimulationInvokes() {
+    boolean more;
     synchronized (pollRequests) {
-      r = pollRequests.pop();
-      hasPollRequests = !pollRequests.isEmpty();
+      more = hasPollRequests;
     }
-    return r;
+    while (more) {
+      Runnable r;
+      synchronized (pollRequests) {
+        r = pollRequests.pop();
+        more = hasPollRequests = !pollRequests.isEmpty();
+      }
+      r.run();
+    }
   }
 
   /**
@@ -274,11 +280,7 @@ public class Simulation extends Observable implements Runnable {
     EventQueue.Pair nextEvent = null;
     try {
       while (isRunning) {
-
-        /* Handle all poll requests */
-        while (hasPollRequests) {
-          popSimulationInvokes().run();
-        }
+        runSimulationInvokes();
 
         /* Handle one simulation event, and update simulation time */
         nextEvent = eventQueue.popFirst();
@@ -346,7 +348,7 @@ public class Simulation extends Observable implements Runnable {
   public void startSimulation() {
     if (!isRunning()) {
       isRunning = true;
-      simulationThread = new Thread(this);
+      simulationThread = new Thread(this, "simulationThread");
       simulationThread.start();
     }
   }
@@ -653,16 +655,11 @@ public class Simulation extends Observable implements Runnable {
         }
 
         // Show configure simulation dialog
-        boolean createdOK = false;
         if (visAvailable && !quick) {
-          createdOK = CreateSimDialog.showDialog(Cooja.getTopParentContainer(), this);
-        } else {
-          createdOK = true;
-        }
-
-        if (!createdOK) {
-          logger.debug("Simulation not created, aborting");
-          throw new Exception("Load aborted by user");
+          if (!CreateSimDialog.showDialog(Cooja.getTopParentContainer(), this)) {
+            logger.debug("Simulation not created, aborting");
+            throw new Exception("Load aborted by user");
+          }
         }
 
         // Check if radio medium specific config should be applied
@@ -774,9 +771,7 @@ public class Simulation extends Observable implements Runnable {
     notifyObservers(this);
 
     /* Execute simulation thread events now, before simulation starts */
-    while (hasPollRequests) {
-      popSimulationInvokes().run();
-    }
+    runSimulationInvokes();
 
     return true;
   }

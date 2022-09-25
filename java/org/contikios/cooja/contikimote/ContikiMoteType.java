@@ -45,6 +45,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.JComponent;
@@ -70,7 +71,6 @@ import org.contikios.cooja.mote.memory.MemoryInterface.Symbol;
 import org.contikios.cooja.mote.memory.MemoryLayout;
 import org.contikios.cooja.mote.memory.SectionMoteMemory;
 import org.contikios.cooja.mote.memory.VarMemory;
-import org.contikios.cooja.util.StringUtils;
 import org.jdom.Element;
 
 import org.contikios.cooja.contikimote.interfaces.ContikiLog;
@@ -116,6 +116,11 @@ public class ContikiMoteType implements MoteType {
    */
   private static final File tempOutputDirectory = new File(
       Cooja.getExternalToolsSetting("PATH_CONTIKI_NG_BUILD_DIR", "build/cooja"));
+
+  /**
+   * Random generator for generating a unique mote ID.
+   */
+  private static final Random rnd = new Random();
 
   /**
    * Communication stacks in Contiki.
@@ -395,18 +400,14 @@ public class ContikiMoteType implements MoteType {
               "Core communicator already used: " + myCoreComm.getClass().getName());
     }
 
-    if (getContikiFirmwareFile() == null
-            || !getContikiFirmwareFile().exists()) {
-      throw new MoteTypeCreationException("Library file could not be found: " + getContikiFirmwareFile());
-    }
-
-    if (javaClassName == null) {
-      throw new MoteTypeCreationException("Unknown Java class library");
+    final var firmwareFile = getContikiFirmwareFile();
+    if (firmwareFile == null || !firmwareFile.exists()) {
+      throw new MoteTypeCreationException("Library file could not be found: " + firmwareFile);
     }
 
     // Allocate core communicator class
-    logger.debug("Creating core communicator between Java class " + javaClassName + " and Contiki library '" + getContikiFirmwareFile().getPath() + "'");
-    myCoreComm = CoreComm.createCoreComm(tempDir, this.javaClassName, getContikiFirmwareFile());
+    logger.debug("Creating core communicator between Java class " + javaClassName + " and Contiki library '" + firmwareFile.getPath() + "'");
+    myCoreComm = CoreComm.createCoreComm(tempDir, javaClassName, firmwareFile);
 
     /* Parse addresses using map file
      * or output of command specified in external tools settings (e.g. nm -a )
@@ -417,7 +418,6 @@ public class ContikiMoteType implements MoteType {
     SectionParser bssSecParser;
     SectionParser commonSecParser;
 
-    HashMap<String, Symbol> variables = new HashMap<>();
     if (useCommand) {
       /* Parse command output */
       String[] output = loadCommandData(getContikiFirmwareFile(), withUI);
@@ -439,16 +439,25 @@ public class ContikiMoteType implements MoteType {
               Cooja.getExternalToolsSetting("COMMAND_VAR_SEC_COMMON"));
     } else {
       /* Parse map file */
-      if (mapFile == null
-              || !mapFile.exists()) {
+      if (mapFile == null || !mapFile.exists()) {
         throw new MoteTypeCreationException("Map file " + mapFile + " could not be found");
       }
-      String[] mapData = loadMapFile(mapFile);
-      if (mapData == null) {
+      // The map file for 02-ringbufindex.csc is 2779 lines long, add some margin beyond that.
+      var lines = new ArrayList<String>(4000);
+      try (var reader = Files.newBufferedReader(mapFile.toPath(), UTF_8)) {
+        String line;
+        while ((line = reader.readLine()) != null) {
+          lines.add(line);
+        }
+      } catch (IOException e) {
         logger.fatal("No map data could be loaded");
-        throw new MoteTypeCreationException("No map data could be loaded: " + mapFile);
+        lines.clear();
       }
 
+      if (lines.isEmpty()) {
+        throw new MoteTypeCreationException("No map data could be loaded: " + mapFile);
+      }
+      String[] mapData = lines.toArray(new String[0]);
       dataSecParser = new MapSectionParser(
               mapData,
               Cooja.getExternalToolsSetting("MAPFILE_DATA_START"),
@@ -469,6 +478,7 @@ public class ContikiMoteType implements MoteType {
      *
      * This offset will be used in Cooja in the memory abstraction to match
      * Contiki's and Cooja's address spaces */
+    HashMap<String, Symbol> variables = new HashMap<>();
     {
       SectionMoteMemory tmp = new SectionMoteMemory(variables);
       VarMemory varMem = new VarMemory(tmp);
@@ -486,7 +496,7 @@ public class ContikiMoteType implements MoteType {
       getCoreMemory(tmp);
 
       offset = varMem.getAddrValueOf("referenceVar");
-      logger.debug(getContikiFirmwareFile().getName()
+      logger.debug(firmwareFile.getName()
               + ": offsetting Cooja mote address space: 0x" + Long.toHexString(offset));
     }
 
@@ -626,12 +636,11 @@ public class ContikiMoteType implements MoteType {
 
       variables = parseSymbols(offset);
 
-      logger.debug(String.format("Parsed section at 0x%x ( %d == 0x%x bytes)",
+      if (logger.isDebugEnabled()) {
+        logger.debug(String.format("Parsed section at 0x%x ( %d == 0x%x bytes)",
                                  getStartAddr() + offset,
                                  getSize(),
                                  getSize()));
-
-      if (logger.isDebugEnabled()) {
         for (Map.Entry<String, Symbol> entry : variables.entrySet()) {
           logger.debug(String.format("Found Symbol: %s, 0x%x, %d",
                   entry.getKey(),
@@ -1072,7 +1081,7 @@ public class ContikiMoteType implements MoteType {
           commandOutput.addMessage("Error reading from command stderr: "
                                            + e.getMessage(), MessageList.ERROR);
         }
-      });
+      }, "read command output");
       readThread.setDaemon(true);
       readThread.start();
 
@@ -1155,31 +1164,16 @@ public class ContikiMoteType implements MoteType {
   /**
    * Generates a unique Cooja mote type ID.
    *
-   * @param existingTypes Already existing mote types, may be null
-   * @param reservedIdentifiers Already reserved identifiers, may be null
+   * @param reservedIdentifiers Already reserved identifiers
    * @return Unique mote type ID.
    */
-  public static String generateUniqueMoteTypeID(MoteType[] existingTypes, Collection reservedIdentifiers) {
+  public static String generateUniqueMoteTypeID(Set<String> reservedIdentifiers) {
     String testID = "";
     boolean available = false;
 
     while (!available) {
-      testID = "mtype" + new Random().nextInt(1000000000);
-      available = reservedIdentifiers == null || !reservedIdentifiers.contains(testID);
-
-      if (!available) {
-        continue;
-      }
-
-      // Check if identifier is used
-      if (existingTypes != null) {
-        for (MoteType existingMoteType : existingTypes) {
-          if (existingMoteType.getIdentifier().equals(testID)) {
-            available = false;
-            break;
-          }
-        }
-      }
+      testID = "mtype" + rnd.nextInt(1000000000);
+      available = !reservedIdentifiers.contains(testID);
       // FIXME: add check that the library name is not already used.
     }
 
