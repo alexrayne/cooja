@@ -694,6 +694,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
         super(name);
         this.minWidth = minWidth;
       }
+      @Override
       public void actionPerformed(ActionEvent e) {
           paintEventMinWidth = minWidth;
           timeline.repaint();

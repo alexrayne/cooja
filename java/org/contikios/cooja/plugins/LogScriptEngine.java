@@ -34,7 +34,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
 
-import java.io.BufferedWriter;
 import java.lang.reflect.UndeclaredThrowableException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -78,12 +77,30 @@ public class LogScriptEngine {
     }
     @Override
     public void newLogOutput(LogOutputEvent ev) {
-      handleNewMoteOutput(
-          ev.getMote(),
-          ev.getMote().getID(),
-          ev.getTime(),
-          ev.msg
-      );
+      if (scriptThread == null || !scriptThread.isAlive()) {
+        logger.warn("No script thread, deactivate script.");
+        return;
+      }
+
+      // Only called from the simulation loop.
+      final var mote = ev.getMote();
+      try {
+        // Update script variables.
+        engine.put("mote", mote);
+        engine.put("id", mote.getID());
+        engine.put("time", ev.getTime());
+        engine.put("msg", ev.msg);
+
+        stepScript();
+      } catch (UndeclaredThrowableException e) {
+        logger.fatal("Exception: " + e.getMessage(), e);
+        if (Cooja.isVisualized()) {
+          Cooja.showErrorDialog(Cooja.getTopParentContainer(),
+              e.getMessage(),
+              e, false);
+        }
+        simulation.stopSimulation();
+      }
     }
     @Override
     public void removedLogOutput(LogOutputEvent ev) {
@@ -140,34 +157,6 @@ public class LogScriptEngine {
     if (quitCooja) {
       quitRunnable.run();
       quitCooja = false;
-    }
-  }
-
-  /* Only called from the simulation loop */
-  private void handleNewMoteOutput(Mote mote, int id, long time, String msg) {
-    try {
-      if (scriptThread == null ||
-          !scriptThread.isAlive()) {
-        logger.warn("No script thread, deactivate script.");
-        /*scriptThread.isInterrupted()*/
-        return;
-      }
-
-      /* Update script variables */
-      engine.put("mote", mote);
-      engine.put("id", id);
-      engine.put("time", time);
-      engine.put("msg", msg);
-
-      stepScript();
-    } catch (UndeclaredThrowableException e) {
-      logger.fatal("Exception: " + e.getMessage(), e);
-      if (Cooja.isVisualized()) {
-        Cooja.showErrorDialog(Cooja.getTopParentContainer(),
-            e.getMessage(),
-            e, false);
-      }
-      simulation.stopSimulation();
     }
   }
 
@@ -309,7 +298,7 @@ public class LogScriptEngine {
           }
         }
       }
-    }, "scriptThread");
+    }, "script");
     scriptThread.start(); /* Starts by acquiring semaphore (blocks) */
     while (!semaphoreScript.hasQueuedThreads()) {
       try {
