@@ -112,6 +112,18 @@ The COOJA Simulator
     <copy todir="${dist}/lib" file="mspsim/lib/jipv6.jar" />
   </target>
 
+  <target name="avrora">
+    <fail>-
+      ----------------
+      Could not find the Avrora build file.
+      ----------------
+      <condition><not>
+        <available file="apps/avrora/build.xml" />
+      </not></condition>
+    </fail>
+    <ant antfile="build.xml" dir="apps/avrora" target="jar" inheritAll="false"/>
+  </target>
+
   <target name="compile" depends="mspsim">
     <mkdir dir="${build}"/>
     <javac srcdir="tools/coffee-manager" destdir="${build}" debug="on" release="${languageversion}"
@@ -223,7 +235,5 @@ The COOJA Simulator
       <fileset dir="${lib}"/>
     </copy>
   </target>
-
-  <ant antfile="build.xml" dir="apps/avrora" target="jar" inheritAll="false" />
 
 </project>
