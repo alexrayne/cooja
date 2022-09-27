@@ -45,7 +45,7 @@ import org.contikios.cooja.dialogs.CreateSimDialog;
 
 /**
  * A simulation consists of a number of motes and mote types.
- *
+ * <p>
  * A simulation is observable:
  * changed simulation state, added or deleted motes etc. are observed.
  * To track mote changes, observe the mote (interfaces) itself.
@@ -195,7 +195,7 @@ public class Simulation extends Observable implements Runnable {
   /**
    * Schedule simulation event for given time.
    * Already scheduled events must be removed before they are rescheduled.
-   *
+   * <p>
    * If the simulation is running, this method may only be called from the simulation thread.
    *
    * @see #invokeSimulationThread(Runnable)
@@ -579,19 +579,19 @@ public class Simulation extends Observable implements Runnable {
   /**
    * Sets the current simulation config depending on the given configuration.
    *
-   * @param configXML Simulation configuration
+   * @param root Simulation configuration
    * @param visAvailable True if simulation is allowed to show visualizers
    * @param manualRandomSeed Simulation random seed. May be null, in which case the configuration is used
    * @return True if simulation was configured successfully
    * @throws Exception If configuration could not be loaded
    */
-  public boolean setConfigXML(Collection<Element> configXML,
+  public boolean setConfigXML(Element root,
       boolean visAvailable, boolean quick, Long manualRandomSeed) throws Exception {
     this.quick = quick;
 
     // Parse elements
-    for (Element element : configXML) {
-
+    for (var child : root.getChildren()) {
+      Element element = (Element)child;
       // Title
       if (element.getName().equals("title")) {
         title = element.getText();
@@ -964,7 +964,7 @@ public class Simulation extends Observable implements Runnable {
    * @return Motes
    */
   public Mote[] getMotesUninit() {
-    return motesUninit.toArray(new Mote[motesUninit.size()]);
+    return motesUninit.toArray(new Mote[0]);
   }
 
 

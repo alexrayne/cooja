@@ -37,7 +37,6 @@ import de.sciss.syntaxpane.actions.ScriptRunnerAction;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
-import java.awt.GraphicsEnvironment;
 import java.awt.Insets;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
@@ -87,6 +86,8 @@ import org.contikios.cooja.PluginType;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.VisPlugin;
 import org.contikios.cooja.util.StringUtils;
+import org.contikios.cooja.dialogs.MessageList;
+import org.contikios.cooja.dialogs.MessageListUI;
 import org.jdom.Element;
 
 @ClassDescription("Simulation script editor")
@@ -95,13 +96,6 @@ public class ScriptRunner implements Plugin {
   private static final Logger logger = LogManager.getLogger(ScriptRunner.class);
 
   private final Cooja gui;
-  static boolean headless;
-  {
-    headless = GraphicsEnvironment.isHeadless();
-    if (!headless) {
-      DefaultSyntaxKit.initKit();
-    }
-  }
 
   final String[] EXAMPLE_SCRIPTS = new String[] {
       "basic.js", "Various commands",
@@ -137,6 +131,7 @@ public class ScriptRunner implements Plugin {
       return;
     }
 
+    DefaultSyntaxKit.initKit();
     frame = new VisPlugin("Simulation script editor", gui, this);
 
     /* Menus */
@@ -423,7 +418,7 @@ public class ScriptRunner implements Plugin {
         logWriter = null;
       }
 
-      if (!headless) {
+      if (Cooja.isVisualized()) {
         if (actionLinkFile != null) {
           actionLinkFile.setEnabled(true);
         }

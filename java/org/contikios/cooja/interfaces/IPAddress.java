@@ -31,7 +31,6 @@
 package org.contikios.cooja.interfaces;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Observable;
 import java.util.Observer;
@@ -47,7 +46,6 @@ import org.contikios.cooja.mote.memory.MemoryInterface.SegmentMonitor;
 import org.contikios.cooja.mote.memory.MemoryLayout;
 import org.contikios.cooja.mote.memory.VarMemory;
 import org.contikios.cooja.util.IPUtils;
-import org.jdom.Element;
 
 /**
  * Read-only interface to IPv4 or IPv6 address.
@@ -356,18 +354,9 @@ public class IPAddress extends MoteInterface {
     this.deleteObserver(observer);
   }
 
-  @Override
-  public Collection<Element> getConfigXML() {
-    return null;
-  }
-
-  @Override
-  public void setConfigXML(Collection<Element> configXML, boolean visAvailable) {
-  }
-
   /**
    * Holds a single IP address.
-   * 
+   * <p>
    * Note: The compressed IP version is already computed in constructor
    */
   public class IPContainer {

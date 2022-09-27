@@ -30,11 +30,8 @@
 
 package org.contikios.cooja.mspmote.interfaces;
 
-import java.util.Collection;
-
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
-import org.jdom.Element;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Mote;
@@ -427,15 +424,6 @@ public class CC1101Radio extends Radio implements CustomDataRadio {
 	@Override
 	public Position getPosition() {
 		return mote.getInterfaces().getPosition();
-	}
-
-	@Override
-	public Collection<Element> getConfigXML() {
-		return null;
-	}
-
-	@Override
-	public void setConfigXML(Collection<Element> configXML, boolean visAvailable) {
 	}
 
   @Override

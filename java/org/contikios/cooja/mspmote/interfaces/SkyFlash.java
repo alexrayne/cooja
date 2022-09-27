@@ -38,7 +38,6 @@ import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.util.Collection;
 import java.util.Observable;
 import java.util.Observer;
 import javax.swing.JButton;
@@ -51,7 +50,6 @@ import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteInterface;
-import org.jdom.Element;
 import org.contikios.cooja.mspmote.MspMote;
 
 /**
@@ -145,15 +143,6 @@ public class SkyFlash extends MoteInterface {
     }
 
     this.deleteObserver(observer);
-  }
-
-  @Override
-  public Collection<Element> getConfigXML() {
-    return null;
-  }
-
-  @Override
-  public void setConfigXML(Collection<Element> configXML, boolean visAvailable) {
   }
 
   public static void writeDialogFileBytes(Component parent, byte[] data) {

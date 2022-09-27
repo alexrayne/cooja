@@ -71,6 +71,7 @@ import org.contikios.cooja.mote.memory.MemoryInterface.Symbol;
 import org.contikios.cooja.mote.memory.MemoryLayout;
 import org.contikios.cooja.mote.memory.SectionMoteMemory;
 import org.contikios.cooja.mote.memory.VarMemory;
+import org.contikios.cooja.util.StringUtils;
 import org.jdom.Element;
 
 import org.contikios.cooja.contikimote.interfaces.ContikiLog;
@@ -383,7 +384,7 @@ public class ContikiMoteType implements MoteType {
 
   /**
    * For internal use.
-   *
+   * <p>
    * This method creates a core communicator linking a Contiki library and a
    * Java class.
    * It furthermore parses library Contiki memory addresses and creates the
@@ -416,7 +417,7 @@ public class ContikiMoteType implements MoteType {
 
     SectionParser dataSecParser;
     SectionParser bssSecParser;
-    SectionParser commonSecParser;
+    SectionParser commonSecParser = null;
 
     if (useCommand) {
       /* Parse command output */
@@ -466,10 +467,6 @@ public class ContikiMoteType implements MoteType {
               mapData,
               Cooja.getExternalToolsSetting("MAPFILE_BSS_START"),
               Cooja.getExternalToolsSetting("MAPFILE_BSS_SIZE"));
-      commonSecParser = new MapSectionParser(
-              mapData,
-              Cooja.getExternalToolsSetting("MAPFILE_COMMON_START"),
-              Cooja.getExternalToolsSetting("MAPFILE_COMMON_SIZE"));
     }
 
     /* We first need the value of Contiki's referenceVar, which tells us the
@@ -484,7 +481,9 @@ public class ContikiMoteType implements MoteType {
       VarMemory varMem = new VarMemory(tmp);
       tmp.addMemorySection("tmp.data", dataSecParser.parse(0));
       tmp.addMemorySection("tmp.bss", bssSecParser.parse(0));
-      tmp.addMemorySection("tmp.common", commonSecParser.parse(0));
+      if (commonSecParser != null) {
+        tmp.addMemorySection("tmp.common", commonSecParser.parse(0));
+      }
 
       try {
         long referenceVar = varMem.getVariable("referenceVar").addr;
@@ -507,7 +506,9 @@ public class ContikiMoteType implements MoteType {
 
     initialMemory.addMemorySection("bss", bssSecParser.parse(offset));
 
-    initialMemory.addMemorySection("common", commonSecParser.parse(offset));
+    if (commonSecParser != null) {
+      initialMemory.addMemorySection("common", commonSecParser.parse(offset));
+    }
 
     getCoreMemory(initialMemory);
   }
@@ -669,16 +670,17 @@ public class ContikiMoteType implements MoteType {
 
     public MapSectionParser(String[] mapFileData, String startRegExp, String sizeRegExp) {
       super(mapFileData);
+      assert startRegExp != null : "Section start regexp must be specified";
+      assert !startRegExp.isEmpty() : "Section start regexp must contain characters";
+      assert sizeRegExp != null : "Section size regexp must be specified";
+      assert !sizeRegExp.isEmpty() : "Section size regexp must contain characters";
       this.startRegExp = startRegExp;
       this.sizeRegExp = sizeRegExp;
     }
 
     @Override
     protected void parseStartAddr() {
-      if (startRegExp == null || startRegExp.equals("")) {
-        startAddr = -1;
-        return;
-      }
+
       startAddr = parseFirstHexLong(startRegExp);
       
       // 1st word of found line assume as section name 
@@ -691,10 +693,9 @@ public class ContikiMoteType implements MoteType {
 
     @Override
     protected void parseSize() {
-      if (sizeRegExp == null || sizeRegExp.equals("")) {
-        size = -1;
-        return;
-      }
+      size = -1;
+
+
       
       if (foundLine != null)
       if (foundLine.text.matches(sizeRegExp))
@@ -853,6 +854,7 @@ public class ContikiMoteType implements MoteType {
 
     @Override
     protected void parseStartAddr() {
+      // FIXME: Adjust this code to mirror the optimized method in MapSectionParser.
       if (startRegExp == null || startRegExp.equals("")) {
         startAddr = -1;
         return;

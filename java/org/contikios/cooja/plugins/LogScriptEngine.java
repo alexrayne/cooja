@@ -112,7 +112,7 @@ public class LogScriptEngine {
   private Thread scriptThread = null; /* Script thread */
   private Observer scriptLogObserver = null;
 
-  private boolean stopSimulation = false, quitCooja = false;
+  private boolean quitCooja = false;
 
   private final Simulation simulation;
 
@@ -145,19 +145,16 @@ public class LogScriptEngine {
       semSim.acquire();
     } catch (InterruptedException e1) {
       e1.printStackTrace();
+      // FIXME: Something called interrupt() on this thread, computation should stop.
     }
 
     /* ... script is now again waiting for script semaphore ... */
 
-    /* Check if test script requested us to stop */
-    if (stopSimulation) {
-      stopSimulationRunnable.run();
-      stopSimulation = false;
-    }
+    // Check if testOK()/testFailed() were called from the script in headless mode.
     if (quitCooja) {
       quitRunnable.run();
-      quitCooja = false;
     }
+    quitCooja = false;
   }
 
   public void setScriptLogObserver(Observer observer) {
@@ -203,6 +200,7 @@ public class LogScriptEngine {
         scriptThread.join();
       } catch (InterruptedException e) {
         e.printStackTrace();
+        // FIXME: Something called interrupt() on this thread, computation needs to stop.
       }
     }
     scriptThread = null;
@@ -252,6 +250,7 @@ public class LogScriptEngine {
       semaphoreScript.acquire();
     } catch (InterruptedException e) {
       logger.fatal("Error when creating engine: " + e.getMessage(), e);
+      // FIXME: should not proceed after this.
     }
     ThreadGroup group = new ThreadGroup("script") {
       @Override
@@ -304,7 +303,7 @@ public class LogScriptEngine {
       try {
         Thread.sleep(50);
       } catch (InterruptedException e) {
-        // Does not matter, we are waiting.
+        // FIXME: Something called interrupt() on this thread, stop the computation.
       }
     }
 
@@ -369,18 +368,10 @@ public class LogScriptEngine {
     }
   };
 
-  private final Runnable stopSimulationRunnable = new Runnable() {
-    @Override
-    public void run() {
-      simulation.stopSimulation();
-    }
-  };
   private final Runnable quitRunnable = new Runnable() {
     @Override
     public void run() {
-      simulation.stopSimulation();
       new Thread(() -> {
-        try { Thread.sleep(500); } catch (InterruptedException e) { }
         simulation.getCooja().doQuit(false, exitCode);
       }, "Cooja.doQuit").start();
       new Thread(() -> {
@@ -434,12 +425,10 @@ public class LogScriptEngine {
 
       if (Cooja.isVisualized()) {
         log("[if test was run without visualization, Cooja would now have been terminated]\n");
-        stopSimulation = true;
-        simulation.invokeSimulationThread(stopSimulationRunnable);
       } else {
         quitCooja = true;
-        simulation.invokeSimulationThread(quitRunnable);
       }
+      simulation.invokeSimulationThread(simulation::stopSimulation);
 
       throw new RuntimeException("test script killed");
     }

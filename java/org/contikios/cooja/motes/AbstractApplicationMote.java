@@ -49,11 +49,10 @@ import org.contikios.cooja.interfaces.ApplicationSerialPort;
 import org.contikios.cooja.interfaces.ApplicationLogPort;
 import org.contikios.cooja.interfaces.Radio;
 import org.contikios.cooja.mote.memory.MemoryInterface;
-import org.contikios.cooja.mote.memory.MemoryLayout;
 
 /**
  * Abstract application mote.
- *
+ * <p>
  * Simplifies implementation of application level mote types.
  *
  * @author Fredrik Osterlind
@@ -93,7 +92,6 @@ public abstract class AbstractApplicationMote extends AbstractWakeupMote impleme
   public AbstractApplicationMote(MoteType moteType, Simulation sim) throws MoteType.MoteTypeCreationException {
     setSimulation(sim);
     this.moteType = moteType;
-    MemoryLayout.getNative();
     this.memory = new SectionMoteMemory(new HashMap<>());
     this.moteInterfaces = new MoteInterfaceHandler(this, moteType.getMoteInterfaceClasses());
     this.moteInterfaces.getRadio().addObserver(radioDataObserver);

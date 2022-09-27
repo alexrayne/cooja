@@ -51,10 +51,10 @@ import org.contikios.cooja.radiomediums.UDGM;
 import org.contikios.cooja.util.CCITT_CRC;
 /**
  * Packet radio transceiver mote interface.
- *
+ * <p>
  * To simulate transmission rates, the underlying Contiki system is
  * locked in TX or RX states using multi-threading library.
- *
+ * <p>
  * Contiki variables:
  * <ul>
  * <li>char simReceiving (1=mote radio is receiving)
@@ -96,9 +96,14 @@ public class ContikiRadio extends Radio implements ContikiMoteInterface, PolledA
   private static final Logger logger = LogManager.getLogger(ContikiRadio.class);
 
   /**
-   * Transmission bitrate (kbps).
+   * Project default transmission bitrate (kbps).
    */
-  private double RADIO_TRANSMISSION_RATE_kbps;
+  private final double RADIO_TRANSMISSION_RATE_KBPS;
+
+  /**
+   * Configured transmission bitrate (kbps).
+   */
+  private double radioTransmissionRateKBPS;
 
   private RadioPacket packetToMote = null;
 
@@ -143,8 +148,9 @@ public class ContikiRadio extends Radio implements ContikiMoteInterface, PolledA
    */
   public ContikiRadio(Mote mote) {
     // Read class configurations of this mote type
-    RADIO_TRANSMISSION_RATE_kbps = mote.getType().getConfig().getDoubleValue(
+    this.RADIO_TRANSMISSION_RATE_KBPS = mote.getType().getConfig().getDoubleValue(
         ContikiRadio.class, "RADIO_TRANSMISSION_RATE_kbps");
+    this.radioTransmissionRateKBPS = this.RADIO_TRANSMISSION_RATE_KBPS;
 
     this.mote = (ContikiMote) mote;
     this.myMoteMemory = new VarMemory(mote.getMemory());
@@ -380,8 +386,8 @@ public class ContikiRadio extends Radio implements ContikiMoteInterface, PolledA
 
       /* Calculate transmission duration (us) */
       /* XXX Currently floored due to millisecond scheduling! */
-      if (RADIO_TRANSMISSION_RATE_kbps > 0.0) {
-      long duration = (int) (Simulation.MILLISECOND*((8 * size /*bits*/) / RADIO_TRANSMISSION_RATE_kbps));
+      if (radioTransmissionRateKBPS > 0.0) {
+      long duration = (int) (Simulation.MILLISECOND*((8 * size /*bits*/) / radioTransmissionRateKBPS));
       transmissionEndTime = now + Math.max(1, duration);
       }
       else
@@ -449,16 +455,20 @@ public class ContikiRadio extends Radio implements ContikiMoteInterface, PolledA
 
   @Override
   public Collection<Element> getConfigXML() {
+    // Only save radio transmission rate in configuration if different from project default
+    if (this.radioTransmissionRateKBPS == this.RADIO_TRANSMISSION_RATE_KBPS) {
+      return null;
+    }
+
            ArrayList<Element> config = new ArrayList<>();
 
            Element element;
 
            /* Radio bitrate */
            element = new Element("bitrate");
-           element.setText(String.valueOf(RADIO_TRANSMISSION_RATE_kbps));
+           element.setText(String.valueOf(radioTransmissionRateKBPS));
            config.add(element);
 
-   		   //logger.info("contikiRadio: take XML:"+getMote().getID());
            return config;
   }
 
@@ -468,9 +478,9 @@ public class ContikiRadio extends Radio implements ContikiMoteInterface, PolledA
   {
          for (Element element : configXML) {
                  if (element.getName().equals("bitrate")) {
-                         RADIO_TRANSMISSION_RATE_kbps = Double.parseDouble(element.getText());
+                         radioTransmissionRateKBPS = Double.parseDouble(element.getText());
                          logger.debug("mote" + mote.getID() + 
-                                     " Radio bitrate reconfigured to (kbps): " + RADIO_TRANSMISSION_RATE_kbps
+                                     " Radio bitrate reconfigured to (kbps): " + radioTransmissionRateKBPS
                                      );
                  }
          }

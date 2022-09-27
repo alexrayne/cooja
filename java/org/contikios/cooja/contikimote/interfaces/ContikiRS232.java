@@ -48,7 +48,7 @@ import org.contikios.cooja.mote.memory.VarMemory;
 
 /**
  * Contiki mote serial port and log interfaces.
- *
+ * <p>
  * Contiki variables:
  * <ul>
  * <li>char simSerialReceivingFlag (1=mote has incoming serial data)

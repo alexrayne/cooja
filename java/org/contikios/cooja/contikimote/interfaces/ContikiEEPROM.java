@@ -64,7 +64,7 @@ import org.contikios.cooja.mote.memory.VarMemory;
 
 /**
  * Contiki EEPROM interface
- *
+ * <p>
  * Contiki variables:
  * <ul>
  * <li>char[] simEEPROMData
@@ -300,16 +300,15 @@ public class ContikiEEPROM extends MoteInterface implements ContikiMoteInterface
 
   @Override
   public Collection<Element> getConfigXML() {
-      ArrayList<Element> config = new ArrayList<Element>();
       byte[] data = getEEPROMData();
-
       if (!isEmpty(data)) {
+        ArrayList<Element> config = new ArrayList<Element>();
         Element element = new Element("eeprom");
         element.setText(Base64.getEncoder().encodeToString(data));
         config.add(element);
+        return config;
       }
-
-      return config;
+      return null;
   }
 
   @Override
