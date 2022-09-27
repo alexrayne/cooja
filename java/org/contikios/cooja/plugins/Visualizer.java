@@ -150,8 +150,8 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
   public static final int MOTE_RADIUS = 8;
   private static final Color[] DEFAULT_MOTE_COLORS = {Color.WHITE};
 
-  private Cooja gui = null;
-  private Simulation simulation = null;
+  private Cooja gui;
+  private Simulation simulation;
   private final JPanel canvas;
   private boolean loadedConfig = false;
 
@@ -213,12 +213,12 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
 
   /* Generic visualization */
   private final MoteCountListener newMotesListener;
-  private Observer posObserver = null;
-  private Observer moteHighligtObserver = null;
+  private Observer posObserver;
+  private Observer moteHighligtObserver;
   private final ArrayList<Mote> highlightedMotes = new ArrayList<>();
   private final static Color HIGHLIGHT_COLOR = Color.CYAN;
   private final static Color MOVE_COLOR = Color.WHITE;
-  private Observer moteRelationsObserver = null;
+  private Observer moteRelationsObserver;
 
   /* Popup menu */
   public interface SimulationMenuAction {
@@ -607,7 +607,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
         Transferable transferable = dtde.getTransferable();
 
         /* Only accept single files */
-        File file = null;
+        File file;
         if (!transferable.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
           dtde.rejectDrop();
           return;
@@ -1130,10 +1130,6 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
   }
 
   private void beginMoveRequest(Mote selectedMote, boolean withTiming, boolean confirm) {
-    long moveStartTime = -1;
-    if (withTiming) {
-      moveStartTime = System.currentTimeMillis();
-    }
     /* Save start positions and set move-start position to clicked mote */
     for (Mote m : selectedMotes) {
       Position pos = m.getInterfaces().getPosition();
@@ -1300,7 +1296,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
                    MOTE_RADIUS);
 
       }
-      else if (moteColors.length >= 1) {
+      else if (moteColors.length == 1) {
         g.setColor(moteColors[0]);
         g.fillOval(x - MOTE_RADIUS, y - MOTE_RADIUS, 2 * MOTE_RADIUS,
                    2 * MOTE_RADIUS);

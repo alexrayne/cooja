@@ -150,7 +150,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
   private final MoteRuler timelineMoteRuler;
   private final JComponent timeline;
 
-  private Observer moteHighlightObserver = null;
+  private Observer moteHighlightObserver;
   private final ArrayList<Mote> highlightedMotes = new ArrayList<>();
   private final static Color HIGHLIGHT_COLOR = Color.CYAN;
 
@@ -472,7 +472,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
       for (MoteEvents me: allMoteEvents.toArray(new MoteEvents[0])) {
         double d = me.mote.getInterfaces().getPosition().getDistanceTo(m);
 
-        int i=0;
+        int i;
         for (i=0; i < sortedMoteEvents.size(); i++) {
           double d2 = m.getInterfaces().getPosition().getDistanceTo(sortedMoteEvents.get(i).mote);
           if (d < d2) {
@@ -2142,7 +2142,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
     IDLE, RECEIVING, TRANSMITTING, INTERFERED
   }
   class RadioRXTXEvent extends MoteEvent {
-    RXTXRadioEvent state = null;
+    RXTXRadioEvent state;
     double  rssi;
     
     public RadioRXTXEvent(long time, RXTXRadioEvent ev) {

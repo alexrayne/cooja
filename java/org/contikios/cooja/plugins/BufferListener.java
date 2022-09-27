@@ -193,7 +193,7 @@ public class BufferListener extends VisPlugin
 
   private final Simulation simulation;
 
-  private JTextField filterTextField = null;
+  private JTextField filterTextField;
   private final JLabel filterLabel = new JLabel("Filter: ");
   private final Color filterTextFieldBackground;
 
@@ -1316,7 +1316,7 @@ public class BufferListener extends VisPlugin
   }
 
   private void setParser(Class<? extends Parser> bpClass) {
-    Parser bp = null;
+    Parser bp;
     try {
       bp = bpClass.getDeclaredConstructor().newInstance();
     } catch (InvocationTargetException | InstantiationException | IllegalAccessException | NoSuchMethodException e) {
@@ -1553,7 +1553,6 @@ public class BufferListener extends VisPlugin
       if (inRed) {
         /* Diff ends */
         sb.append("</font>");
-        inRed = false;
       }
       sb.append("</html>");
       return sb.toString();

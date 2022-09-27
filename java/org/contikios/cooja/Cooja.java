@@ -1891,37 +1891,39 @@ public class Cooja extends Observable {
       new RunnableInEDT<Boolean>() {
         @Override
         public Boolean work() {
-          var size = new Dimension(100, 100);
-          var location = new Point(100, 100);
-          for (var cfgElem : (List<Element>)root.getChildren()) {
-            if (cfgElem.getName().equals("width")) {
-              size.width = Integer.parseInt(cfgElem.getText());
-              plugin.getCooja().setSize(size);
-            } else if (cfgElem.getName().equals("height")) {
-              size.height = Integer.parseInt(cfgElem.getText());
-              plugin.getCooja().setSize(size);
-            } else if (cfgElem.getName().equals("z")) {
-              int zOrder = Integer.parseInt(cfgElem.getText());
-              plugin.getCooja().putClientProperty("zorder", zOrder);
-            } else if (cfgElem.getName().equals("location_x")) {
-              location.x = Integer.parseInt(cfgElem.getText());
-              plugin.getCooja().setLocation(location);
-            } else if (cfgElem.getName().equals("location_y")) {
-              location.y = Integer.parseInt(cfgElem.getText());
-              plugin.getCooja().setLocation(location);
-            } else if (cfgElem.getName().equals("minimized")) {
-              boolean minimized = Boolean.parseBoolean(cfgElem.getText());
-              final var pluginGUI = plugin.getCooja();
-              if (minimized && pluginGUI != null) {
-                SwingUtilities.invokeLater(new Runnable() {
-                  @Override
-                  public void run() {
-                    try {
-                      pluginGUI.setIcon(true);
-                    } catch (PropertyVetoException e) {
+          if (root != null) {
+            var size = new Dimension(100, 100);
+            var location = new Point(100, 100);
+            for (var cfgElem : (List<Element>) root.getChildren()) {
+              if (cfgElem.getName().equals("width")) {
+                size.width = Integer.parseInt(cfgElem.getText());
+                plugin.getCooja().setSize(size);
+              } else if (cfgElem.getName().equals("height")) {
+                size.height = Integer.parseInt(cfgElem.getText());
+                plugin.getCooja().setSize(size);
+              } else if (cfgElem.getName().equals("z")) {
+                int zOrder = Integer.parseInt(cfgElem.getText());
+                plugin.getCooja().putClientProperty("zorder", zOrder);
+              } else if (cfgElem.getName().equals("location_x")) {
+                location.x = Integer.parseInt(cfgElem.getText());
+                plugin.getCooja().setLocation(location);
+              } else if (cfgElem.getName().equals("location_y")) {
+                location.y = Integer.parseInt(cfgElem.getText());
+                plugin.getCooja().setLocation(location);
+              } else if (cfgElem.getName().equals("minimized")) {
+                boolean minimized = Boolean.parseBoolean(cfgElem.getText());
+                final var pluginGUI = plugin.getCooja();
+                if (minimized && pluginGUI != null) {
+                  SwingUtilities.invokeLater(new Runnable() {
+                    @Override
+                    public void run() {
+                      try {
+                        pluginGUI.setIcon(true);
+                      } catch (PropertyVetoException e) {
+                      }
                     }
-                  }
-                });
+                  });
+                }
               }
             }
           }
@@ -1952,12 +1954,13 @@ public class Cooja extends Observable {
    * @return True if this plugin was registered ok, false otherwise
    */
   public boolean registerPlugin(final Class<? extends Plugin> pluginClass) {
-    if (!pluginClass.isAnnotationPresent(PluginType.class)) {
+    var annotation = pluginClass.getAnnotation(PluginType.class);
+    if (annotation == null) {
       logger.fatal("Could not register plugin, no plugin type found: " + pluginClass);
       return false;
     }
 
-    switch (pluginClass.getAnnotation(PluginType.class).value()) {
+    switch (annotation.value()) {
       case PluginType.MOTE_PLUGIN:
         menuMotePluginClasses.add(pluginClass);
       case PluginType.COOJA_PLUGIN:
@@ -2152,7 +2155,7 @@ public class Cooja extends Observable {
     mySimulation.stopSimulation();
 
     // Create mote type
-    MoteType newMoteType = null;
+    MoteType newMoteType;
     try {
       newMoteType = moteTypeClass.getDeclaredConstructor().newInstance();
       if (!newMoteType.configureAndInit(Cooja.getTopParentContainer(), mySimulation, isVisualized())) {
@@ -2418,7 +2421,7 @@ public class Cooja extends Observable {
         root.addContent(getPluginsConfigXML());
 
         /* Remove current simulation, and load config */
-        boolean shouldRetry = false;
+        boolean shouldRetry;
         do {
           try {
             shouldRetry = false;
@@ -3243,7 +3246,7 @@ public class Cooja extends Observable {
       }
       System.gc();
 
-      if (!newSim.setConfigXML((Element) root.getChild("simulation"), isVisualized(), quick, manualRandomSeed)) {
+      if (!newSim.setConfigXML(root.getChild("simulation"), isVisualized(), quick, manualRandomSeed)) {
         logger.info("Simulation not loaded");
         return null;
       }
@@ -3975,9 +3978,7 @@ public class Cooja extends Observable {
   
   private static File restoreContikiRelativePath(File portable) {
   	int elem = PATH_IDENTIFIER.length;
-  	File path = null;
-	String canonical = null;
-	
+
     try {
     	String portablePath = portable.getPath();
         int i = 0;
@@ -3988,9 +3989,9 @@ public class Cooja extends Observable {
 
       // Not so nice, but goes along with GUI.getExternalToolsSetting
 			String defp = Cooja.getExternalToolsSetting("PATH_COOJA", null);
-    	path = new File(Cooja.getExternalToolsSetting(PATH_IDENTIFIER[i][1], defp + PATH_IDENTIFIER[i][2]));
+      var path = new File(Cooja.getExternalToolsSetting(PATH_IDENTIFIER[i][1], defp + PATH_IDENTIFIER[i][2]));
     	
-		canonical = path.getCanonicalPath();
+      var canonical = path.getCanonicalPath();
     	File absolute = new File(portablePath.replace(PATH_IDENTIFIER[i][0], canonical));
 		if(!absolute.exists()){
 			logger.warn("Replaced " + portable  + " with " + absolute + " (default: "+ defp + PATH_IDENTIFIER[i][2] +"), but could not find it. This does not have to be an error, as the file might be created later.");
@@ -4134,7 +4135,7 @@ public class Cooja extends Observable {
       key = obj.getClass().getName();
     }
 
-    String help = null;
+    String help;
     if (obj instanceof HasQuickHelp) {
       help = ((HasQuickHelp) obj).getQuickHelp();
     } else {

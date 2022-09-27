@@ -29,7 +29,7 @@
   <property name="args" value="" />
   <property name="CC" value="gcc" />
 
-  <property name="log4j.version" value="2.17.2" />
+  <property name="log4j.version" value="2.19.0" />
 
   <path id="cooja.classpath">
     <pathelement path="${build}"/>
@@ -47,8 +47,8 @@
     <!-- Downloaded from
          https://mvnrepository.com/artifact/info.picocli/picocli/4.6.3 -->
     <pathelement location="lib/picocli-4.6.3.jar"/>
-    <pathelement location="lib/syntaxpane-1.2.0.jar"/>
-    <pathelement location="lib/swingx-all-1.6.4.jar"/>
+    <pathelement location="lib/syntaxpane-1.2.1.jar"/>
+    <pathelement location="lib/swingx-autocomplete-1.6.5-1.jar"/>
     <!-- Copied into dist/lib by the mspsim rule -->
     <pathelement location="dist/lib/jipv6.jar" />
     <pathelement location="dist/lib/mspsim.jar" />
@@ -141,7 +141,6 @@ The COOJA Simulator
     <mkdir dir="${build}"/>
     <copy todir="${build}">
       <fileset dir="${config}"/>
-      <fileset dir="images"/>
       <fileset file="tools/coffee-manager/sky.properties"/>
       <fileset file="tools/coffee-manager/esb.properties"/>
     </copy>
