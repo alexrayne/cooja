@@ -397,8 +397,9 @@ public class ScriptRunner implements Plugin {
     }
 
     /* Activate engine */
+    boolean activated;
     try {
-      engine.activateScript(Cooja.isVisualized() ? codeEditor.getText() : headlessScript);
+      activated = engine.activateScript(Cooja.isVisualized() ? codeEditor.getText() : headlessScript);
     } catch (RuntimeException | ScriptException e) {
       logger.fatal("Test script error: ", e);
       setScriptActive(false);
@@ -408,7 +409,7 @@ public class ScriptRunner implements Plugin {
       }
       return;
     }
-    if (Cooja.isVisualized()) {
+    if (activated && Cooja.isVisualized()) {
       if (actionLinkFile != null) {
         actionLinkFile.setEnabled(false);
       }

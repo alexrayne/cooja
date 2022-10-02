@@ -149,7 +149,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
   private final Simulation simulation;
 
-  private JTextField filterTextField;
+  private final JTextField filterTextField;
   private final JLabel filterLabel = new JLabel("Filter: ");
   private final Color filterTextFieldBackground;
   /* filter history */

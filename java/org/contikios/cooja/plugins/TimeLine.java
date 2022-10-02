@@ -150,7 +150,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
   private final MoteRuler timelineMoteRuler;
   private final JComponent timeline;
 
-  private Observer moteHighlightObserver;
+  private final Observer moteHighlightObserver;
   private final ArrayList<Mote> highlightedMotes = new ArrayList<>();
   private final static Color HIGHLIGHT_COLOR = Color.CYAN;
 
@@ -621,21 +621,29 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
     zoomFinish(cpd, focusTime, focusCenter);
   }
 
-  private void zoomIn (final long focusTime,
-                       final double focusCenter) {
+  // legacy
+  private void zoomIn (final long focusTime, final double focusCenter) {
     zoomFinishLevel(zoomGetLevel()-1, focusTime, focusCenter);
   }
 
-  private void zoomOut (final long focusTime,
-                        final double focusCenter) {
+  private void zoomIn(final long focusTime) {
+    zoomFinishLevel(zoomGetLevel()-1, focusTime, 0.5);
+  }
+
+  // legacy
+  private void zoomOut (final long focusTime, final double focusCenter) {
     zoomFinishLevel(zoomGetLevel()+1, focusTime, focusCenter);
+  }
+
+  private void zoomOut(final long focusTime) {
+    zoomFinishLevel(zoomGetLevel()+1, focusTime, 0.5);
   }
 
   private final Action zoomInAction = new AbstractAction("Zoom in (Ctrl+)") {
     @Override
     public void actionPerformed(ActionEvent e) {
       final long centerTime = getCenterPointTime(); 
-      zoomIn(centerTime, 0.5);
+      zoomIn(centerTime);
     }
   };
 
@@ -643,7 +651,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
     @Override
     public void actionPerformed(ActionEvent e) {
       final long centerTime = getCenterPointTime(); 
-      zoomOut(centerTime, 0.5);
+      zoomOut(centerTime);
     }
   };
 
@@ -2142,7 +2150,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
     IDLE, RECEIVING, TRANSMITTING, INTERFERED
   }
   class RadioRXTXEvent extends MoteEvent {
-    RXTXRadioEvent state;
+    final RXTXRadioEvent state;
     double  rssi;
     
     public RadioRXTXEvent(long time, RXTXRadioEvent ev) {
@@ -2574,14 +2582,12 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
 
   class MoteEvents {
     final Mote mote;
-
-
-    EventsList radioRXTXEvents;
-    EventsList radioChannelEvents;
-    EventsList radioHWEvents;
-    EventsList ledEvents;
-    EventsList logEvents;
-    EventsList watchpointEvents;
+    final ArrayList<MoteEvent> radioRXTXEvents;
+    final ArrayList<MoteEvent> radioChannelEvents;
+    final ArrayList<MoteEvent> radioHWEvents;
+    final ArrayList<MoteEvent> ledEvents;
+    final ArrayList<MoteEvent> logEvents;
+    final ArrayList<MoteEvent> watchpointEvents;
 
     private MoteEvent lastRadioRXTXEvent = null;
     private MoteEvent lastRadioChannelEvent = null;
@@ -2592,12 +2598,12 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
 
     public MoteEvents(Mote mote) {
       this.mote = mote;
-      this.radioRXTXEvents = new EventsList();
-      this.radioChannelEvents = new EventsList();
-      this.radioHWEvents = new EventsList();
-      this.ledEvents = new EventsList();
-      this.logEvents = new EventsList();
-      this.watchpointEvents = new EventsList();
+      this.radioRXTXEvents = new ArrayList<>();
+      this.radioChannelEvents = new ArrayList<>();
+      this.radioHWEvents = new ArrayList<>();
+      this.ledEvents = new ArrayList<>();
+      this.logEvents = new ArrayList<>();
+      this.watchpointEvents = new ArrayList<>();
 
       if (mote.getSimulation().getSimulationTime() > 0) {
         /* Create no history events */

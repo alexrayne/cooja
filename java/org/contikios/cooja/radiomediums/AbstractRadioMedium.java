@@ -87,7 +87,7 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 	
 	private RadioConnection lastConnection = null;
 	
-	private Simulation simulation;
+	private final Simulation simulation;
 	
 	/* Bookkeeping */
 	public int COUNTER_TX = 0;
@@ -497,7 +497,7 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 	*/
 	public void setBaseRssi(Radio radio, double rssi) {
 		baseRssi.put(radio, rssi);
-		simulation.invokeSimulationThread(() -> updateSignalStrengths());
+		simulation.invokeSimulationThread(this::updateSignalStrengths);
 	}
 
 	
