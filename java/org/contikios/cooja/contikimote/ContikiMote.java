@@ -241,15 +241,6 @@ public class ContikiMote extends AbstractWakeupMote implements Mote {
 
   @Override
   public boolean setConfigXML(Simulation simulation, Collection<Element> configXML, boolean visAvailable) {
-    setSimulation(simulation);
-    myMemory = myType.createInitialMemory();
-    try {
-      myInterfaceHandler = new MoteInterfaceHandler(this, myType.getMoteInterfaceClasses());
-    } catch (Exception e) {
-      logger.fatal("Failed to create mote: " + e);
-      return false;
-    }
-
     for (Element element: configXML) {
       String name = element.getName();
 

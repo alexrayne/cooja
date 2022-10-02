@@ -882,9 +882,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
   private final Action statisticsAction = new AbstractAction("Print statistics to console") {
     @Override
     public void actionPerformed(ActionEvent e) {
-      if (simulation.isRunning()) {
-        simulation.stopSimulation();
-      }
+      simulation.stopSimulation();
       logger.info(extractStatistics());
     }
   };
@@ -2582,12 +2580,12 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
 
   class MoteEvents {
     final Mote mote;
-    final ArrayList<MoteEvent> radioRXTXEvents;
-    final ArrayList<MoteEvent> radioChannelEvents;
-    final ArrayList<MoteEvent> radioHWEvents;
-    final ArrayList<MoteEvent> ledEvents;
-    final ArrayList<MoteEvent> logEvents;
-    final ArrayList<MoteEvent> watchpointEvents;
+    final EventsList radioRXTXEvents;
+    final EventsList radioChannelEvents;
+    final EventsList radioHWEvents;
+    final EventsList ledEvents;
+    final EventsList logEvents;
+    final EventsList watchpointEvents;
 
     private MoteEvent lastRadioRXTXEvent = null;
     private MoteEvent lastRadioChannelEvent = null;
@@ -2598,12 +2596,12 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
 
     public MoteEvents(Mote mote) {
       this.mote = mote;
-      this.radioRXTXEvents = new ArrayList<>();
-      this.radioChannelEvents = new ArrayList<>();
-      this.radioHWEvents = new ArrayList<>();
-      this.ledEvents = new ArrayList<>();
-      this.logEvents = new ArrayList<>();
-      this.watchpointEvents = new ArrayList<>();
+      this.radioRXTXEvents      = new EventsList();
+      this.radioChannelEvents   = new EventsList();
+      this.radioHWEvents        = new EventsList();
+      this.ledEvents            = new EventsList();
+      this.logEvents            = new EventsList();
+      this.watchpointEvents     = new EventsList();
 
       if (mote.getSimulation().getSimulationTime() > 0) {
         /* Create no history events */

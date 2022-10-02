@@ -162,24 +162,18 @@ public abstract class AbstractCompileDialog extends JDialog {
     label.setPreferredSize(LABEL_DIMENSION);
     sourcePanel.add(label);
     contikiField = new JTextField(40);
-    final Runnable selectedContikiFile = new Runnable() {
-      @Override
-      public void run() {
-        setContikiSelection(new File(contikiField.getText()));
-      }
-    };
     DocumentListener contikiFieldListener = new DocumentListener() {
       @Override
       public void changedUpdate(DocumentEvent e) {
-        selectedContikiFile.run();
+        setContikiSelection(new File(contikiField.getText()));
       }
       @Override
       public void insertUpdate(DocumentEvent e) {
-        selectedContikiFile.run();
+        setContikiSelection(new File(contikiField.getText()));
       }
       @Override
       public void removeUpdate(DocumentEvent e) {
-        selectedContikiFile.run();
+        setContikiSelection(new File(contikiField.getText()));
       }
     };
     sourcePanel.add(contikiField);
@@ -224,7 +218,7 @@ public abstract class AbstractCompileDialog extends JDialog {
         }
 
         fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
-        fc.addChoosableFileFilter(new FileFilter() {
+        fc.setFileFilter(new FileFilter() {
           @Override
           public boolean accept(File f) {
             if (f.isDirectory()) {
@@ -460,10 +454,6 @@ public abstract class AbstractCompileDialog extends JDialog {
   public void compileContiki() throws Exception {
     final MessageListUI taskOutput = new MessageListUI();
 
-    if (contikiFirmware.exists()) {
-      contikiFirmware.delete();
-    }
-
     /* Handle multiple compilation commands one by one */
     final ArrayList<String> commands = new ArrayList<>();
     String[] arr = getCompileCommands().split("\n");
@@ -669,8 +659,8 @@ public abstract class AbstractCompileDialog extends JDialog {
     	compileButton.setEnabled(false);
     	createButton.setEnabled(true);
     	commandsArea.setEnabled(false);
-    	setCompileCommands("");
       getRootPane().setDefaultButton(createButton);
+      setCompileCommands("");
       break;
 
     default:
@@ -680,18 +670,25 @@ public abstract class AbstractCompileDialog extends JDialog {
 
   private void addCompileCommandTab(JTabbedPane parent) {
     commandsArea = new JTextArea(10, 1);
+    // Loading firmware sets the create button to default, so do not update dialog state after that.
     commandsArea.getDocument().addDocumentListener(new DocumentListener() {
       @Override
       public void changedUpdate(DocumentEvent e) {
-        setDialogState(DialogState.AWAITING_COMPILATION);
+        if (contikiSource != null || getRootPane().getDefaultButton() != createButton) {
+          setDialogState(DialogState.AWAITING_COMPILATION);
+        }
       }
       @Override
       public void insertUpdate(DocumentEvent e) {
-        setDialogState(DialogState.AWAITING_COMPILATION);
+        if (contikiSource != null || getRootPane().getDefaultButton() != createButton) {
+          setDialogState(DialogState.AWAITING_COMPILATION);
+        }
       }
       @Override
       public void removeUpdate(DocumentEvent e) {
-        setDialogState(DialogState.AWAITING_COMPILATION);
+        if (contikiSource != null || getRootPane().getDefaultButton() != createButton) {
+          setDialogState(DialogState.AWAITING_COMPILATION);
+        }
       }
     });
     parent.addTab("Compile commands", null, new JScrollPane(commandsArea), "Manually alter Contiki compilation commands");
@@ -809,8 +806,7 @@ public abstract class AbstractCompileDialog extends JDialog {
     });
 
     /* Always select position and ID interface */
-    if (intfClass == Position.class ||
-        intfClass == MoteID.class) {
+    if (Position.class.isAssignableFrom(intfClass) || MoteID.class.isAssignableFrom(intfClass)) {
       intfCheckBox.setEnabled(false);
       intfCheckBox.setSelected(true);
     }

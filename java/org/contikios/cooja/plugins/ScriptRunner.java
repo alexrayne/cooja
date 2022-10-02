@@ -30,10 +30,12 @@
 package org.contikios.cooja.plugins;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.nio.file.StandardOpenOption.CREATE;
+import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
+import static java.nio.file.StandardOpenOption.WRITE;
 
 import de.sciss.syntaxpane.DefaultSyntaxKit;
 import de.sciss.syntaxpane.actions.DefaultSyntaxAction;
-import de.sciss.syntaxpane.actions.ScriptRunnerAction;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -51,6 +53,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Observable;
@@ -106,7 +109,9 @@ public class ScriptRunner implements Plugin {
   };
 
   private final Simulation simulation;
-  private LogScriptEngine engine;
+  private final LogScriptEngine engine;
+
+  private boolean activated = false;
 
   private static BufferedWriter logWriter = null; /* For non-GUI tests */
 
@@ -122,7 +127,7 @@ public class ScriptRunner implements Plugin {
   public ScriptRunner(Simulation simulation, Cooja gui) {
     this.gui = gui;
     this.simulation = simulation;
-    this.engine = null;
+    this.engine = new LogScriptEngine(simulation);
 
     if (!Cooja.isVisualized()) {
       frame = null;
@@ -144,37 +149,14 @@ public class ScriptRunner implements Plugin {
 
     frame.setJMenuBar(menuBar);
 
-    /* Example scripts */
-    final JMenu examplesMenu = new JMenu("Load example script");
-    for (int i=0; i < EXAMPLE_SCRIPTS.length; i += 2) {
-      final String file = EXAMPLE_SCRIPTS[i];
-      JMenuItem exampleItem = new JMenuItem(EXAMPLE_SCRIPTS[i+1]);
-      exampleItem.addActionListener(new ActionListener() {
-        @Override
-        public void actionPerformed(ActionEvent e) {
-          String script = loadScript(file);
-          if (script == null) {
-            JOptionPane.showMessageDialog(Cooja.getTopParentContainer(),
-                "Could not load example script: scripts/" + file,
-                "Could not load script", JOptionPane.ERROR_MESSAGE);
-            return;
-          }
-          updateScript(script);
-        }
-      });
-      examplesMenu.add(exampleItem);
-    }
-    fileMenu.add(examplesMenu);
-
     /* Script area */
     frame.setLayout(new BorderLayout());
     codeEditor = new JEditorPane();
     codeEditor.setContentType("text/javascript");
     if (codeEditor.getEditorKit() instanceof DefaultSyntaxKit) {
       DefaultSyntaxKit kit = (DefaultSyntaxKit) codeEditor.getEditorKit();
-      kit.setProperty("PopupMenu", "copy-to-clipboard,-,find,find-next,goto-line,-,linkfile");
+      kit.setProperty(DefaultSyntaxKit.CONFIG_MENU, "copy-to-clipboard,-,find,find-next,goto-line,-,linkfile");
       kit.setProperty("Action.linkfile", JSyntaxLinkFile.class.getName());
-      kit.setProperty("Action.execute-script", ScriptRunnerAction.class.getName());
       kit.install(codeEditor);
     }
 
@@ -183,14 +165,54 @@ public class ScriptRunner implements Plugin {
     logTextArea.setEditable(true);
     logTextArea.setCursor(null);
 
+    var open = new JMenuItem("Open...");
+    open.addActionListener(l -> {
+      var f = showFileChooser(true);
+      if (f == null) {
+        return;
+      }
+      var script = StringUtils.loadFromFile(f);
+      if (script != null) {
+        codeEditor.setText(script);
+      }
+    });
+    fileMenu.add(open);
+    var saveAs = new JMenuItem("Save as...");
+    saveAs.addActionListener(l -> {
+      var f = showFileChooser(false);
+      if (f == null) {
+        return;
+      }
+      try (var writer = Files.newBufferedWriter(f.toPath(), UTF_8)) {
+        writer.write(codeEditor.getText());
+      } catch (IOException e) {
+        logger.error("Failed saving file: " + e.getMessage());
+      }
+    });
+    fileMenu.add(saveAs);
+    /* Example scripts */
+    final JMenu examplesMenu = new JMenu("Load example script");
+    for (int i=0; i < EXAMPLE_SCRIPTS.length; i += 2) {
+      final String file = EXAMPLE_SCRIPTS[i];
+      JMenuItem exampleItem = new JMenuItem(EXAMPLE_SCRIPTS[i+1]);
+      exampleItem.addActionListener(new ActionListener() {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+          updateScript(loadScript(file));
+        }
+      });
+      examplesMenu.add(exampleItem);
+    }
+    fileMenu.add(examplesMenu);
+
     final JCheckBoxMenuItem activateMenuItem = new JCheckBoxMenuItem("Activate");
     activateMenuItem.addActionListener(new ActionListener() {
       @Override
       public void actionPerformed(ActionEvent ev) {
-        try {
-          setScriptActive(!isActive());
-        } catch (Exception e) {
-          logger.fatal("Error: " + e.getMessage(), e);
+        if (isActive()) {
+          deactivateScript();
+        } else {
+          activateScript();
         }
       }
     });
@@ -254,10 +276,7 @@ public class ScriptRunner implements Plugin {
     }
 
     /* Set default script */
-    String script = loadScript(EXAMPLE_SCRIPTS[0]);
-    if (script != null) {
-      updateScript(script);
-    }
+    updateScript(loadScript(EXAMPLE_SCRIPTS[0]));
   }
 
   @Override
@@ -267,49 +286,45 @@ public class ScriptRunner implements Plugin {
 
   @Override
   public void startPlugin() {
-	/* start simulation */
-	if (!Cooja.isVisualized()) {
-	  simulation.setSpeedLimit(null);
-	  simulation.startSimulation();
-	}
   }
 
-  public void setLinkFile(File source) {
-    linkedFile = source;
-    String script = source == null ? "" : StringUtils.loadFromFile(linkedFile);
-    if (source == null)
-      updateScript("");
-    else 
-      updateScript(linkedFile);
-
-    if (!Cooja.isVisualized()) {
-      return;
-    }
-
-    if (source == null) {
+  public void removeLinkFile() {
+    linkedFile = null;
+    updateScript("");
+    if (Cooja.isVisualized()) {
       if (actionLinkFile != null) {
         actionLinkFile.setMenuText("Link script to disk file");
         actionLinkFile.putValue("JavascriptSource", null);
       }
       codeEditor.setEditable(true);
-    } else {
+      updateTitle();
+    }
+  }
+
+  public boolean setLinkFile(File source) {
+    String script = StringUtils.loadFromFile(source);
+    if (script == null) {
+      logger.error("Could not read " + source);
+      return false;
+    }
+    linkedFile = source;
+    updateScript(script);
+    if (Cooja.isVisualized()) {
       Cooja.setExternalToolsSetting("SCRIPTRUNNER_LAST_SCRIPTFILE", source.getAbsolutePath());
       if (actionLinkFile != null) {
         actionLinkFile.setMenuText("Unlink script: " + source.getName());
         actionLinkFile.putValue("JavascriptSource", source);
       }
       codeEditor.setEditable(false);
+      updateTitle();
     }
-    updateTitle();
+    return true;
   }
 
-  public void setScriptActive(boolean active) {
-    // Always clean up the resources for the currently running script.
+  private void deactivateScript() {
+    activated = false;
     if (engine != null) {
-      /* Deactivate script */
       engine.deactivateScript();
-      engine.setScriptLogObserver(null);
-      engine = null;
     }
 
     if (logWriter != null) {
@@ -331,25 +346,11 @@ public class ScriptRunner implements Plugin {
       codeEditor.setEnabled(true);
       updateTitle();
     }
+  }
 
-    // Previous script deactivated at this point.
-    if (!active) {
-      return;
-    }
-
-    // Activate new script.
-    if (linkedFile != null) {
-      String script = StringUtils.loadFromFile(linkedFile);
-      if (script == null) {
-        logger.fatal("Failed to load script from: " + linkedFile.getAbsolutePath());
-        // FIXME: script load failed, do not create new simulation.
-      } else {
-        updateScript(script);
-      }
-    }
-
-    /* Create new engine */
-    engine = new LogScriptEngine(simulation);
+  private void activateScript() {
+    deactivateScript();
+    activated = true;
     if (Cooja.isVisualized()) {
       /* Attach visualized log observer */
       engine.setScriptLogObserver(new Observer() {
@@ -364,14 +365,12 @@ public class ScriptRunner implements Plugin {
         /* Continuously write test output to file */
         if (logWriter == null) {
           /* Warning: static variable, used by all active test editor plugins */
-          File logFile = new File(gui.logDirectory + "/COOJA.testlog");
           Path logDirPath = Path.of(gui.logDirectory);
           if (!Files.exists(logDirPath)) {
             Files.createDirectory(logDirPath);
-          } else if (logFile.exists()) {
-            logFile.delete();
           }
-          logWriter = Files.newBufferedWriter(logFile.toPath(), UTF_8);
+          var logFile = Paths.get(gui.logDirectory, "COOJA.testlog");
+          logWriter = Files.newBufferedWriter(logFile, UTF_8, WRITE, CREATE, TRUNCATE_EXISTING);
           logWriter.write("Random seed: " + simulation.getRandomSeed() + "\n");
           logWriter.flush();
         }
@@ -392,24 +391,25 @@ public class ScriptRunner implements Plugin {
         });
       } catch (Exception e) {
         logger.fatal("Create log writer error: ", e);
-        setScriptActive(false);
+        deactivateScript();
+        return;
       }
     }
 
     /* Activate engine */
-    boolean activated;
+    boolean active;
     try {
-      activated = engine.activateScript(Cooja.isVisualized() ? codeEditor.getText() : headlessScript);
+      active = engine.activateScript(Cooja.isVisualized() ? codeEditor.getText() : headlessScript);
     } catch (RuntimeException | ScriptException e) {
       logger.fatal("Test script error: ", e);
-      setScriptActive(false);
+      deactivateScript();
       if (Cooja.isVisualized()) {
         Cooja.showErrorDialog(Cooja.getTopParentContainer(),
                 "Script error", e, false);
       }
       return;
     }
-    if (activated && Cooja.isVisualized()) {
+    if (active && Cooja.isVisualized()) {
       if (actionLinkFile != null) {
         actionLinkFile.setEnabled(false);
       }
@@ -604,10 +604,6 @@ public class ScriptRunner implements Plugin {
   }
 
   private void updateScript(String script) {
-    if (script == null) {
-      return;
-    }
-
     if (Cooja.isVisualized()) {
       codeEditor.setText(script);
       logTextArea.setText("");
@@ -619,39 +615,38 @@ public class ScriptRunner implements Plugin {
   @Override
   public Collection<Element> getConfigXML() {
     ArrayList<Element> config = new ArrayList<>();
-    Element element;
 
     if (linkedFile != null) {
-      element = new Element("scriptfile");
+      Element element = new Element("scriptfile");
       element.setText(simulation.getCooja().createPortablePath(linkedFile).getPath().replace('\\', '/'));
       config.add(element);
     } else {
-      element = new Element("script");
+      Element element = new Element("script");
       element.setText(codeEditor.getText());
       config.add(element);
     }
 
-    element = new Element("active");
-    element.setText(String.valueOf(isActive()));
-    config.add(element);
+    if (isActive()) {
+      Element element = new Element("active");
+      element.setText(String.valueOf(true));
+      config.add(element);
+    }
 
     return config;
   }
 
   public boolean isActive() {
-    return engine != null;
-
+    return activated;
   }
+
   @Override
   public void closePlugin() {
-    try {
-      setScriptActive(false);
-    } catch (Exception e) {
-    }
+    deactivateScript();
   }
 
   @Override
   public boolean setConfigXML(Collection<Element> configXML, boolean visAvailable) {
+    boolean activate = false;
     for (Element element : configXML) {
       String name = element.getName();
       if ("script".equals(name)) {
@@ -660,22 +655,54 @@ public class ScriptRunner implements Plugin {
         }
       } else if ("scriptfile".equals(name)) {
         File file = simulation.getCooja().restorePortablePath(new File(element.getText().trim()));
-        setLinkFile(file);
-      } else if ("active".equals(name)) {
-        try {
-          // Automatically activate script in headless mode.
-          setScriptActive(!Cooja.isVisualized() || Boolean.parseBoolean(element.getText()));
-        } catch (Exception e) {
-          logger.fatal("Error: " + e.getMessage(), e);
-          // FIXME: return false here.
+        if (!setLinkFile(file)) {
+          return false;
         }
+      } else if ("active".equals(name)) {
+        activate = Boolean.parseBoolean(element.getText());
       }
     }
+
+    // Automatically activate script in headless mode.
+    if (activate || !Cooja.isVisualized()) {
+      activateScript();
+    }
+
     return true;
   }
 
   private static String loadScript(String file) {
-    return StringUtils.loadFromURL(ScriptRunner.class.getResource("/scripts/" + file));
+    return StringUtils.loadFromStream(ScriptRunner.class.getResourceAsStream("/scripts/" + file));
+  }
+
+  /**
+   * Show a file chooser dialog for opening or saving a JavaScript file.
+   *
+   * @param open True shows an open dialog, false shows a save dialog.
+   * @return The file chosen, null on cancel.
+   */
+  private File showFileChooser(boolean open) {
+    var chooser = new JFileChooser();
+    String suggest = Cooja.getExternalToolsSetting("SCRIPTRUNNER_LAST_SCRIPTFILE", null);
+    if (suggest != null) {
+      chooser.setSelectedFile(new File(suggest));
+    } else {
+      chooser.setCurrentDirectory(new File("."));
+    }
+    chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+    chooser.setDialogTitle("Select script file");
+    chooser.setFileFilter(new FileFilter() {
+      @Override
+      public boolean accept(File file) {
+        return file.isDirectory() || file.getName().endsWith(".js");
+      }
+      @Override
+      public String getDescription() {
+        return "JavaScript";
+      }
+    });
+    var choice = open ? chooser.showOpenDialog(frame) : chooser.showSaveDialog(frame);
+    return choice == JFileChooser.APPROVE_OPTION ? chooser.getSelectedFile() : null;
   }
 
   public static class JSyntaxLinkFile extends DefaultSyntaxAction {
@@ -691,34 +718,13 @@ public class ScriptRunner implements Plugin {
       File currentSource = (File) action.getValue("JavascriptSource");
 
       if (currentSource != null) {
-        scriptRunner.setLinkFile(null);
+        scriptRunner.removeLinkFile();
         return;
       }
-
-      JFileChooser fileChooser = new JFileChooser();
-      String suggest = Cooja.getExternalToolsSetting("SCRIPTRUNNER_LAST_SCRIPTFILE", null);
-      if (suggest != null) {
-        fileChooser.setSelectedFile(new File(suggest));
-      } else {
-        fileChooser.setCurrentDirectory(new java.io.File("."));
+      var file = scriptRunner.showFileChooser(true);
+      if (file != null) {
+        scriptRunner.setLinkFile(file);
       }
-      fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
-      fileChooser.setDialogTitle("Select script file");
-      fileChooser.setFileFilter(new FileFilter() {
-        @Override
-        public boolean accept(File file) {
-          if (file.isDirectory()) { return true; }
-          return file.getName().endsWith(".js");
-        }
-        @Override
-        public String getDescription() {
-          return "Javascript";
-        }
-      });
-      if (fileChooser.showOpenDialog(scriptRunner.frame) != JFileChooser.APPROVE_OPTION) {
-        return;
-      }
-      scriptRunner.setLinkFile(fileChooser.getSelectedFile());
     }
   }
 }

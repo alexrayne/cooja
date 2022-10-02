@@ -29,6 +29,8 @@
 package org.contikios.cooja.mote.memory;
 
 import java.nio.ByteBuffer;
+import java.nio.BufferUnderflowException;
+import java.nio.BufferOverflowException;
 import org.contikios.cooja.mote.memory.MemoryLayout.DataType;
 
 /**
@@ -243,6 +245,7 @@ public class MemoryBuffer {
    */
   public int getInt() {
     int value;
+    try {
     switch (memLayout.intSize) {
       case 2:
         value = bbuf.getShort();
@@ -255,6 +258,10 @@ public class MemoryBuffer {
     }
     skipPaddingBytesFor(DataType.INT);
     return value;
+    }
+    catch( BufferUnderflowException | BufferOverflowException e ) {
+        throw e;
+    }
   }
 
   /**

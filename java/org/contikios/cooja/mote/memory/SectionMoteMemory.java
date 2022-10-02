@@ -40,7 +40,7 @@ import org.apache.logging.log4j.LogManager;
  * Represents a mote memory consisting of non-overlapping memory sections with
  * symbol addresses.
  * <p>
- * Every section must implement MemoyInterface.
+ * Every section must implement MemoryInterface.
  * <p>
  * Implements MemoryInterface by forwarding calls to available sections or returning
  * an error if no section is available.
@@ -191,7 +191,7 @@ public class SectionMoteMemory implements MemoryInterface {
   /**
    * Returns memory segment from section matching segment given by address and size
    * @param address start address of segment to get
-   * @param size size of segmetn to get
+   * @param size size of segment to get
    * @return Array containing data of segment
    * @throws MoteMemoryException if no single section containing the given address range was found
    */
@@ -279,7 +279,7 @@ public class SectionMoteMemory implements MemoryInterface {
     return false;
   }
 
-  /** Copies seciton memory to new (array backed) one
+  /** Copies section memory to new (array backed) one
    * @return Cloned memory
    */
   @Override

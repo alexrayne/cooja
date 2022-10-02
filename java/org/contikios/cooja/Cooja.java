@@ -72,6 +72,9 @@ import java.util.MissingResourceException;
 import java.util.Observable;
 import java.util.Observer;
 import java.util.Properties;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.SynchronousQueue;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import javax.swing.AbstractAction;
@@ -102,6 +105,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTextPane;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.ToolTipManager;
 import javax.swing.UIManager;
 import javax.swing.UIManager.LookAndFeelInfo;
@@ -264,7 +268,6 @@ public class Cooja extends Observable {
     "PATH_COOJA",
     "PATH_CONTIKI", "PATH_APPS",
     "PATH_APPSEARCH",
-    "PATH_CONTIKI_NG_BUILD_DIR",
 
     "PATH_MAKE",
     "PATH_SHELL",
@@ -674,7 +677,9 @@ public class Cooja extends Observable {
    *          New observer
    */
   public void addMoteHighlightObserver(Observer newObserver) {
-    moteHighlightObservable.addObserver(newObserver);
+    if (moteHighlightObservable != null) {
+      moteHighlightObservable.addObserver(newObserver);
+    }
   }
 
   /**
@@ -685,7 +690,9 @@ public class Cooja extends Observable {
    *          Observer to delete
    */
   public void deleteMoteHighlightObserver(Observer observer) {
-    moteHighlightObservable.deleteObserver(observer);
+    if (moteHighlightObservable != null) {
+      moteHighlightObservable.deleteObserver(observer);
+    }
   }
 
   /**
@@ -972,9 +979,7 @@ public class Cooja extends Observable {
       @Override
       public void actionPerformed(ActionEvent e) {
         Simulation s = getSimulation();
-        if (s.isRunning()) {
-          s.stopSimulation();
-        }
+        s.stopSimulation();
 
         while (s.getMotesCount() > 0) {
           s.removeMote(getSimulation().getMote(0));
@@ -1427,7 +1432,10 @@ public class Cooja extends Observable {
     return myDesktopPane;
   }
 
-  private static void setLookAndFeel() throws InterruptedException, InvocationTargetException {
+  static public 
+  void setLookAndFeel() 
+                       throws InterruptedException, InvocationTargetException 
+  {
     javax.swing.SwingUtilities.invokeAndWait(() -> {
       JFrame.setDefaultLookAndFeelDecorated(true);
       JDialog.setDefaultLookAndFeelDecorated(true);
@@ -2204,9 +2212,7 @@ public class Cooja extends Observable {
   }
 
   private void setSimulation(Simulation sim, boolean startPlugins) {
-    if (sim != null) {
-      doRemoveSimulation(false);
-    }
+    doRemoveSimulation(false);
     mySimulation = sim;
     updateGUIComponentState();
 
@@ -2345,7 +2351,6 @@ public class Cooja extends Observable {
 
     final JDialog progressDialog;
     if (quick) {
-      final Thread loadThread = Thread.currentThread();
       final String progressTitle = "Loading " + configFile.getAbsolutePath();
 
       progressDialog = new RunnableInEDT<JDialog>() {
@@ -2354,25 +2359,13 @@ public class Cooja extends Observable {
           final JDialog progressDialog = new JDialog(Cooja.getTopParentContainer(), progressTitle, ModalityType.APPLICATION_MODAL);
 
           JPanel progressPanel = new JPanel(new BorderLayout());
-          JProgressBar progressBar;
-          JButton button;
-
-          progressBar = new JProgressBar(0, 100);
+          var progressBar = new JProgressBar(0, 100);
           progressBar.setValue(0);
           progressBar.setIndeterminate(true);
 
           PROGRESS_BAR = progressBar; /* Allow various parts of COOJA to show messages */
 
-          button = new JButton("Abort");
-          button.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-              if (loadThread.isAlive()) {
-                loadThread.interrupt();
-                doRemoveSimulation(false);
-              }
-            }
-          });
+          var button = new JButton("Abort");
 
           progressPanel.add(BorderLayout.CENTER, progressBar);
           progressPanel.add(BorderLayout.SOUTH, button);
@@ -2396,34 +2389,75 @@ public class Cooja extends Observable {
       progressDialog = null;
     }
 
-    // Load simulation in this thread, while showing progress monitor
-    boolean shouldRetry;
-    Simulation newSim = null;
-    do {
-      try {
-        shouldRetry = false;
-        cooja.doRemoveSimulation(false);
-        PROGRESS_WARNINGS.clear();
-        newSim = loadSimulationConfig(configFile, quick, rewriteCsc, manualRandomSeed);
+    final var cfgFile = configFile;
+    // SwingWorker can pass information from worker to process() through publish().
+    // Communicate information the other way through this shared queue.
+    final var channel = new SynchronousQueue<Integer>(true);
+    var worker = new SwingWorker<Simulation, SimulationCreationException>() {
+      @Override
+      public Simulation doInBackground() {
+        boolean shouldRetry;
+        Simulation newSim = null;
+        do {
+          try {
+            shouldRetry = false;
+            cooja.doRemoveSimulation(false);
+            PROGRESS_WARNINGS.clear();
+            newSim = loadSimulationConfig(cfgFile, quick, rewriteCsc, manualRandomSeed);
+          } catch (SimulationCreationException e) {
+            publish(e);
+            try {
+              shouldRetry = channel.take() == 1;
+            } catch (InterruptedException ex) {
+              cooja.doRemoveSimulation(false);
+              return null;
+            }
+          }
+        } while (shouldRetry);
+        return newSim;
+      }
 
-        /* Optionally show compilation warnings */
-        boolean hideWarn = Boolean.parseBoolean(
-            Cooja.getExternalToolsSetting("HIDE_WARNINGS", "false")
-        );
+      @Override
+      protected void process(List<SimulationCreationException> exs) {
+        for (var e : exs) {
+          var retry = showErrorDialog(Cooja.getTopParentContainer(), "Simulation load error", e, true);
+          try {
+            channel.put(retry ? 1 : 0);
+          } catch (InterruptedException ex) {
+            cancel(true);
+            return;
+          }
+        }
+      }
+
+      @Override
+      protected void done() {
+        // Optionally show compilation warnings.
+        var hideWarn = Boolean.parseBoolean(Cooja.getExternalToolsSetting("HIDE_WARNINGS", "false"));
         if (quick && !hideWarn && !PROGRESS_WARNINGS.isEmpty()) {
           showWarningsDialog(frame, PROGRESS_WARNINGS.toArray(new String[0]));
         }
         PROGRESS_WARNINGS.clear();
-
-      } catch (SimulationCreationException e) {
-        shouldRetry = showErrorDialog(Cooja.getTopParentContainer(), "Simulation load error", e, true);
+        if (progressDialog != null && progressDialog.isDisplayable()) {
+          progressDialog.dispose();
+        }
       }
-    } while (shouldRetry);
+    };
 
-    if (progressDialog != null && progressDialog.isDisplayable()) {
-      progressDialog.dispose();
+    if (progressDialog != null) {
+      progressDialog.getRootPane().getDefaultButton().addActionListener(e -> worker.cancel(true));
     }
-    return newSim;
+
+    worker.execute();
+    Simulation sim;
+    try {
+      sim = worker.get();
+    } catch (CancellationException | ExecutionException | InterruptedException e) {
+      cooja.doRemoveSimulation(false);
+      return null;
+    }
+
+    return sim;
   }
 
   /**
@@ -3146,8 +3180,13 @@ public class Cooja extends Observable {
           }
     } else {
       File config = new File(vis ? options.action.quickstart : options.action.nogui);
-      if (quickStartSimulationConfig(config, vis, options.updateSimulation, options.randomSeed, logDirectory) == null) {
+      Simulation sim = quickStartSimulationConfig(config, vis, options.updateSimulation, options.randomSeed, logDirectory);
+      if (sim == null) {
           System.exit(1);
+      }
+      if (!vis) {
+        sim.setSpeedLimit(null);
+        sim.startSimulation();
       }
     }
   }
@@ -3164,11 +3203,11 @@ public class Cooja extends Observable {
         return null;
       }
 
-      if (vis) {
-        return gui.doLoadConfig(config, true, simupdate, manualRandomSeed);
-      }
       try {
-        return gui.loadSimulationConfig(config, true, simupdate, manualRandomSeed);
+        if (vis)
+          return gui.doLoadConfig(config, true, simupdate, manualRandomSeed);
+        else
+          return gui.loadSimulationConfig(config, true, simupdate, manualRandomSeed);
       } catch (Exception e) {
         logger.fatal("Exception when loading simulation: ", e);
         return null;
@@ -3208,7 +3247,7 @@ public class Cooja extends Observable {
 
       sim = loadSimulationConfig(root, quick, rewriteCsc, manualRandomSeed);
     } catch (JDOMException e) {
-      throw new SimulationCreationException("Config not wellformed", e);
+      throw new SimulationCreationException("Config not well-formed", e);
     } catch (IOException e) {
       throw new SimulationCreationException("Load simulation error", e);
     }
@@ -3823,7 +3862,9 @@ public class Cooja extends Observable {
    *          Mote to highlight
    */
   public void signalMoteHighlight(Mote m) {
-    moteHighlightObservable.setChangedAndNotify(m);
+    if (moteHighlightObservable != null) {
+      moteHighlightObservable.setChangedAndNotify(m);
+    }
   }
 
   /**
@@ -3844,7 +3885,7 @@ public class Cooja extends Observable {
    * @param color The color to use when visualizing the mote relation
    */
   public void addMoteRelation(Mote source, Mote dest, Color color) {
-    if (source == null || dest == null) {
+    if (source == null || dest == null || moteRelationObservable == null) {
       return;
     }
     removeMoteRelation(source, dest); /* Unique relations */
@@ -3859,7 +3900,7 @@ public class Cooja extends Observable {
    * @param dest Destination mote
    */
   public void removeMoteRelation(Mote source, Mote dest) {
-    if (source == null || dest == null) {
+    if (source == null || dest == null || moteRelationObservable == null) {
       return;
     }
     MoteRelation[] arr = getMoteRelations();
@@ -3889,7 +3930,9 @@ public class Cooja extends Observable {
    * @param newObserver Observer
    */
   public void addMoteRelationsObserver(Observer newObserver) {
-    moteRelationObservable.addObserver(newObserver);
+    if (moteRelationObservable != null) {
+      moteRelationObservable.addObserver(newObserver);
+    }
   }
 
   /**
@@ -3899,7 +3942,9 @@ public class Cooja extends Observable {
    * @param observer Observer
    */
   public void deleteMoteRelationsObserver(Observer observer) {
-    moteRelationObservable.deleteObserver(observer);
+    if (moteRelationObservable != null) {
+      moteRelationObservable.deleteObserver(observer);
+    }
   }
 
   /**
