@@ -297,17 +297,11 @@ public class Cooja extends Observable {
 
   private static final int FRAME_NEW_OFFSET = 30;
 
-  private static final int FRAME_STANDARD_WIDTH = 150;
-
-  private static final int FRAME_STANDARD_HEIGHT = 300;
-
   private static final String WINDOW_TITLE = "Cooja: The Contiki Network Simulator";
 
   private final Cooja cooja;
 
   private Simulation mySimulation;
-
-  protected final GUIEventHandler guiEventHandler;
 
   private final JMenu menuMoteTypeClasses;
   private final JMenu menuMoteTypes;
@@ -343,11 +337,7 @@ public class Cooja extends Observable {
   private final ScnObservable moteHighlightObservable;
 
   private final ScnObservable moteRelationObservable;
-
   private final JTextPane quickHelpTextPane;
-  private final GUIAction showQuickHelpAction;
-  private final JScrollPane quickHelpScroll;
-  private final Properties quickHelpProperties;
 
   /**
    * Mote relation (directed).
@@ -371,8 +361,8 @@ public class Cooja extends Observable {
    * @param vis          True if running in visual mode
    */
   public static Cooja makeCooja(final String logDirectory, final boolean vis) {
-    assert !java.awt.EventQueue.isDispatchThread() : "Call from regular context";
     if (vis) {
+      assert !java.awt.EventQueue.isDispatchThread() : "Call from regular context";
       return new RunnableInEDT<Cooja>() {
         @Override
         public Cooja work() {
@@ -417,7 +407,7 @@ public class Cooja extends Observable {
       String[] arr = searchProjectDirs.split(";");
       for (String d : arr) {
         File searchDir = restorePortablePath(new File(d));
-        File[] projects = COOJAProject.sarchProjects(searchDir, 3);
+        File[] projects = COOJAProject.searchProjects(searchDir, 3);
         if(projects == null) continue;
         for(File p : projects){
           currentProjects.add(new COOJAProject(p));
@@ -426,13 +416,9 @@ public class Cooja extends Observable {
     }
 
     if (!vis) {
-      quickHelpProperties = null;
-      SAVED_SIMULATIONS_FILES = null;
+      SAVED_SIMULATIONS_FILES   = null;
       myDesktopPane = null;
-      showQuickHelpAction = null;
       quickHelpTextPane = null;
-      quickHelpScroll = null;
-      guiEventHandler = null;
       menuOpenSimulation = null;
       menuMoteTypeClasses = null;
       menuMoteTypes = null;
@@ -470,7 +456,7 @@ public class Cooja extends Observable {
         return ".csc";
       }
     };
-    guiEventHandler = new GUIEventHandler();
+
     myDesktopPane = new JDesktopPane() {
       @Override
       public void setBounds(int x, int y, int w, int h) {
@@ -505,67 +491,10 @@ public class Cooja extends Observable {
     frame = new JFrame(WINDOW_TITLE);
 
     /* Help panel */
-    showQuickHelpAction = new GUIAction("Quick help", KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0)) {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        if (!(e.getSource() instanceof JCheckBoxMenuItem)) {
-          return;
-        }
-        boolean show = ((JCheckBoxMenuItem) e.getSource()).isSelected();
-        quickHelpTextPane.setVisible(show);
-        quickHelpScroll.setVisible(show);
-        setExternalToolsSetting("SHOW_QUICKHELP", Boolean.toString(show));
-        frame.getContentPane().revalidate();
-        updateDesktopSize(getDesktopPane());
-      }
-
-      @Override
-      public boolean shouldBeEnabled() {
-        return true;
-      }
-    };
-    quickHelpProperties = new Properties();
-    quickHelpProperties.put("KEYBOARD_SHORTCUTS",
-      "<b>Keyboard shortcuts</b><br>" +
-      "<br><i>Ctrl+N:</i> New simulation" +
-      "<br><i>Ctrl+S:</i> Start/pause simulation" +
-      "<br><i>Ctrl+R:</i> Reload current simulation. If no simulation exists, the last used simulation config is loaded" +
-      "<br><i>Ctrl+Shift+R:</i> Reload current simulation with another random seed" +
-      "<br>" +
-      "<br><i>F1:</i> Toggle quick help");
-    quickHelpProperties.put("GETTING_STARTED",
-      "<b>Getting started</b><br>" +
-      "<br>" +
-      "<br><i>F1:</i> Toggle quick help</i>");
     quickHelpTextPane = new JTextPane();
     quickHelpTextPane.setContentType("text/html");
     quickHelpTextPane.setEditable(false);
     quickHelpTextPane.setVisible(false);
-    quickHelpScroll = new JScrollPane(quickHelpTextPane, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-    quickHelpScroll.setPreferredSize(new Dimension(200, 0));
-    quickHelpScroll.setBorder(BorderFactory.createCompoundBorder(
-        BorderFactory.createLineBorder(Color.GRAY),
-        BorderFactory.createEmptyBorder(0, 3, 0, 0)
-    ));
-    quickHelpScroll.setVisible(false);
-    loadQuickHelp("GETTING_STARTED");
-
-    final boolean showQuickhelp = getExternalToolsSetting("SHOW_QUICKHELP", "true").equalsIgnoreCase("true");
-    if (showQuickhelp) {
-      SwingUtilities.invokeLater(new Runnable() {
-        @Override
-        public void run() {
-          JCheckBoxMenuItem checkBox = ((JCheckBoxMenuItem)showQuickHelpAction.getValue("checkbox"));
-          if (checkBox == null) {
-            return;
-          }
-          if (checkBox.isSelected()) {
-            return;
-          }
-          checkBox.doClick();
-        }
-      });
-    }
 
     /* Debugging - Break on repaints outside EDT */
     /*RepaintManager.setCurrentManager(new RepaintManager() {
@@ -607,16 +536,11 @@ public class Cooja extends Observable {
     menuMoteTypeClasses.setMnemonic(KeyEvent.VK_C);
     menuMoteTypes = new JMenu("Add motes");
     menuMoteTypes.setMnemonic(KeyEvent.VK_A);
-    frame.setJMenuBar(createMenuBar());
+    var container = new JPanel(new BorderLayout());
+    frame.setJMenuBar(createMenuBar(container));
 
     // Scrollable desktop.
     myDesktopPane.setOpaque(true);
-
-    var container = new JPanel(new BorderLayout());
-    var scroll = new JScrollPane(myDesktopPane);
-    scroll.setBorder(null);
-    container.add(BorderLayout.CENTER, scroll);
-    container.add(BorderLayout.EAST, quickHelpScroll);
     frame.setContentPane(container);
 
     frame.setSize(700, 700);
@@ -786,8 +710,7 @@ public class Cooja extends Observable {
       file = new RunnableInEDT<File>() {
         @Override
         public File work() {
-          JFileChooser fc = new JFileChooser();
-          fc.setFileFilter(SAVED_SIMULATIONS_FILES);
+          JFileChooser fc = newFileChooser();
 
           if (suggestedFile != null && suggestedFile.isDirectory()) {
             fc.setCurrentDirectory(suggestedFile);
@@ -806,8 +729,7 @@ public class Cooja extends Observable {
           File file = fc.getSelectedFile();
           if (!file.exists()) {
             // Try default file extension.
-            // FIXME: The file chooser should ensure a csc file is selected and this code should be removed.
-            file = new File(file.getParent(), file.getName() + SAVED_SIMULATIONS_FILES);
+            file = new File(file.getParent(), file.getName() + fc.getFileFilter());
           }
           if (!file.exists() || !file.canRead()) {
             logger.fatal("No read access to file");
@@ -826,7 +748,7 @@ public class Cooja extends Observable {
     new Thread(() -> cooja.doLoadConfig(cfgFile, quick, false, null), "asyncld").start();
   }
   private void updateOpenHistoryMenuItems(File[] openFilesHistory) {
-  	menuOpenSimulation.removeAll();
+    menuOpenSimulation.removeAll();
 
     /* Reconfigure submenu */
     JMenu reconfigureMenu = new JMenu("Open and Reconfigure");
@@ -847,7 +769,7 @@ public class Cooja extends Observable {
   }
 
   /**
-   * Enables/disables menues and menu items depending on whether a simulation is loaded etc.
+   * Enables/disables menus and menu items depending on whether a simulation is loaded etc.
    */
   void updateGUIComponentState() {
     if (!isVisualized()) {
@@ -859,16 +781,12 @@ public class Cooja extends Observable {
       a.setEnabled(a.shouldBeEnabled());
     }
 
-    /* Mote and mote type menues */
-    if (menuMoteTypeClasses != null) {
-      menuMoteTypeClasses.setEnabled(getSimulation() != null);
-    }
-    if (menuMoteTypes != null) {
-      menuMoteTypes.setEnabled(getSimulation() != null);
-    }
+    // Mote and mote type menus.
+    menuMoteTypeClasses.setEnabled(getSimulation() != null);
+    menuMoteTypes.setEnabled(getSimulation() != null);
   }
 
-  private JMenuBar createMenuBar() {
+  private JMenuBar createMenuBar(JPanel desktop) {
     final var newSimulationAction = new GUIAction("New simulation...", KeyEvent.VK_N, KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK)) {
       @Override
       public void actionPerformed(ActionEvent e) {
@@ -991,38 +909,6 @@ public class Cooja extends Observable {
         return s != null && s.getMotesCount() > 0;
       }
     };
-    final var showGettingStartedAction = new GUIAction("Getting started") {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        loadQuickHelp("GETTING_STARTED");
-        var checkBox = ((JCheckBoxMenuItem)showQuickHelpAction.getValue("checkbox"));
-        if (checkBox == null || checkBox.isSelected()) {
-          return;
-        }
-        checkBox.doClick();
-      }
-
-      @Override
-      public boolean shouldBeEnabled() {
-        return true;
-      }
-    };
-    final var showKeyboardShortcutsAction = new GUIAction("Keyboard shortcuts") {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        loadQuickHelp("KEYBOARD_SHORTCUTS");
-        var checkBox = ((JCheckBoxMenuItem)showQuickHelpAction.getValue("checkbox"));
-        if (checkBox == null || checkBox.isSelected()) {
-          return;
-        }
-        checkBox.doClick();
-      }
-
-      @Override
-      public boolean shouldBeEnabled() {
-        return true;
-      }
-    };
     final var showBufferSettingsAction = new GUIAction("Buffer sizes...") {
       @Override
       public void actionPerformed(ActionEvent e) {
@@ -1136,7 +1022,7 @@ public class Cooja extends Observable {
     menuItem.putClientProperty("class", SimControl.class);
     simulationMenu.add(menuItem);
 
-    guiAction = new StartPluginGUIAction("Simulation...");
+    guiAction = new StartPluginGUIAction("Information...");
     menuItem = new JMenuItem(guiAction);
     guiActions.add(guiAction);
     menuItem.setMnemonic(KeyEvent.VK_I);
@@ -1156,7 +1042,7 @@ public class Cooja extends Observable {
       public void menuCanceled(MenuEvent e) {
       }
     });
-
+    final var guiEventHandler = new GUIEventHandler();
     // Mote type classes sub menu
     menuMoteTypeClasses.addMenuListener(new MenuListener() {
       @Override
@@ -1400,7 +1286,86 @@ public class Cooja extends Observable {
     settingsMenu.add(new JMenuItem(showBufferSettingsAction));
 
     /* Help */
+    var quickHelpScroll = new JScrollPane(quickHelpTextPane, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+    quickHelpScroll.setPreferredSize(new Dimension(200, 0));
+    quickHelpScroll.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(Color.GRAY),
+            BorderFactory.createEmptyBorder(0, 3, 0, 0)
+    ));
+    quickHelpScroll.setVisible(false);
+    var scroll = new JScrollPane(myDesktopPane);
+    scroll.setBorder(null);
+    desktop.add(BorderLayout.CENTER, scroll);
+    desktop.add(BorderLayout.EAST, quickHelpScroll);
+    var showQuickHelpAction = new GUIAction("Quick help", KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0)) {
+      @Override
+      public void actionPerformed(ActionEvent e) {
+        if (!(e.getSource() instanceof JCheckBoxMenuItem)) {
+          return;
+        }
+        boolean show = ((JCheckBoxMenuItem) e.getSource()).isSelected();
+        quickHelpTextPane.setVisible(show);
+        quickHelpScroll.setVisible(show);
+        setExternalToolsSetting("SHOW_QUICKHELP", Boolean.toString(show));
+        frame.getContentPane().revalidate();
+        updateDesktopSize(getDesktopPane());
+      }
+
+      @Override
+      public boolean shouldBeEnabled() {
+        return true;
+      }
+    };
+    loadQuickHelp("GETTING_STARTED");
+    final boolean showQuickhelp = getExternalToolsSetting("SHOW_QUICKHELP", "true").equalsIgnoreCase("true");
+    if (showQuickhelp) {
+      SwingUtilities.invokeLater(new Runnable() {
+        @Override
+        public void run() {
+          JCheckBoxMenuItem checkBox = ((JCheckBoxMenuItem)showQuickHelpAction.getValue("checkbox"));
+          if (checkBox == null) {
+            return;
+          }
+          if (checkBox.isSelected()) {
+            return;
+          }
+          checkBox.doClick();
+        }
+      });
+    }
+    final var showGettingStartedAction = new GUIAction("Getting started") {
+      @Override
+      public void actionPerformed(ActionEvent e) {
+        loadQuickHelp("GETTING_STARTED");
+        var checkBox = ((JCheckBoxMenuItem)showQuickHelpAction.getValue("checkbox"));
+        if (checkBox == null || checkBox.isSelected()) {
+          return;
+        }
+        checkBox.doClick();
+      }
+
+      @Override
+      public boolean shouldBeEnabled() {
+        return true;
+      }
+    };
     helpMenu.add(new JMenuItem(showGettingStartedAction));
+    final var showKeyboardShortcutsAction = new GUIAction("Keyboard shortcuts") {
+      @Override
+      public void actionPerformed(ActionEvent e) {
+        loadQuickHelp("KEYBOARD_SHORTCUTS");
+        var checkBox = ((JCheckBoxMenuItem)showQuickHelpAction.getValue("checkbox"));
+        if (checkBox == null || checkBox.isSelected()) {
+          return;
+        }
+        checkBox.doClick();
+      }
+
+      @Override
+      public boolean shouldBeEnabled() {
+        return true;
+      }
+    };
     helpMenu.add(new JMenuItem(showKeyboardShortcutsAction));
     JCheckBoxMenuItem checkBox = new JCheckBoxMenuItem(showQuickHelpAction);
     showQuickHelpAction.putValue("checkbox", checkBox);
@@ -1744,6 +1709,10 @@ public class Cooja extends Observable {
    */
   public void showPlugin(final Plugin plugin) {
     new RunnableInEDT<Boolean>() {
+      private static final int FRAME_STANDARD_WIDTH = 150;
+
+      private static final int FRAME_STANDARD_HEIGHT = 300;
+
       @Override
       public Boolean work() {
         JInternalFrame pluginFrame = plugin.getCooja();
@@ -2088,18 +2057,6 @@ public class Cooja extends Observable {
     return null;
   }
 
-  /**
-   * Returns started plugin with given class name, if any.
-   *
-   * @param classname Class name
-   * @return Plugin instance
-   * @deprecated
-   */
-  @Deprecated
-  public Plugin getStartedPlugin(String classname) {
-    return getPlugin(classname);
-  }
-
   public Plugin[] getStartedPlugins() {
     return startedPlugins.toArray(new Plugin[0]);
   }
@@ -2253,7 +2210,8 @@ public class Cooja extends Observable {
     // Create mote type
     MoteType newMoteType;
     try {
-      newMoteType = moteTypeClass.getDeclaredConstructor().newInstance();
+      newMoteType = moteTypeClass == ContikiMoteType.class
+              ? new ContikiMoteType(this) : moteTypeClass.getDeclaredConstructor().newInstance();
       if (!newMoteType.configureAndInit(Cooja.getTopParentContainer(), mySimulation, isVisualized())) {
         return;
       }
@@ -2600,20 +2558,13 @@ public class Cooja extends Observable {
 
     mySimulation.stopSimulation();
 
-    JFileChooser fc = new JFileChooser();
-    fc.setFileFilter(SAVED_SIMULATIONS_FILES);
-
-    // Suggest file using history
-    File suggestedFile = getLastOpenedFile();
-    if (suggestedFile != null) {
-      fc.setSelectedFile(suggestedFile);
-    }
+    JFileChooser fc = newFileChooser();
 
     int returnVal = fc.showSaveDialog(myDesktopPane);
     if (returnVal == JFileChooser.APPROVE_OPTION) {
       File saveFile = fc.getSelectedFile();
       if (!fc.accept(saveFile)) {
-        saveFile = new File(saveFile.getParent(), saveFile.getName() + SAVED_SIMULATIONS_FILES);
+        saveFile = new File(saveFile.getParent(), saveFile.getName() + fc.getFileFilter());
       }
       if (saveFile.exists()) {
         if (askForConfirmation) {
@@ -2642,6 +2593,19 @@ public class Cooja extends Observable {
       }
     }
     return null;
+  }
+
+  /** Allocate a file chooser for Cooja simulation files. */
+  private JFileChooser newFileChooser() {
+    JFileChooser fc = new JFileChooser();
+    fc.setFileFilter( SAVED_SIMULATIONS_FILES );
+
+    // Suggest file using history
+    File suggestedFile = getLastOpenedFile();
+    if (suggestedFile != null) {
+      fc.setSelectedFile(suggestedFile);
+    }
+    return fc;
   }
 
   /**
@@ -3408,10 +3372,7 @@ public class Cooja extends Observable {
     root.addContent(simulationElement);
 
     // Create started plugins config
-    Collection<Element> pluginsConfig = getPluginsConfigXML();
-    if (pluginsConfig != null) {
-      root.addContent(pluginsConfig);
-    }
+    root.addContent(getPluginsConfigXML());
 
     return root;
   }
@@ -4210,18 +4171,35 @@ public class Cooja extends Observable {
       return;
     }
 
-    String key;
-    if (obj instanceof String) {
-      key = (String) obj;
-    } else {
-      key = obj.getClass().getName();
-    }
-
     String help;
     if (obj instanceof HasQuickHelp) {
       help = ((HasQuickHelp) obj).getQuickHelp();
     } else {
-      help = quickHelpProperties.getProperty(key);
+      String key;
+      if (obj instanceof String) {
+        key = (String) obj;
+      } else {
+        key = obj.getClass().getName();
+      }
+      switch (key) {
+        case "KEYBOARD_SHORTCUTS":
+          help = "<b>Keyboard shortcuts</b><br>" +
+                  "<br><i>Ctrl+N:</i> New simulation" +
+                  "<br><i>Ctrl+S:</i> Start/pause simulation" +
+                  "<br><i>Ctrl+R:</i> Reload current simulation. If no simulation exists, the last used simulation config is loaded" +
+                  "<br><i>Ctrl+Shift+R:</i> Reload current simulation with another random seed" +
+                  "<br>" +
+                  "<br><i>F1:</i> Toggle quick help";
+          break;
+        case "GETTING_STARTED":
+          help = "<b>Getting started</b><br>" +
+                  "<br>" +
+                  "<br><i>F1:</i> Toggle quick help</i>";
+          break;
+        default:
+          help = null;
+          break;
+      }
     }
 
     if (help != null) {

@@ -133,6 +133,21 @@ public class ScriptRunner implements Plugin {
       frame = null;
       codeEditor = null;
       logTextArea = null;
+      engine.setScriptLogObserver(new Observer() {
+        @Override
+        public void update(Observable obs, Object obj) {
+          try {
+            if (logWriter != null) {
+              logWriter.write((String) obj);
+              logWriter.flush();
+            } else {
+              logger.fatal("No log writer: " + obj);
+            }
+          } catch (IOException e) {
+            logger.fatal("Error when writing to test log file: " + obj, e);
+          }
+        }
+      });
       return;
     }
 
@@ -151,8 +166,7 @@ public class ScriptRunner implements Plugin {
 
     /* Script area */
     frame.setLayout(new BorderLayout());
-    codeEditor = new JEditorPane();
-    codeEditor.setContentType("text/javascript");
+    codeEditor = newEditor();
     if (codeEditor.getEditorKit() instanceof DefaultSyntaxKit) {
       DefaultSyntaxKit kit = (DefaultSyntaxKit) codeEditor.getEditorKit();
       kit.setProperty(DefaultSyntaxKit.CONFIG_MENU, "copy-to-clipboard,-,find,find-next,goto-line,-,linkfile");
@@ -164,6 +178,14 @@ public class ScriptRunner implements Plugin {
     logTextArea.setMargin(new Insets(5,5,5,5));
     logTextArea.setEditable(true);
     logTextArea.setCursor(null);
+
+    engine.setScriptLogObserver(new Observer() {
+      @Override
+      public void update(Observable obs, Object obj) {
+        logTextArea.append((String) obj);
+        logTextArea.setCaretPosition(logTextArea.getText().length());
+      }
+    });
 
     var open = new JMenuItem("Open...");
     open.addActionListener(l -> {
@@ -323,15 +345,11 @@ public class ScriptRunner implements Plugin {
 
   private void deactivateScript() {
     activated = false;
-    if (engine != null) {
-      engine.deactivateScript();
-    }
+    engine.deactivateScript();
 
     if (logWriter != null) {
       try {
-        logWriter.write(
-                "Test ended at simulation time: " +
-                        (simulation!=null?simulation.getSimulationTime():"?") + "\n");
+        logWriter.write("Test ended at simulation time: " + simulation.getSimulationTime() + "\n");
         logWriter.flush();
         logWriter.close();
       } catch (IOException e) {
@@ -351,16 +369,7 @@ public class ScriptRunner implements Plugin {
   private void activateScript() {
     deactivateScript();
     activated = true;
-    if (Cooja.isVisualized()) {
-      /* Attach visualized log observer */
-      engine.setScriptLogObserver(new Observer() {
-        @Override
-        public void update(Observable obs, Object obj) {
-          logTextArea.append((String) obj);
-          logTextArea.setCaretPosition(logTextArea.getText().length());
-        }
-      });
-    } else {
+    if (!Cooja.isVisualized()) {
       try {
         /* Continuously write test output to file */
         if (logWriter == null) {
@@ -374,21 +383,6 @@ public class ScriptRunner implements Plugin {
           logWriter.write("Random seed: " + simulation.getRandomSeed() + "\n");
           logWriter.flush();
         }
-        engine.setScriptLogObserver(new Observer() {
-          @Override
-          public void update(Observable obs, Object obj) {
-            try {
-              if (logWriter != null) {
-                logWriter.write((String) obj);
-                logWriter.flush();
-              } else {
-                logger.fatal("No log writer: " + obj);
-              }
-            } catch (IOException e) {
-              logger.fatal("Error when writing to test log file: " + obj, e);
-            }
-          }
-        });
       } catch (Exception e) {
         logger.fatal("Create log writer error: ", e);
         deactivateScript();
@@ -428,6 +422,13 @@ public class ScriptRunner implements Plugin {
       title += "*active*";
     }
     frame.setTitle(title);
+  }
+
+  /** Make a new code editor. */
+  private JEditorPane newEditor() {
+    var editor = new JEditorPane();
+    editor.setContentType("text/javascript");
+    return editor;
   }
 
   private void exportAndRun() {
