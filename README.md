@@ -27,8 +27,6 @@ Serial
     * Logging received from more serial data can be configured. by default - on.
     * provide protection for mote receive buffer overload
 
-+ [contrib/queue-perf] - sim perfomance boost by Matthew Bradbury PR
-
 + [feature/plugins-timeselec] - fixed select time between windows - timeline, 
         mote output, radio log, etc. Double-click on item select corresponding time everywhere.
 
@@ -49,8 +47,6 @@ TimeLine
 
 + [timeline-dumpevents-bytime] - timeline save events log now ordered by time 
     (was order by mote id)
-
-+ [feature/timeline-event-minwidth] - provide minimal painted width of events in TimeLine.
 
 Crash and Exceptions
 ------------------------------------------------------------------------
