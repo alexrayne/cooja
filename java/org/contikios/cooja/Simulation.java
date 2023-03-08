@@ -63,8 +63,6 @@ public class Simulation extends Observable implements Runnable {
   /*private static long EVENT_COUNTER = 0;*/
 
   private final ArrayList<Mote> motes = new ArrayList<>();
-  private final ArrayList<Mote> motesUninit = new ArrayList<>();
-  
   private final ArrayList<MoteType> moteTypes = new ArrayList<>();
 
   /* If true, run simulation at full speed */
@@ -206,11 +204,6 @@ public class Simulation extends Observable implements Runnable {
     }
   };
 
-  public void clearEvents() {
-    eventQueue.clear();
-    pollRequests.clear();
-  }
-
   @Override
   public void run() {
     assert isRunning : "Did not set isRunning before starting";
@@ -221,6 +214,7 @@ public class Simulation extends Observable implements Runnable {
     speedLimitLastSimtime = lastStartSimulationTime;
 
     /* Simulation starting */
+    cooja.updateProgress(false);
     this.setChanged();
     this.notifyObservers(this);
 
@@ -270,6 +264,7 @@ public class Simulation extends Observable implements Runnable {
     simulationThread = null;
     stopSimulation = false;
 
+    cooja.updateProgress(true);
     this.setChanged();
     this.notifyObservers(this);
   }
@@ -320,6 +315,7 @@ public class Simulation extends Observable implements Runnable {
       } catch (InterruptedException e) {
       }
     }
+    cooja.updateProgress(true);
   }
 
   /**
@@ -366,13 +362,6 @@ public class Simulation extends Observable implements Runnable {
    */
   public long getRandomSeed() {
     return randomSeed;
-  }
-
-  /**
-   * @return Random seed (converted to a string)
-   */
-  public String getRandomSeedString() {
-    return Long.toString(randomSeed);
   }
 
   /**
@@ -477,7 +466,7 @@ public class Simulation extends Observable implements Runnable {
     config.add(element);
 
     // Mote types
-    for (MoteType moteType : getMoteTypes()) {
+    for (MoteType moteType : moteTypes) {
       element = new Element("motetype");
       element.setText(moteType.getClass().getName());
 
@@ -596,6 +585,7 @@ public class Simulation extends Observable implements Runnable {
 
         // Show configure simulation dialog
         if (visAvailable && !quick) {
+          // FIXME: this should run from the AWT thread.
           if (!CreateSimDialog.showDialog(Cooja.getTopParentContainer(), this)) {
             logger.debug("Simulation not created, aborting");
             throw new Exception("Load aborted by user");
@@ -753,7 +743,6 @@ public class Simulation extends Observable implements Runnable {
       @Override
       public void run() {
         motes.remove(mote);
-        motesUninit.remove(mote);
         currentRadioMedium.unregisterMote(mote, Simulation.this);
 
         /* Dispose mote interface resources */
@@ -822,7 +811,6 @@ public class Simulation extends Observable implements Runnable {
         }
 
         motes.add(mote);
-        motesUninit.remove(mote);
         currentRadioMedium.registerMote(mote, Simulation.this);
 
         /* Notify mote interfaces that node was added */
@@ -837,9 +825,6 @@ public class Simulation extends Observable implements Runnable {
         cooja.updateGUIComponentState();
       }
     };
-
-    //Add to list of uninitialized motes
-    motesUninit.add(mote);
 
     if (!isRunning()) {
       /* Simulation is stopped, add mote immediately */
@@ -880,24 +865,6 @@ public class Simulation extends Observable implements Runnable {
   }
 
   /**
-   * Returns uninitialised simulation mote with given ID.
-   * 
-   * @param id ID
-   * @return Mote or null
-   * @see Mote#getID()
-   */
-  public Mote getMoteWithIDUninit(int id) {
-    for (Mote m: motesUninit) {
-      if (m.getID() == id) {
-        return m;
-      }
-    }
-    return null;
-  }
-
-
-
-  /**
    * Returns number of motes in this simulation.
    *
    * @return Number of motes
@@ -916,16 +883,6 @@ public class Simulation extends Observable implements Runnable {
     motes.toArray(arr);
     return arr;
   }
-
-  /**
-   * Returns uninitialised motes
-   *
-   * @return Motes
-   */
-  public Mote[] getMotesUninit() {
-    return motesUninit.toArray(new Mote[0]);
-  }
-
 
   /**
    * Returns all mote types in simulation.

@@ -35,12 +35,13 @@ import static java.util.Map.entry;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.contikios.cooja.contikimote.interfaces.ContikiBeeper;
 import org.contikios.cooja.contikimote.interfaces.ContikiButton;
 import org.contikios.cooja.contikimote.interfaces.ContikiCFS;
 import org.contikios.cooja.contikimote.interfaces.ContikiClock;
 import org.contikios.cooja.contikimote.interfaces.ContikiEEPROM;
-import org.contikios.cooja.contikimote.interfaces.ContikiIPAddress;
 import org.contikios.cooja.contikimote.interfaces.ContikiLED;
 import org.contikios.cooja.contikimote.interfaces.ContikiMoteID;
 import org.contikios.cooja.contikimote.interfaces.ContikiPIR;
@@ -59,10 +60,6 @@ import org.contikios.cooja.interfaces.Mote2MoteRelations;
 import org.contikios.cooja.interfaces.MoteAttributes;
 import org.contikios.cooja.interfaces.MoteID;
 import org.contikios.cooja.interfaces.PIR;
-import org.contikios.cooja.interfaces.PolledAfterActiveTicks;
-import org.contikios.cooja.interfaces.PolledAfterAllTicks;
-import org.contikios.cooja.interfaces.PolledBeforeActiveTicks;
-import org.contikios.cooja.interfaces.PolledBeforeAllTicks;
 import org.contikios.cooja.interfaces.Position;
 import org.contikios.cooja.interfaces.Radio;
 import org.contikios.cooja.interfaces.RimeAddress;
@@ -70,18 +67,15 @@ import org.contikios.cooja.interfaces.SerialIO;
 
 /**
  * The mote interface handler holds all interfaces for a specific mote.
- * Interfaces should be polled via this class when the mote is ticked.
- *
- * @see #doActiveActionsAfterTick()
- * @see #doActiveActionsBeforeTick()
- * @see #doPassiveActionsAfterTick()
- * @see #doPassiveActionsBeforeTick()
  *
  * @author Fredrik Osterlind
  */
 public class MoteInterfaceHandler {
+  private static final Logger logger = LogManager.getLogger(MoteInterfaceHandler.class);
+
   /** Static translation map from name -> class for builtin interfaces. */
   private static final Map<String, Class<? extends MoteInterface>> builtinInterfaces = Map.ofEntries(
+          entry("org.contikios.cooja.interfaces.IPAddress", IPAddress.class),
           entry("org.contikios.cooja.interfaces.Position", Position.class),
           entry("org.contikios.cooja.interfaces.Battery", Battery.class),
           entry("org.contikios.cooja.contikimote.interfaces.ContikiVib", ContikiVib.class),
@@ -90,7 +84,7 @@ public class MoteInterfaceHandler {
           entry("org.contikios.cooja.contikimote.interfaces.ContikiRS232", ContikiRS232.class),
           entry("org.contikios.cooja.contikimote.interfaces.ContikiBeeper", ContikiBeeper.class),
           entry("org.contikios.cooja.interfaces.RimeAddress", RimeAddress.class),
-          entry("org.contikios.cooja.contikimote.interfaces.ContikiIPAddress", ContikiIPAddress.class),
+          entry("org.contikios.cooja.contikimote.interfaces.ContikiIPAddress", IPAddress.class), // Compatibility.
           entry("org.contikios.cooja.contikimote.interfaces.ContikiRadio", ContikiRadio.class),
           entry("org.contikios.cooja.contikimote.interfaces.ContikiButton", ContikiButton.class),
           entry("org.contikios.cooja.contikimote.interfaces.ContikiPIR", ContikiPIR.class),
@@ -117,16 +111,6 @@ public class MoteInterfaceHandler {
   private PIR myPIR;
   private Position myPosition;
   private Radio myRadio;
-  private PolledBeforeActiveTicks[] polledBeforeActive = null;
-  private PolledAfterActiveTicks[] polledAfterActive = null;
-  private PolledBeforeAllTicks[] polledBeforeAll = null;
-  private PolledAfterAllTicks[] polledAfterAll = null;
-
-  /**
-   * Creates new empty mote interface handler.
-   */
-  public MoteInterfaceHandler() {
-  }
 
   /**
    * Creates new mote interface handler. All given interfaces are created.
@@ -352,82 +336,6 @@ public class MoteInterfaceHandler {
   }
 
   /**
-   * Polls active interfaces before mote tick.
-   */
-  public void doActiveActionsBeforeTick() {
-    if (polledBeforeActive == null) {
-      ArrayList<PolledBeforeActiveTicks> intfs = new ArrayList<>();
-      for (MoteInterface intf: moteInterfaces) {
-        if (intf instanceof PolledBeforeActiveTicks) {
-          intfs.add((PolledBeforeActiveTicks)intf);
-        }
-      }
-      polledBeforeActive = intfs.toArray(new PolledBeforeActiveTicks[0]);
-    }
-
-    for (PolledBeforeActiveTicks element : polledBeforeActive) {
-      element.doActionsBeforeTick();
-    }
-  }
-
-  /**
-   * Polls active interfaces after mote tick.
-   */
-  public void doActiveActionsAfterTick() {
-    if (polledAfterActive == null) {
-      ArrayList<PolledAfterActiveTicks> intfs = new ArrayList<>();
-      for (MoteInterface intf: moteInterfaces) {
-        if (intf instanceof PolledAfterActiveTicks) {
-          intfs.add((PolledAfterActiveTicks)intf);
-        }
-      }
-      polledAfterActive = intfs.toArray(new PolledAfterActiveTicks[0]);
-    }
-
-    for (PolledAfterActiveTicks element : polledAfterActive) {
-      element.doActionsAfterTick();
-    }
-  }
-
-  /**
-   * Polls passive interfaces before mote tick.
-   */
-  public void doPassiveActionsBeforeTick() {
-    if (polledBeforeAll == null) {
-      ArrayList<PolledBeforeAllTicks> intfs = new ArrayList<>();
-      for (MoteInterface intf: moteInterfaces) {
-        if (intf instanceof PolledBeforeAllTicks) {
-          intfs.add((PolledBeforeAllTicks)intf);
-        }
-      }
-      polledBeforeAll = intfs.toArray(new PolledBeforeAllTicks[0]);
-    }
-
-    for (PolledBeforeAllTicks element : polledBeforeAll) {
-      element.doActionsBeforeTick();
-    }
-  }
-
-  /**
-   * Polls passive interfaces after mote tick.
-   */
-  public void doPassiveActionsAfterTick() {
-    if (polledAfterAll == null) {
-      ArrayList<PolledAfterAllTicks> intfs = new ArrayList<>();
-      for (MoteInterface intf: moteInterfaces) {
-        if (intf instanceof PolledAfterAllTicks) {
-          intfs.add((PolledAfterAllTicks)intf);
-        }
-      }
-      polledAfterAll = intfs.toArray(new PolledAfterAllTicks[0]);
-    }
-
-    for (PolledAfterAllTicks element : polledAfterAll) {
-      element.doActionsAfterTick();
-    }
-  }
-
-  /**
    * @return Mote interfaces
    */
   public Collection<MoteInterface> getInterfaces() {
@@ -442,18 +350,9 @@ public class MoteInterfaceHandler {
    * Add mote interface.
    *
    * @param intf Mote interface
-   * @see PolledBeforeActiveTicks
-   * @see PolledBeforeAllTicks
-   * @see PolledAfterActiveTicks
-   * @see PolledAfterAllTicks
    */
   public void addInterface(MoteInterface intf) {
     moteInterfaces.add(intf);
-
-    polledBeforeActive = null;
-    polledAfterActive = null;
-    polledBeforeAll = null;
-    polledAfterAll = null;
   }
 
   @Override

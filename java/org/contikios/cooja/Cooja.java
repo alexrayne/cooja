@@ -37,6 +37,8 @@ import java.awt.Dimension;
 import java.awt.Frame;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -45,6 +47,8 @@ import java.awt.event.ActionListener;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.InputEvent;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -81,6 +85,7 @@ import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
+import javax.swing.ButtonGroup;
 import javax.swing.DefaultDesktopManager;
 import javax.swing.InputMap;
 import javax.swing.JButton;
@@ -99,13 +104,18 @@ import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
+import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
 import javax.swing.JSeparator;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextPane;
+import javax.swing.JToggleButton;
+import javax.swing.JToolBar;
 import javax.swing.KeyStroke;
+import javax.swing.RepaintManager;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
+import javax.swing.Timer;
 import javax.swing.ToolTipManager;
 import javax.swing.UIManager;
 import javax.swing.UIManager.LookAndFeelInfo;
@@ -270,12 +280,10 @@ public class Cooja extends Observable {
     "PATH_APPSEARCH",
 
     "PATH_MAKE",
-    "PATH_SHELL",
     "PATH_C_COMPILER", "COMPILER_ARGS",
     "PATH_JAVAC",
 
     "DEFAULT_PROJECTDIRS",
-    "CORECOMM_TEMPLATE_FILENAME",
 
     "PARSE_WITH_COMMAND",
 
@@ -307,6 +315,7 @@ public class Cooja extends Observable {
   private final JMenu menuMoteTypes;
 
   private final JMenu menuOpenSimulation;
+  
   private boolean hasFileHistoryChanged;
 
   private final ArrayList<Class<? extends Plugin>> menuMotePluginClasses = new ArrayList<>();
@@ -496,15 +505,18 @@ public class Cooja extends Observable {
     quickHelpTextPane.setEditable(false);
     quickHelpTextPane.setVisible(false);
 
-    /* Debugging - Break on repaints outside EDT */
-    /*RepaintManager.setCurrentManager(new RepaintManager() {
-      public void addDirtyRegion(JComponent comp, int a, int b, int c, int d) {
-        if(!java.awt.EventQueue.isDispatchThread()) {
-          throw new RuntimeException("Repainting outside EDT");
+    // Print a warning when repainting outside EDT with: gradlew run -Dcooja.debug.repaint=true
+    if (System.getProperty("debug.repaint") != null) {
+      RepaintManager.setCurrentManager(new RepaintManager() {
+        public void addDirtyRegion(JComponent comp, int a, int b, int c, int d) {
+          if (!java.awt.EventQueue.isDispatchThread()) {
+            // Log to console so the thread name is printed along with the complete backtrace.
+            logger.warn("Repainting outside EDT", new IllegalStateException("Repainting outside EDT"));
+          }
+          super.addDirtyRegion(comp, a, b, c, d);
         }
-        super.addDirtyRegion(comp, a, b, c, d);
-      }
-    });*/
+      });
+    }
 
     /* Parse current extension configuration */
     try {
@@ -589,6 +601,7 @@ public class Cooja extends Observable {
         }
       }
     }
+    updateProgress(false);
     frame.setVisible(true);
   }
 
@@ -646,10 +659,16 @@ public class Cooja extends Observable {
     return history;
   }
 
+  /** Adds a file first to the file history. Method avoids adding duplicates. */
   private void addToFileHistory(File file) {
     // Fetch current history
     String[] history = getExternalToolsSetting("SIMCFG_HISTORY", "").split(";");
-    String newFile = file.getAbsolutePath();
+    String newFile;
+    try {
+      newFile = file.getCanonicalPath();
+    } catch (IOException e) {
+      return;
+    }
     if (history.length > 0 && history[0].equals(newFile)) {
       // File already added
       return;
@@ -698,55 +717,72 @@ public class Cooja extends Observable {
     }
   }
 
+  /** Opens a file chooser if the file cannot be read. */
+  private File validateFileOrSelectNew(File file) {
+    if (file != null && file.canRead()) {
+      return file;
+    }
+    final File suggestedFile = file;
+    return new RunnableInEDT<File>() {
+      @Override
+      public File work() {
+        JFileChooser fc = newFileChooser();
+
+        if (suggestedFile != null && suggestedFile.isDirectory()) {
+          fc.setCurrentDirectory(suggestedFile);
+        } else {
+          // Suggest file using file history.
+          File suggestedFile = getLastOpenedFile();
+          if (suggestedFile != null) {
+            fc.setSelectedFile(suggestedFile);
+          }
+        }
+
+        if (fc.showOpenDialog(Cooja.getTopParentContainer()) != JFileChooser.APPROVE_OPTION) {
+          return null;
+        }
+
+        File file = fc.getSelectedFile();
+        if (!file.exists()) {  // Try default file extension.
+          file = new File(file.getParent(), file.getName() + fc.getFileFilter());
+        }
+        if (!file.exists() || !file.canRead()) {
+          logger.fatal("No read access to file");
+          return null;
+        }
+        return file;
+      }
+    }.invokeAndWait();
+  }
+
+  /**
+   * Load a simulation configuration file from disk asynchronously.
+   *
+   * @param quick Quick-load simulation
+   * @param file Configuration file to load, if null a dialog will appear
+   */
   private void doLoadConfigAsync(final boolean quick, File file) {
     // Warn about memory usage.
     if (warnMemory()) {
       return;
     }
 
-    // Open File Chooser if config is not useful.
-    if (file == null || !file.canRead()) {
-      final File suggestedFile = file;
-      file = new RunnableInEDT<File>() {
-        @Override
-        public File work() {
-          JFileChooser fc = newFileChooser();
+    final var cfgFile = validateFileOrSelectNew(file);
+    if (cfgFile == null) return;
 
-          if (suggestedFile != null && suggestedFile.isDirectory()) {
-            fc.setCurrentDirectory(suggestedFile);
-          } else {
-            // Suggest file using file history.
-            File suggestedFile = getLastOpenedFile();
-            if (suggestedFile != null) {
-              fc.setSelectedFile(suggestedFile);
-            }
-          }
-
-          if (fc.showOpenDialog(Cooja.getTopParentContainer()) != JFileChooser.APPROVE_OPTION) {
-            return null;
-          }
-
-          File file = fc.getSelectedFile();
-          if (!file.exists()) {
-            // Try default file extension.
-            file = new File(file.getParent(), file.getName() + fc.getFileFilter());
-          }
-          if (!file.exists() || !file.canRead()) {
-            logger.fatal("No read access to file");
-            return null;
-          }
-          return file;
-        }
-      }.invokeAndWait();
-
-      if (file == null) {
-        return;
-      }
-    }
-
-    final File cfgFile = file;
-    new Thread(() -> cooja.doLoadConfig(cfgFile, quick, false, null), "asyncld").start();
+    createLoadSimWorker(cfgFile, quick, false, null).execute();
   }
+
+  /**
+   * Updates GUI state based on simulation status.
+   * @param stoppedSimulation True if update was triggered by a stop event.
+   */
+  public void updateProgress(boolean stoppedSimulation) {
+    if (!isVisualized()) {
+      return;
+    }
+  }
+  
   private void updateOpenHistoryMenuItems(File[] openFilesHistory) {
     menuOpenSimulation.removeAll();
 
@@ -776,17 +812,21 @@ public class Cooja extends Observable {
       return;
     }
 
-    /* Update action state */
-    for (GUIAction a: guiActions) {
-      a.setEnabled(a.shouldBeEnabled());
-    }
+    java.awt.EventQueue.invokeLater(() -> {
+      // Update action state.
+      for (GUIAction a : guiActions) {
+        a.setEnabled(a.shouldBeEnabled());
+      }
 
-    // Mote and mote type menus.
-    menuMoteTypeClasses.setEnabled(getSimulation() != null);
-    menuMoteTypes.setEnabled(getSimulation() != null);
+      // Mote and mote type menus.
+      menuMoteTypeClasses.setEnabled(getSimulation() != null);
+      menuMoteTypes.setEnabled(getSimulation() != null);
+      updateProgress(false);
+    });
   }
 
   private JMenuBar createMenuBar(JPanel desktop) {
+
     final var newSimulationAction = new GUIAction("New simulation...", KeyEvent.VK_N, KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK)) {
       @Override
       public void actionPerformed(ActionEvent e) {
@@ -796,7 +836,14 @@ public class Cooja extends Observable {
 
         var sim = new Simulation(cooja);
         if (CreateSimDialog.showDialog(Cooja.getTopParentContainer(), sim)) {
-          cooja.setSimulation(sim, true);
+          // Start GUI plugins.
+          for (var pluginClass : pluginClasses) {
+            int type = pluginClass.getAnnotation(PluginType.class).value();
+            if (type == PluginType.SIM_STANDARD_PLUGIN) {
+              tryStartPlugin(pluginClass, cooja, sim, null);
+            }
+          }
+          cooja.setSimulation(sim);
         }
       }
       @Override
@@ -846,7 +893,7 @@ public class Cooja extends Observable {
     final var saveSimulationAction = new GUIAction("Save simulation as...", KeyEvent.VK_S) {
       @Override
       public void actionPerformed(ActionEvent e) {
-        cooja.doSaveConfig(true);
+        cooja.doSaveConfig();
       }
       @Override
       public boolean shouldBeEnabled() {
@@ -923,15 +970,12 @@ public class Cooja extends Observable {
       }
     };
 
-    JMenuItem menuItem;
-
     /* Prepare GUI actions */
     guiActions.add(newSimulationAction);
     guiActions.add(closeSimulationAction);
     guiActions.add(reloadSimulationAction);
     guiActions.add(reloadRandomSimulationAction);
     guiActions.add(saveSimulationAction);
-    /*    guiActions.add(closePluginsAction);*/
     guiActions.add(exportExecutableJARAction);
     guiActions.add(exitCoojaAction);
     guiActions.add(startStopSimulationAction);
@@ -985,13 +1029,7 @@ public class Cooja extends Observable {
     fileMenu.add(new JMenuItem(saveSimulationAction));
 
     fileMenu.add(new JMenuItem(exportExecutableJARAction));
-
-    /*    menu.addSeparator();*/
-
-    /*    menu.add(new JMenuItem(closePluginsAction));*/
-
     fileMenu.addSeparator();
-
     fileMenu.add(new JMenuItem(exitCoojaAction));
 
     /* Simulation menu */
@@ -1015,14 +1053,9 @@ public class Cooja extends Observable {
     reloadSimulationMenuItem.add(new JMenuItem(reloadRandomSimulationAction));
     simulationMenu.add(reloadSimulationMenuItem);
 
-    GUIAction guiAction = new StartPluginGUIAction("Control panel...");
-    menuItem = new JMenuItem(guiAction);
-    guiActions.add(guiAction);
-    menuItem.setMnemonic(KeyEvent.VK_C);
-    menuItem.putClientProperty("class", SimControl.class);
-    simulationMenu.add(menuItem);
-
-    guiAction = new StartPluginGUIAction("Information...");
+    JMenuItem menuItem;
+    
+    GUIAction guiAction = new StartPluginGUIAction("Information...");
     menuItem = new JMenuItem(guiAction);
     guiActions.add(guiAction);
     menuItem.setMnemonic(KeyEvent.VK_I);
@@ -1942,7 +1975,9 @@ public class Cooja extends Observable {
 
     if (root != null) {
       for (var cfg : root.getChildren("plugin_config")) {
-        plugin.setConfigXML(((Element)cfg).getChildren(), isVisualized());
+        if (!plugin.setConfigXML(((Element)cfg).getChildren(), isVisualized())) {
+          throw new PluginConstructionException("Failed to set config for " + pluginClass.getName());
+        }
       }
     }
 
@@ -2062,30 +2097,28 @@ public class Cooja extends Observable {
   }
 
   private static boolean isMotePluginCompatible(Class<? extends Plugin> motePluginClass, Mote mote) {
-    if (motePluginClass.getAnnotation(SupportedArguments.class) == null) {
+    var supportedArgs = motePluginClass.getAnnotation(SupportedArguments.class);
+    if (supportedArgs == null) {
       return true;
     }
 
     /* Check mote interfaces */
-    Class<? extends MoteInterface>[] moteInterfaces =
-      motePluginClass.getAnnotation(SupportedArguments.class).moteInterfaces();
-    for (Class<? extends MoteInterface> requiredMoteInterface: moteInterfaces) {
-      if (mote.getInterfaces().getInterfaceOfType(requiredMoteInterface) == null) {
+    final var moteInterfaces = mote.getInterfaces();
+    for (Class<? extends MoteInterface> requiredMoteInterface: supportedArgs.moteInterfaces()) {
+      if (moteInterfaces.getInterfaceOfType(requiredMoteInterface) == null) {
         return false;
       }
     }
 
     /* Check mote type */
-    boolean moteTypeOK = false;
-    Class<? extends Mote>[] motes =
-      motePluginClass.getAnnotation(SupportedArguments.class).motes();
-    for (Class<? extends Mote> supportedMote: motes) {
-      if (supportedMote.isAssignableFrom(mote.getClass())) {
-        moteTypeOK = true;
+    final var clazz = mote.getClass();
+    for (Class<? extends Mote> supportedMote: supportedArgs.motes()) {
+      if (supportedMote.isAssignableFrom(clazz)) {
+        return true;
       }
     }
 
-    return moteTypeOK;
+    return false;
   }
 
   public JMenu createMotePluginsSubmenu(Class<? extends Plugin> pluginClass) {
@@ -2168,24 +2201,13 @@ public class Cooja extends Observable {
     return mySimulation;
   }
 
-  private void setSimulation(Simulation sim, boolean startPlugins) {
-    doRemoveSimulation(false);
+  private void setSimulation(Simulation sim) {
     mySimulation = sim;
     updateGUIComponentState();
 
     // Set frame title
     if (frame != null) {
       frame.setTitle(sim.getTitle() + " - " + WINDOW_TITLE);
-    }
-
-    // Open standard plugins (if none opened already)
-    if (startPlugins) {
-      for (Class<? extends Plugin> pluginClass : pluginClasses) {
-        int pluginType = pluginClass.getAnnotation(PluginType.class).value();
-        if (pluginType == PluginType.SIM_STANDARD_PLUGIN) {
-          tryStartPlugin(pluginClass, this, sim, null);
-        }
-      }
     }
 
     setChanged();
@@ -2293,57 +2315,79 @@ public class Cooja extends Observable {
   }
 
   /**
-   * Load a simulation configuration file from disk
+   * Load a simulation configuration file from disk and return the simulation.
    *
-   * @param configFile Configuration file to load, if null a dialog will appear
+   * @param configFile Configuration file to load, reloads current sim if null
    * @param quick      Quick-load simulation
    * @param rewriteCsc Rewrite simulation config
    * @param manualRandomSeed The random seed to use for the simulation
+   * @return The simulation
    */
   private Simulation doLoadConfig(File configFile, final boolean quick, boolean rewriteCsc, Long manualRandomSeed) {
-    if (!doRemoveSimulation(true)) {
+    final var worker = new RunnableInEDT<SwingWorker<Simulation, SimulationCreationException>>() {
+      @Override
+      public SwingWorker<Simulation, SimulationCreationException> work() {
+        return createLoadSimWorker(configFile, quick, rewriteCsc, manualRandomSeed);
+      }
+    }.invokeAndWait();
+    worker.execute();
+    try {
+      return worker.get();
+    } catch (CancellationException | ExecutionException | InterruptedException e) {
+      cooja.doRemoveSimulation(false);
+      return null;
+    }
+  }
+
+  /**
+   * Create a worker that will load the simulation in the background, displaying
+   * a progress dialog if it is a quick-load.
+   *
+   * @param configFile Configuration file to load, reloads current sim if null
+   * @param quick      Quick-load simulation
+   * @param rewriteCsc Rewrite simulation config
+   * @param manualRandomSeed The random seed to use for the simulation
+   * @return The worker that will load the simulation.
+   */
+  private SwingWorker<Simulation, SimulationCreationException> createLoadSimWorker(File configFile, final boolean quick,
+                                                                                   boolean rewriteCsc, Long manualRandomSeed) {
+    assert java.awt.EventQueue.isDispatchThread() : "Call from AWT thread";
+    final var autoStart = configFile == null && mySimulation.isRunning();
+    if (configFile != null && !doRemoveSimulation(true)) {
       return null;
     }
 
-    addToFileHistory(configFile);
+    if (configFile != null) {
+      addToFileHistory(configFile);
+    }
 
+    final JPanel progressPanel;
     final JDialog progressDialog;
     if (quick) {
-      final String progressTitle = "Loading " + configFile.getAbsolutePath();
+      final String progressTitle = "Loading " + (configFile == null ? "" : configFile.getAbsolutePath());
+      progressDialog = new JDialog(Cooja.getTopParentContainer(), progressTitle, ModalityType.APPLICATION_MODAL);
 
-      progressDialog = new RunnableInEDT<JDialog>() {
-        @Override
-        public JDialog work() {
-          final JDialog progressDialog = new JDialog(Cooja.getTopParentContainer(), progressTitle, ModalityType.APPLICATION_MODAL);
+      progressPanel = new JPanel(new BorderLayout());
+      var progressBar = new JProgressBar(0, 100);
+      progressBar.setValue(0);
+      progressBar.setIndeterminate(true);
 
-          JPanel progressPanel = new JPanel(new BorderLayout());
-          var progressBar = new JProgressBar(0, 100);
-          progressBar.setValue(0);
-          progressBar.setIndeterminate(true);
+      PROGRESS_BAR = progressBar; /* Allow various parts of COOJA to show messages */
 
-          PROGRESS_BAR = progressBar; /* Allow various parts of COOJA to show messages */
+      var button = new JButton("Abort");
 
-          var button = new JButton("Abort");
+      progressPanel.add(BorderLayout.CENTER, progressBar);
+      progressPanel.add(BorderLayout.SOUTH, button);
+      progressPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-          progressPanel.add(BorderLayout.CENTER, progressBar);
-          progressPanel.add(BorderLayout.SOUTH, button);
-          progressPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+      progressDialog.getContentPane().add(progressPanel);
+      progressDialog.setSize(400, 200);
 
-          progressPanel.setVisible(true);
-
-          progressDialog.getContentPane().add(progressPanel);
-          progressDialog.setSize(400, 200);
-
-          progressDialog.getRootPane().setDefaultButton(button);
-          progressDialog.setLocationRelativeTo(Cooja.getTopParentContainer());
-          progressDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
-
-          java.awt.EventQueue.invokeLater(() -> progressDialog.setVisible(true));
-
-          return progressDialog;
-        }
-      }.invokeAndWait();
+      progressDialog.getRootPane().setDefaultButton(button);
+      progressDialog.setLocationRelativeTo(Cooja.getTopParentContainer());
+      progressDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
     } else {
+      progressPanel = null;
       progressDialog = null;
     }
 
@@ -2354,14 +2398,23 @@ public class Cooja extends Observable {
     var worker = new SwingWorker<Simulation, SimulationCreationException>() {
       @Override
       public Simulation doInBackground() {
+        Element root = cfgFile == null ? extractSimulationConfig() : null;
         boolean shouldRetry;
         Simulation newSim = null;
         do {
           try {
             shouldRetry = false;
-            cooja.doRemoveSimulation(false);
             PROGRESS_WARNINGS.clear();
-            newSim = loadSimulationConfig(cfgFile, quick, rewriteCsc, manualRandomSeed);
+            if (cfgFile == null) {
+              cooja.doRemoveSimulation(false);
+              newSim = createSimulation(root, quick, rewriteCsc, manualRandomSeed);
+              setSimulation(newSim);
+            } else {
+              newSim = loadSimulationConfig(cfgFile, quick, rewriteCsc, manualRandomSeed);
+            }
+            if (newSim != null && autoStart) {
+              newSim.startSimulation();
+            }
           } catch (SimulationCreationException e) {
             publish(e);
             try {
@@ -2390,6 +2443,7 @@ public class Cooja extends Observable {
 
       @Override
       protected void done() {
+        updateProgress(false);
         // Optionally show compilation warnings.
         var hideWarn = Boolean.parseBoolean(Cooja.getExternalToolsSetting("HIDE_WARNINGS", "false"));
         if (quick && !hideWarn && !PROGRESS_WARNINGS.isEmpty()) {
@@ -2403,19 +2457,13 @@ public class Cooja extends Observable {
     };
 
     if (progressDialog != null) {
-      progressDialog.getRootPane().getDefaultButton().addActionListener(e -> worker.cancel(true));
+      java.awt.EventQueue.invokeLater(() -> {
+        progressPanel.setVisible(true);
+        progressDialog.getRootPane().getDefaultButton().addActionListener(e -> worker.cancel(true));
+        progressDialog.setVisible(true);
+      });
     }
-
-    worker.execute();
-    Simulation sim;
-    try {
-      sim = worker.get();
-    } catch (CancellationException | ExecutionException | InterruptedException e) {
-      cooja.doRemoveSimulation(false);
-      return null;
-    }
-
-    return sim;
+    return worker;
   }
 
   /**
@@ -2434,90 +2482,7 @@ public class Cooja extends Observable {
       return;
     }
 
-    final boolean autoStart = sim.isRunning();
-    final long randomSeed = sim.getRandomSeed();
-    final JDialog progressDialog = new JDialog(frame, "Reloading", true);
-    final Thread loadThread = new Thread(new Runnable() {
-      @Override
-      public void run() {
-
-        /* Get current simulation configuration */
-        Element root = new Element("simconf");
-        Element simulationElement = new Element("simulation");
-
-        simulationElement.addContent(getSimulation().getConfigXML());
-        root.addContent(simulationElement);
-        root.addContent(getPluginsConfigXML());
-
-        /* Remove current simulation, and load config */
-        boolean shouldRetry;
-        do {
-          try {
-            shouldRetry = false;
-            cooja.doRemoveSimulation(false);
-            PROGRESS_WARNINGS.clear();
-            Simulation newSim = loadSimulationConfig(root, true, false, randomSeed);
-
-            if (autoStart) {
-              newSim.startSimulation();
-            }
-
-            /* Optionally show compilation warnings */
-            boolean hideWarn = Boolean.parseBoolean(
-                Cooja.getExternalToolsSetting("HIDE_WARNINGS", "false")
-            );
-            if (!hideWarn && !PROGRESS_WARNINGS.isEmpty()) {
-              showWarningsDialog(frame, PROGRESS_WARNINGS.toArray(new String[0]));
-            }
-            PROGRESS_WARNINGS.clear();
-
-          } catch (SimulationCreationException e) {
-            shouldRetry = showErrorDialog(frame, "Simulation reload error", e, true);
-
-            cooja.doRemoveSimulation(false);
-          }
-        } while (shouldRetry);
-
-        if (progressDialog.isDisplayable()) {
-          progressDialog.dispose();
-        }
-      }
-    }, "reloadCurrentSimulation");
-
-    // Display progress dialog while reloading
-    JProgressBar progressBar = new JProgressBar(0, 100);
-    progressBar.setValue(0);
-    progressBar.setIndeterminate(true);
-
-    PROGRESS_BAR = progressBar; /* Allow various parts of COOJA to show messages */
-
-    JButton button = new JButton("Abort");
-    button.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        if (loadThread.isAlive()) {
-          loadThread.interrupt();
-          doRemoveSimulation(false);
-        }
-      }
-    });
-
-    JPanel progressPanel = new JPanel(new BorderLayout());
-    progressPanel.add(BorderLayout.CENTER, progressBar);
-    progressPanel.add(BorderLayout.SOUTH, button);
-    progressPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-
-    progressPanel.setVisible(true);
-
-    progressDialog.getContentPane().add(progressPanel);
-    progressDialog.setSize(400, 200);
-
-    progressDialog.getRootPane().setDefaultButton(button);
-    progressDialog.setLocationRelativeTo(frame);
-    progressDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
-
-    loadThread.start();
-    progressDialog.setVisible(true);
+    createLoadSimWorker(null, true, false, sim.getRandomSeed()).execute();
   }
 
   private static boolean warnMemory() {
@@ -2547,11 +2512,8 @@ public class Cooja extends Observable {
 
   /**
    * Save current simulation configuration to disk
-   *
-   * @param askForConfirmation
-   *          Ask for confirmation before overwriting file
    */
-  public File doSaveConfig(boolean askForConfirmation) {
+  public File doSaveConfig() {
     if (mySimulation == null) {
       return null;
     }
@@ -2559,40 +2521,34 @@ public class Cooja extends Observable {
     mySimulation.stopSimulation();
 
     JFileChooser fc = newFileChooser();
+    if (fc.showSaveDialog(myDesktopPane) != JFileChooser.APPROVE_OPTION) {
+      return null;
+    }
 
-    int returnVal = fc.showSaveDialog(myDesktopPane);
-    if (returnVal == JFileChooser.APPROVE_OPTION) {
-      File saveFile = fc.getSelectedFile();
-      if (!fc.accept(saveFile)) {
-        saveFile = new File(saveFile.getParent(), saveFile.getName() + fc.getFileFilter());
-      }
-      if (saveFile.exists()) {
-        if (askForConfirmation) {
-          String s1 = "Overwrite";
-          String s2 = "Cancel";
-          Object[] options = { s1, s2 };
-          int n = JOptionPane.showOptionDialog(
-              Cooja.getTopParentContainer(),
+    File saveFile = fc.getSelectedFile();
+    if (!fc.accept(saveFile)) {
+      saveFile = new File(saveFile.getParent(), saveFile.getName() + fc.getFileFilter());
+    }
+    if (saveFile.exists()) {
+      String s1 = "Overwrite";
+      String s2 = "Cancel";
+      Object[] options = {s1, s2};
+      if (JOptionPane.showOptionDialog(getTopParentContainer(),
               "A file with the same name already exists.\nDo you want to remove it?",
               "Overwrite existing file?", JOptionPane.YES_NO_OPTION,
-              JOptionPane.QUESTION_MESSAGE, null, options, s1);
-          if (n != JOptionPane.YES_OPTION) {
-            return null;
-          }
-        }
-      }
-      if (!saveFile.exists() || saveFile.canWrite()) {
-        saveSimulationConfig(saveFile);
-        addToFileHistory(saveFile);
-        return saveFile;
-      } else {
-      	JOptionPane.showMessageDialog(
-      			getTopParentContainer(), "No write access to " + saveFile, "Save failed",
-      			JOptionPane.ERROR_MESSAGE);
-        logger.fatal("No write access to file: " + saveFile.getAbsolutePath());
+              JOptionPane.QUESTION_MESSAGE, null, options, s1) != JOptionPane.YES_OPTION) {
+        return null;
       }
     }
-    return null;
+    if (saveFile.exists() && !saveFile.canWrite()) {
+      JOptionPane.showMessageDialog(getTopParentContainer(),
+            "No write access to " + saveFile, "Save failed", JOptionPane.ERROR_MESSAGE);
+      logger.fatal("No write access to file: " + saveFile.getAbsolutePath());
+      return null;
+    }
+    saveSimulationConfig(saveFile);
+    addToFileHistory(saveFile);
+    return saveFile;
   }
 
   /** Allocate a file chooser for Cooja simulation files. */
@@ -2636,7 +2592,7 @@ public class Cooja extends Observable {
     Simulation newSim = new Simulation(this);
     boolean createdOK = CreateSimDialog.showDialog(Cooja.getTopParentContainer(), newSim);
     if (createdOK) {
-      cooja.setSimulation(newSim, true);
+      cooja.setSimulation(newSim);
     }
   }
 
@@ -2650,8 +2606,8 @@ public class Cooja extends Observable {
   }
   
   public void doQuit(boolean askForConfirmation, int exitCode) {
-    if (askForConfirmation) {
-      if (getSimulation() != null) {
+    if (getSimulation() != null) {
+      if (askForConfirmation) {
         /* Save? */
         String s1 = "Yes";
         String s2 = "No";
@@ -2661,25 +2617,20 @@ public class Cooja extends Observable {
             "Do you want to save the current simulation?",
             WINDOW_TITLE, JOptionPane.YES_NO_CANCEL_OPTION,
             JOptionPane.WARNING_MESSAGE, null, options, s1);
-        if (n == JOptionPane.YES_OPTION) {
-          if (cooja.doSaveConfig(true) == null) {
-            return;
-          }
-        } else if (n == JOptionPane.CANCEL_OPTION) {
-          return;
-        } else if (n != JOptionPane.NO_OPTION) {
+        if (n == JOptionPane.CANCEL_OPTION || n == JOptionPane.YES_OPTION && doSaveConfig() == null) {
           return;
         }
       }
     }
 
-    if (getSimulation() != null) {
+    // Clean up resources. Catch all exceptions to ensure that System.exit will be called.
+    try {
       doRemoveSimulation(false);
-    }
-
-    // Clean up resources
-    for (var plugin : startedPlugins.toArray(new Plugin[0])) {
-      removePlugin(plugin, false);
+      for (var plugin : startedPlugins.toArray(new Plugin[0])) {
+        removePlugin(plugin, false);
+      }
+    } catch (Exception e) {
+      logger.error("Failed to remove simulation/plugins on shutdown.", e);
     }
 
     /* Store frame size and position */
@@ -2934,15 +2885,41 @@ public class Cooja extends Observable {
   private class GUIEventHandler implements ActionListener {
     @Override
     public void actionPerformed(ActionEvent e) {
-      if (e.getActionCommand().equals("create mote type")) {
-        cooja.doCreateMoteType((Class<? extends MoteType>) ((JMenuItem) e
-            .getSource()).getClientProperty("class"));
-      } else if (e.getActionCommand().equals("add motes")) {
-        cooja.doAddMotes((MoteType) ((JMenuItem) e.getSource())
-            .getClientProperty("motetype"));
-      } else if (e.getActionCommand().equals("edit paths")) {
+      MoteType newMoteType = null;
+      final var cmd = e.getActionCommand();
+      if (cmd.equals("create mote type")) {
+        // FIXME: Simulation should never be null if this action is enabled.
+        if (cooja.mySimulation == null) {
+          logger.fatal("Can't create mote type (no simulation)");
+          return;
+        }
+        cooja.mySimulation.stopSimulation();
+
+        // Create mote type
+        var clazz = (Class<? extends MoteType>) ((JMenuItem) e.getSource()).getClientProperty("class");
+        try {
+          newMoteType = clazz == ContikiMoteType.class
+                  ? new ContikiMoteType(cooja) : clazz.getDeclaredConstructor().newInstance();
+          if (!newMoteType.configureAndInit(Cooja.getTopParentContainer(), cooja.mySimulation, isVisualized())) {
+            return;
+          }
+          cooja.mySimulation.addMoteType(newMoteType);
+        } catch (Exception e1) {
+          logger.fatal("Exception when creating mote type", e1);
+          showErrorDialog(getTopParentContainer(), "Mote type creation error", e1, false);
+          newMoteType = null;
+        }
+      } else if (cmd.equals("add motes")) {
+        // FIXME: Simulation should never be null if this action is enabled.
+        if (cooja.mySimulation == null) {
+          logger.warn("No simulation active");
+          return;
+        }
+        cooja.mySimulation.stopSimulation();
+        newMoteType = (MoteType) ((JMenuItem) e.getSource()).getClientProperty("motetype");
+      } else if (cmd.equals("edit paths")) {
         ExternalToolsDialog.showDialog(Cooja.getTopParentContainer());
-      } else if (e.getActionCommand().equals("manage extensions")) {
+      } else if (cmd.equals("manage extensions")) {
         COOJAProject[] newProjects = ProjectDirectoriesDialog.showDialog(
             Cooja.getTopParentContainer(),
             Cooja.this,
@@ -2955,18 +2932,21 @@ public class Cooja extends Observable {
             reparseProjectConfig();
           } catch (ParseProjectsException ex) {
             logger.fatal("Error when loading extensions: " + ex.getMessage(), ex);
-            if (isVisualized()) {
-            	JOptionPane.showMessageDialog(Cooja.getTopParentContainer(),
-            			"All Cooja extensions could not load.\n\n" +
-            			"To manage Cooja extensions:\n" +
-            			"Menu->Settings->Cooja extensions",
-            			"Reconfigure Cooja extensions", JOptionPane.INFORMATION_MESSAGE);
-            }
+            JOptionPane.showMessageDialog(Cooja.getTopParentContainer(),
+                    "All Cooja extensions could not load.\n\n" +
+                            "To manage Cooja extensions:\n" +
+                            "Menu->Settings->Cooja extensions",
+                    "Reconfigure Cooja extensions", JOptionPane.INFORMATION_MESSAGE);
             showErrorDialog(getTopParentContainer(), "Cooja extensions load error", ex, false);
           }
         }
       } else {
-        logger.warn("Unhandled action: " + e.getActionCommand());
+        logger.warn("Unhandled action: " + cmd);
+      }
+      if (newMoteType != null) {
+        for (var mote : AddMoteDialog.showDialog(frame, cooja.mySimulation, newMoteType)) {
+          cooja.mySimulation.addMote(mote);
+        }
       }
     }
   }
@@ -3186,6 +3166,7 @@ public class Cooja extends Observable {
    *
    * @param file       File to read
    * @param rewriteCsc Should Cooja update the .csc file.
+   * @param manualRandomSeed The random seed.
    * @return New simulation or null if recompiling failed or aborted
    * @throws SimulationCreationException If loading fails.
    * @see #saveSimulationConfig(File)
@@ -3208,8 +3189,9 @@ public class Cooja extends Observable {
         logger.fatal("Not a valid Cooja simulation config.");
         return null;
       }
-
-      sim = loadSimulationConfig(root, quick, rewriteCsc, manualRandomSeed);
+      doRemoveSimulation(false);
+      sim = createSimulation(root, quick, rewriteCsc, manualRandomSeed);
+      setSimulation(sim);
     } catch (JDOMException e) {
       throw new SimulationCreationException("Config not well-formed", e);
     } catch (IOException e) {
@@ -3223,7 +3205,15 @@ public class Cooja extends Observable {
     return sim;
   }
 
-  private Simulation loadSimulationConfig(Element root, boolean quick, boolean rewriteCsc, Long manualRandomSeed)
+  /** Create a new simulation object.
+   * @param root The XML config.
+   * @param quick Do a quickstart.
+   * @param rewriteCsc Should Cooja update the .csc file.
+   * @param manualRandomSeed The random seed.
+   * @throws SimulationCreationException If creation fails.
+   * @return Simulation object.
+   * */
+  private Simulation createSimulation(Element root, boolean quick, boolean rewriteCsc, Long manualRandomSeed)
   throws SimulationCreationException {
     boolean projectsOk = verifyProjects(root);
 
@@ -3319,7 +3309,6 @@ public class Cooja extends Observable {
         return null;
       }
     }
-    setSimulation(newSim, false);
     return newSim;
   }
 
@@ -3355,6 +3344,7 @@ public class Cooja extends Observable {
     }
   }
 
+  /** Returns a root element containing the simulation config. */
   public Element extractSimulationConfig() {
     // Create simulation config
     Element root = new Element("simconf");
@@ -3363,7 +3353,6 @@ public class Cooja extends Observable {
     for (COOJAProject project: currentProjects) {
       Element projectElement = new Element("project");
       projectElement.addContent(createPortablePath(project.dir).getPath().replaceAll("\\\\", "/"));
-      projectElement.setAttribute("EXPORT", "discard");
       root.addContent(projectElement);
     }
 
@@ -3372,17 +3361,6 @@ public class Cooja extends Observable {
     root.addContent(simulationElement);
 
     // Create started plugins config
-    root.addContent(getPluginsConfigXML());
-
-    return root;
-  }
-
-  /**
-   * Returns started plugins config.
-   *
-   * @return Config or null
-   */
-  private Collection<Element> getPluginsConfigXML() {
     ArrayList<Element> config = new ArrayList<>();
     Element pluginElement, pluginSubElement;
 
@@ -3392,7 +3370,8 @@ public class Cooja extends Observable {
 
       // Ignore GUI plugins
       if (pluginType == PluginType.COOJA_PLUGIN
-          || pluginType == PluginType.COOJA_STANDARD_PLUGIN) {
+          || pluginType == PluginType.COOJA_STANDARD_PLUGIN) 
+      {
         continue;
       }
 
@@ -3453,8 +3432,8 @@ public class Cooja extends Observable {
 
       config.add(pluginElement);
     }
-
-    return config;
+    root.addContent(config);
+    return root;
   }
 
   /** Verify project extension directories. */

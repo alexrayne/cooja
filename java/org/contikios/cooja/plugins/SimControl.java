@@ -31,8 +31,13 @@ package org.contikios.cooja.plugins;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.ItemListener;
+import java.awt.event.ItemEvent;
 import java.util.Observable;
 import java.util.Observer;
 
@@ -50,6 +55,9 @@ import javax.swing.JPanel;
 import javax.swing.JRadioButtonMenuItem;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.JToolBar;
+import javax.swing.JToggleButton;
+import javax.swing.JRadioButton;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
@@ -80,6 +88,10 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
   private long lastSimulationTimeTimestamp;
   private long lastSystemTimeTimestamp;
 
+  /** Listener for the toolbar. */
+  private ToolbarListener toolbarListener;
+  private JToolBar        toolBar;
+  
   /**
    * Create a new simulation control panel.
    *
@@ -88,11 +100,6 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
   public SimControl(Simulation simulation, Cooja gui) {
     super("Simulation control", gui);
     this.simulation = simulation;
-
-    /* Update current time label when simulation is running */
-    if (simulation.isRunning()) {
-      updateLabelTimer.start();
-    }
 
     /* Menus */
     JMenuBar menuBar = new JMenuBar();
@@ -106,12 +113,6 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
     runMenu.add(new JMenuItem(startAction));
     runMenu.add(new JMenuItem(stopAction));
     runMenu.add(new JMenuItem(stepAction));
-    var reloadAction = new AbstractAction("Reload") {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        simulation.getCooja().reloadCurrentSimulation();
-      }
-    };
     runMenu.add(new JMenuItem(reloadAction));
 
     ButtonGroup speedlimitButtonGroup = new ButtonGroup();
@@ -202,6 +203,13 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
     smallPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
     controlPanel.add(smallPanel);
 
+    pack();
+    
+    this.createToolBar();
+
+    this.lastSystemTimeTimestamp = System.currentTimeMillis();
+    this.lastSimulationTimeTimestamp = 0;
+
     /* Observe current simulation */
     simulation.addObserver(simObserver = new Observer() {
       @Override
@@ -211,18 +219,223 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
     });
     /* Set initial values */
     updateValues();
-
-    pack();
-
-    this.lastSystemTimeTimestamp = System.currentTimeMillis();
-    this.lastSimulationTimeTimestamp = 0;
-
+    
     /* XXX HACK: here we set the position and size of the window when it
      * appears on a blank simulation screen. */
     this.setLocation(400, 0);
     this.setSize(280, 160);
+    
+    this.setIconifiable(true);                 // minimize
+    
+    /* Update current time label when simulation is running */
+    if (simulation.isRunning()) {
+      updateLabelTimer.start();
+    }
+    
   }
 
+  public void createToolBar()
+  {
+      // Create simulation control toolbar.
+      toolBar = new JToolBar("Simulation Control");
+      
+      var startButton = new JToggleButton("Start/Pause");
+      startButton.setText("Start/Pause");
+      startButton.setToolTipText("Start");
+      toolBar.add(startButton);
+      
+      var stepButton = new JButton(stepAction);
+      stepButton.setToolTipText("Step");
+      toolBar.add(stepButton);
+
+      var breakButton = new JButton(breakAction);
+      breakButton.setToolTipText("Break");
+      toolBar.add(breakButton);
+
+      var reloadButton = new JButton(reloadAction);
+      reloadButton.setToolTipText("Reload");
+      toolBar.add(reloadButton);
+
+      toolBar.addSeparator();
+      toolBar.add(new JLabel("Speed limit:"));
+      
+      var pane = new JPanel(new GridBagLayout());
+      var group = new ButtonGroup();
+      var radioConstraints = new GridBagConstraints();
+      radioConstraints.fill = GridBagConstraints.HORIZONTAL;
+
+      var slowCrawlSpeedButton = new JRadioButton("0.01X");
+      slowCrawlSpeedButton.setToolTipText("1%");
+      pane.add(slowCrawlSpeedButton, radioConstraints);
+      group.add(slowCrawlSpeedButton);
+      
+      var crawlSpeedButton = new JRadioButton("0.1X");
+      crawlSpeedButton.setToolTipText("10%");
+      pane.add(crawlSpeedButton, radioConstraints);
+      group.add(crawlSpeedButton);
+      
+      var normalSpeedButton = new JRadioButton("1X");
+      normalSpeedButton.setToolTipText("100%");
+      pane.add(normalSpeedButton, radioConstraints);
+      group.add(normalSpeedButton);
+      
+      var doubleSpeedButton = new JRadioButton("2X");
+      doubleSpeedButton.setToolTipText("200%");
+      pane.add(doubleSpeedButton, radioConstraints);
+      group.add(doubleSpeedButton);
+      
+      var superSpeedButton = new JRadioButton("20X");
+      superSpeedButton.setToolTipText("2000%");
+      pane.add(superSpeedButton, radioConstraints);
+      group.add(superSpeedButton);
+      
+      var unlimitedSpeedButton = new JRadioButton("Unlimited");
+      superSpeedButton.setToolTipText("Unlimited");
+      pane.add(unlimitedSpeedButton, radioConstraints);
+      group.add(unlimitedSpeedButton);
+      
+      toolBar.add(pane);
+      toolBar.addSeparator();
+      final var simulationTime = new JLabel("Time:");
+      toolBar.add(simulationTime);
+      toolBar.setMinimumSize(toolBar.getSize());
+      
+      var desktop = gui.getTopParentContainer().getContentPane(); 
+      desktop.add(toolBar, BorderLayout.PAGE_START);
+
+      toolbarListener = new ToolbarListener() {
+        private final Timer updateTimer = new Timer(500, e -> {
+          final var sim = getSimulation();
+          simulationTime.setText(getTimeString(sim));
+        });
+
+        @Override
+        public void itemStateChanged(ItemEvent e) {
+          final var sim = getSimulation();
+          // Simulation is null when resetting the state of startButton after closing simulation.
+          if (sim == null) {
+            return;
+          }
+          switch (e.getStateChange()) {
+            case ItemEvent.SELECTED:
+              sim.startSimulation();
+              stepButton.setEnabled(false);
+              break;
+            case ItemEvent.DESELECTED:
+              sim.stopSimulation();
+              stepButton.setEnabled(true);
+              break;
+          }
+          updateToolbar(false);
+        }
+
+        @Override
+        public void updateToolbar(boolean stoppedSimulation) {
+          // Ensure the start button can be pressed if this update was from stopping the simulation.
+          if (stoppedSimulation) {
+            startButton.setSelected(false);
+            updateTimer.stop();
+          }
+          
+          final var sim = getSimulation();
+          simulationTime.setText(getTimeString(sim));
+          
+          var hasSim = sim != null;
+          var state = hasSim && !sim.isRunning() && sim.isRunnable();
+          startButton.setEnabled(hasSim && sim.isRunnable());
+          startButton.setSelected(hasSim && sim.isRunning());
+          stepButton.setEnabled(state);
+          reloadButton.setEnabled(hasSim);
+          
+          slowCrawlSpeedButton.setEnabled(hasSim);
+          crawlSpeedButton.setEnabled(hasSim);
+          normalSpeedButton.setEnabled(hasSim);
+          doubleSpeedButton.setEnabled(hasSim);
+          superSpeedButton.setEnabled(hasSim);
+          unlimitedSpeedButton.setEnabled(hasSim);
+          
+          if (hasSim) {
+            Double speed = sim.getSpeedLimit();
+            if (speed == null) {
+              unlimitedSpeedButton.setSelected(true);
+            } else if (speed == 0.01) {
+              slowCrawlSpeedButton.setSelected(true);
+            } else if (speed == 0.1) {
+              crawlSpeedButton.setSelected(true);
+            } else if (speed == 1.0) {
+              normalSpeedButton.setSelected(true);
+            } else if (speed == 2.0) {
+              doubleSpeedButton.setSelected(true);
+            } else if (speed == 20.0) {
+              superSpeedButton.setSelected(true);
+            }
+          } else {
+            startButton.setSelected(false);
+          }
+          // Start timer after updating the UI states.
+          if (hasSim && sim.isRunning() && !stoppedSimulation && !updateTimer.isRunning()) {
+            updateTimer.start();
+          }
+        }
+      };
+      startButton.addItemListener(toolbarListener);
+      
+      
+      final var buttonAction = new ActionListener() {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+          var source = e.getSource();
+          if (source == stepButton) {
+            getSimulation().stepMillisecondSimulation();
+          } else if (source == reloadButton) {
+            gui.reloadCurrentSimulation();
+          }
+          java.awt.EventQueue.invokeLater(() -> toolbarListener.updateToolbar(false));
+        }
+      };
+      stepButton.addActionListener(buttonAction);
+      reloadButton.addActionListener(buttonAction);
+      
+      
+      final var speedListener = new ActionListener() {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+          switch (e.getActionCommand()) {
+            case "0.01X":
+              getSimulation().setSpeedLimit(0.01);
+              break;
+            case "0.1X":
+              getSimulation().setSpeedLimit(0.1);
+              break;
+            case "1X":
+              getSimulation().setSpeedLimit(1.0);
+              break;
+            case "2X":
+              getSimulation().setSpeedLimit(2.0);
+              break;
+            case "20X":
+              getSimulation().setSpeedLimit(20.0);
+              break;
+            case "Unlimited":
+              getSimulation().setSpeedLimit(null);
+              break;
+          }
+        }
+      };
+      
+      slowCrawlSpeedButton.addActionListener(speedListener);
+      crawlSpeedButton.addActionListener(speedListener);
+      normalSpeedButton.addActionListener(speedListener);
+      doubleSpeedButton.addActionListener(speedListener);
+      superSpeedButton.addActionListener(speedListener);
+      unlimitedSpeedButton.addActionListener(speedListener);
+  }
+
+  private interface ToolbarListener extends ItemListener {
+      /** Updates buttons according to simulation status. */
+      void updateToolbar(boolean stoppedSimulation);
+  }
+  
   private class ChangeMaxSpeedLimitAction extends AbstractAction {
     private final Double maxSpeed;
     public ChangeMaxSpeedLimitAction(String name, Double maxSpeed) {
@@ -236,47 +449,61 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
   }
 
   private void updateValues() {
-    /* Update current time */
-    simulationTime.setText(getTimeString());
-    simulationSpeedup.setText("Speed: ---");
-    if (simulation.isRunning() && !updateLabelTimer.isRunning()) {
-      updateLabelTimer.start();
-    }
-
-    /* Update control buttons */
-    if (simulation.isRunning()) {
-      startAction.setEnabled(false);
-      stopAction.setEnabled(true);
-      stepAction.setEnabled(false);
-    } else {
-      if(simulation.isRunnable()) {
-        startAction.setEnabled(true);
-        stepAction.setEnabled(true);
-      } else {
-        startAction.setEnabled(false);
-        stepAction.setEnabled(false);
+      /* Update current time */
+      simulationTime.setText(getTimeString());
+      simulationSpeedup.setText("Speed: ---");
+      if (simulation.isRunning() && !updateLabelTimer.isRunning()) {
+        updateLabelTimer.start();
       }
-      stopAction.setEnabled(false);
-    }
+
+      /* Update control buttons */
+      if (simulation.isRunning()) {
+        startAction.setEnabled(false);
+        stopAction.setEnabled(true);
+        stepAction.setEnabled(false);
+        stopButton.requestFocus();
+      } else {
+        if(simulation.isRunnable()) {
+          startAction.setEnabled(true);
+          stepAction.setEnabled(true);
+        } else {
+          startAction.setEnabled(false);
+          stepAction.setEnabled(false);
+        }
+        stopAction.setEnabled(false);
+        startButton.requestFocus();
+      }
+
+    final boolean stoppedSimulation = !simulation.isRunning();
+    toolbarListener.updateToolbar(stoppedSimulation);
   }
 
+  protected 
+  Simulation getSimulation( ) {
+      return this.simulation;
+  }
+  
   private static final long TIME_SECOND = 1000*Simulation.MILLISECOND;
   private static final long TIME_MINUTE = 60*TIME_SECOND;
   private static final long TIME_HOUR = 60*TIME_MINUTE;
-  public String getTimeString() {
-    long t = simulation.getSimulationTime();
+  public String getTimeString(Simulation sim) {
+    long t = sim.getSimulationTime();
     long h = (t / TIME_HOUR);
     t -= (t / TIME_HOUR)*TIME_HOUR;
     long m = (t / TIME_MINUTE);
     t -= (t / TIME_MINUTE)*TIME_MINUTE;
     long s = (t / TIME_SECOND);
     t -= (t / TIME_SECOND)*TIME_SECOND;
-    long ms = t / Simulation.MILLISECOND;
+    long ms = t / sim.MILLISECOND;
     if (h > 0) {
       return String.format("Time: %d:%02d:%02d.%03d", h,m,s,ms);
     } else {
       return String.format("Time: %02d:%02d.%03d", m,s,ms);
     }
+  }
+  
+  public String getTimeString() {
+      return getTimeString(simulation);
   }
 
   @Override
@@ -287,7 +514,10 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
     }
 
     /* Remove label update timer */
-    updateLabelTimer.stop();
+    //updateLabelTimer.stop();
+    
+    var desktop = gui.getTopParentContainer().getContentPane();
+    desktop.remove(toolBar);
   }
 
   private final Timer updateLabelTimer = new Timer(LABEL_UPDATE_INTERVAL, new ActionListener() {
@@ -317,14 +547,12 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
     @Override
     public void actionPerformed(ActionEvent e) {
       simulation.startSimulation();
-      stopButton.requestFocus();
     }
   };
   private final Action stopAction = new AbstractAction("Pause") {
     @Override
     public void actionPerformed(ActionEvent e) {
       simulation.stopSimulation();
-      startButton.requestFocus();
     }
   };
   private final Action stepAction = new AbstractAction("Step") {
@@ -336,9 +564,14 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
   private Action breakAction = new AbstractAction("Break") {
       public void actionPerformed(ActionEvent e) {
         simulation.breakSimulation();
-        stopButton.requestFocus();
       }
-    };
+  };
+  private final Action reloadAction = new AbstractAction("Reload") {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+          simulation.getCooja().reloadCurrentSimulation();
+        }
+  };
 
   @Override
   public String getQuickHelp() {

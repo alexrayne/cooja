@@ -36,7 +36,6 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
 import org.contikios.cooja.*;
 import org.contikios.cooja.contikimote.ContikiMote;
-import org.contikios.cooja.contikimote.ContikiMoteInterface;
 import org.contikios.cooja.dialogs.LogUI;
 import org.contikios.cooja.interfaces.PolledAfterActiveTicks;
 import org.contikios.cooja.mote.memory.VarMemory;
@@ -66,7 +65,7 @@ import org.contikios.cooja.mote.memory.VarMemory;
  * @author Fredrik Osterlind
  */
 @ClassDescription("Debug Log")
-public class ContikiLog extends LogUI implements ContikiMoteInterface, PolledAfterActiveTicks {
+public class ContikiLog extends LogUI implements PolledAfterActiveTicks {
   private static final Logger logger = LogManager.getLogger(ContikiLog.class);
 
   private ContikiMote mote = null;

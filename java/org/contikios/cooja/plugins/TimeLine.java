@@ -600,31 +600,24 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
                            final long focusTime,
                            final double focusCenter) 
   {
-    String note = "";
   
     long now = simulation.getSimulationTime();
     if (now/zoomDivisor > Integer.MAX_VALUE) {
         // limit zoom to fits sim-time in timeline
         int min_level = zoomGetLevel( now/Integer.MAX_VALUE );
         zoomDivisor = zoomLevelToDivisor( min_level );
-        note = " (LIM)";
     }
     
     currentPixelDivisor = zoomDivisor;
     if (ZOOM_LEVELS[0] >= zoomDivisor) {
       currentPixelDivisor = ZOOM_LEVELS[0];
-      note = " (MIN)";
     } else if (ZOOM_LEVELS[ZOOM_LEVELS.length-1] <= zoomDivisor) {
       currentPixelDivisor = ZOOM_LEVELS[ZOOM_LEVELS.length-1];
-      note = " (MAX)";
     }
     if (zoomDivisor != currentPixelDivisor) {
       logger.info("Zoom level: adjusted out-of-range " + zoomDivisor + " us/pixel");
     }
     
-    if (note != "")
-    logger.info("Zoom level: " + currentPixelDivisor + " microseconds/pixel " + note);
-
     forceRepaintAndFocus(focusTime, focusCenter);
   }
 

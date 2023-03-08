@@ -174,6 +174,8 @@ public interface MoteType {
   Class<? extends MoteInterface> haveInterfaceOfType(Class<N> interfaceType
           , ArrayList< Class<? extends MoteInterface> > list) 
   {
+      if (list == null)
+          return null;
       for (Class<? extends MoteInterface> intf : list) {
         if (isSubclassOf( interfaceType, intf) ) {
           return intf;

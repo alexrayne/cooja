@@ -4,7 +4,7 @@ plugins {
 
 java {
   toolchain {
-    languageVersion = JavaLanguageVersion.of(11)
+    languageVersion = JavaLanguageVersion.of(17)
   }
 }
 
@@ -32,6 +32,11 @@ dependencies {
 
 // FIXME: add test resources.
 sourceSets {
+  corecomm {
+    resources {
+      srcDirs = ['java/org/contikios/cooja/corecomm']
+    }
+  }
   data {
     resources {
       srcDirs = ['tools/coffee-manager']
@@ -41,16 +46,21 @@ sourceSets {
   main {
     java {
       srcDirs = ['java', 'tools/coffee-manager']
+      exclude 'org/contikios/cooja/corecomm/CoreCommTemplate.java'
     }
     resources {
-      srcDirs = [data.resources, 'config', 'images']
+      srcDirs = [corecomm.resources, data.resources, 'config', 'images']
     }
   }
 }
 
 application {
   mainClass = 'org.contikios.cooja.Main'
-  applicationDefaultJvmArgs = ['-Xms400M', '-Xmx2048M']
+  applicationDefaultJvmArgs = ['-Xms400M', '-Xmx2048M',
+    // Several Contiki-NG tests crash the JVM without these flags with Java 17,
+    // 08-ipv6-unicast.csc is one example. Unclear why, the JVM should not
+    // do anything with the pointers in C-land part of ContikiMoteType.
+    '-XX:-UseCompressedOops', '-XX:-UseCompressedClassPointers']
 }
 
 jar {
@@ -93,4 +103,12 @@ run {
   doFirst {
     args += ['-cooja', "$projectDir"]
   }
+  // Pass all command line "-Dcooja.k=v" as "-Dk=v" to Cooja.
+  System.properties.each { k,v ->
+    if (k.startsWith("cooja.")) {
+      systemProperty k - "cooja.", v
+    }
+  }
+  // Enable assertions with "-Passertions".
+  enableAssertions = project.hasProperty('assertions')
 }

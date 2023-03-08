@@ -66,6 +66,7 @@ import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.contikimote.ContikiMoteType;
 import org.contikios.cooja.contikimote.ContikiMoteType.NetworkStack;
+import org.contikios.cooja.mote.BaseContikiMoteType;
 
 /**
  * Contiki Mote Type compile dialog.
@@ -117,12 +118,8 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
     }
 
     moteType.setContikiSourceFile(source);
-    var env = ((ContikiMoteType)moteType).configureForCompilation();
-    String[] envOneDimension = new String[env.length];
-    for (int i=0; i < env.length; i++) {
-      envOneDimension[i] = env[i][0] + "=" + env[i][1];
-    }
-    compilationEnvironment = envOneDimension;
+    var env = moteType.getCompilationEnvironment();
+    compilationEnvironment = BaseContikiMoteType.oneDimensionalEnv(env);
     if (SwingUtilities.isEventDispatchThread()) {
       createEnvironmentTab(tabbedPane, env);
     } else {
@@ -134,7 +131,7 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
     }
 
     /*"make clean TARGET=cooja\n" + */
-    final String target = getExpectedFirmwareFile(moteType.getIdentifier(), source).getName();
+    final String target = moteType.getExpectedFirmwareFile(source).getName();
     String command = setCommandTarget(save_command, target);
 
     final String newstack = ((ContikiMoteType) moteType).getNetworkStack().getHeaderFile(); 
@@ -168,12 +165,12 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
   private
   String setCommandTarget(String command, String target) {
 
-      String target_cmd = "TARGET="+getTargetName();
+      String target_cmd = "TARGET=cooja";
       
       int cmd_finish = command.lastIndexOf("make ");
       if (cmd_finish > 0) {
           // update old command with new source, and netstack
-          final String target_patern = " ((\\S)*."+getTargetName()+") "+target_cmd;
+          final String target_patern = " ((\\S)*.cooja) "+target_cmd;
           String make = command.substring(cmd_finish);
           make = make.replaceAll(target_patern, " " + target + " "+target_cmd );
 
@@ -192,18 +189,6 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
           //{"[COOJA_DIR]","PATH_COOJA",""},
           //{"[APPS_DIR]","PATH_APPS","apps"}
       };
-
-  @Override
-  public File getExpectedFirmwareFile(File source) {
-    logger.warn("Called getExpectedFirmwareFile(File)");
-    //throw new RuntimeException("This method should not be called on ContikiMotes");
-    return ContikiMoteType.getExpectedFirmwareFile(moteType.getIdentifier(), source);
-  }
-
-  @Override
-  public File getExpectedFirmwareFile(String moteId, File source) {
-    return ContikiMoteType.getExpectedFirmwareFile(moteId, source);
-  }
 
   @Override
   public Class<? extends MoteInterface>[] getAllMoteInterfaces() {
@@ -336,12 +321,5 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
 
   @Override
   public void writeSettingsToMoteType() {
-    ((ContikiMoteType)moteType).setContikiFirmwareFile();
   }
-
-  @Override
-  protected String getTargetName() {
-  	return "cooja";
-  }
-
 }
