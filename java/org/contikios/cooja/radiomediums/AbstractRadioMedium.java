@@ -208,7 +208,9 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 		}
 		
 		/* Set interfered if currently a connection destination */
-		for (RadioConnection conn : activeConnections) {
+		if (!activeConnections.isEmpty())
+		for (int i = 0; i < activeConnections.size(); ++i) {
+			RadioConnection conn = activeConnections.get(i);
 			if (conn.isDestination(radio)) {
 				conn.addInterfered(radio);
 				if (!radio.isInterfered()) {
@@ -219,7 +221,9 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 	}
 	
 	protected RadioConnection getActiveConnectionFrom(Radio source) {
-		for (RadioConnection conn : activeConnections) {
+		if (!activeConnections.isEmpty())
+		for (int i = 0; i < activeConnections.size(); ++i) {
+			RadioConnection conn = activeConnections.get(i);
 			if (conn.getSource() == source) {
 				return conn;
 			}
