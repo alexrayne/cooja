@@ -384,12 +384,6 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
       final var buttonAction = new ActionListener() {
         @Override
         public void actionPerformed(ActionEvent e) {
-          var source = e.getSource();
-          if (source == stepButton) {
-            getSimulation().stepMillisecondSimulation();
-          } else if (source == reloadButton) {
-            gui.reloadCurrentSimulation(getSimulation().getRandomSeed());
-          }
           java.awt.EventQueue.invokeLater(() -> toolbarListener.updateToolbar(false));
         }
       };
