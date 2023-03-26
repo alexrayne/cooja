@@ -85,7 +85,7 @@ import org.contikios.cooja.Cooja;
  * @author Niclas Finne
  * @author Fredrik Osterlind
  */
-public class MessageListUI extends JList implements MessageList {
+public class MessageListUI extends JList<MessageContainer> implements MessageList {
 
   private static final Logger logger = LogManager.getLogger(MessageListUI.class);
 
@@ -273,7 +273,7 @@ public class MessageListUI extends JList implements MessageList {
       ((DefaultListModel<MessageContainer>) getModel()).addElement(messages.get(getModel().getSize()));
     }
     while (max > 0 && getModel().getSize() > max) {
-      ((DefaultListModel) getModel()).removeElementAt(0);
+      ((DefaultListModel<MessageContainer>) getModel()).removeElementAt(0);
       messages.remove(0);
     }
 
@@ -300,7 +300,7 @@ public class MessageListUI extends JList implements MessageList {
   @Override
   public void clearMessages() {
     messages.clear();
-    ((DefaultListModel) getModel()).clear();
+    ((DefaultListModel<MessageContainer>) getModel()).clear();
   }
 
   @Override
@@ -406,7 +406,7 @@ public class MessageListUI extends JList implements MessageList {
   // Renderer for messages
   // -------------------------------------------------------------------
 
-  private static class MessageModel extends DefaultListModel {
+  private static class MessageModel extends DefaultListModel<MessageContainer> {
     public void updateList() {
       fireContentsChanged(this, 0, getSize());
     }

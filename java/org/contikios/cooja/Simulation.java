@@ -89,7 +89,7 @@ public class Simulation extends Observable implements Runnable {
 
   private final Cooja cooja;
 
-  private long randomSeed = 123456;
+  private long randomSeed;
 
   private boolean randomSeedGenerated = false;
 
@@ -212,7 +212,6 @@ public class Simulation extends Observable implements Runnable {
     assert isRunning : "Did not set isRunning before starting";
     lastStartRealTime = System.currentTimeMillis();
     lastStartSimulationTime = getSimulationTimeMillis();
-    logger.debug("Simulation started, system time: {}", lastStartRealTime);
     speedLimitLastRealtime = lastStartRealTime;
     speedLimitLastSimtime = lastStartSimulationTime;
 
@@ -275,9 +274,35 @@ public class Simulation extends Observable implements Runnable {
   /**
    * Creates a new simulation
    */
-  public Simulation(Cooja cooja) {
+  public Simulation(Cooja cooja, long seed) {
     this.cooja = cooja;
     randomGenerator = new SafeRandom(this);
+    randomSeed = seed;
+  }
+
+  /** Basic simulation configuration. */
+  public record SimConfig(String title, String radioMedium, boolean generatedSeed, long randomSeed, long moteStartDelay) {}
+
+  public SimConfig getSimConfig() {
+    return new Simulation.SimConfig(title,
+            currentRadioMedium == null ? null : Cooja.getDescriptionOf(currentRadioMedium),
+            randomSeedGenerated, randomSeed, maxMoteStartupDelay / MILLISECOND);
+  }
+
+  public boolean setSimConfig(SimConfig cfg) throws MoteType.MoteTypeCreationException {
+    if (cfg == null) {
+      return false;
+    }
+    title = cfg.title;
+    var radioMedium = MoteInterfaceHandler.createRadioMedium(this, cfg.radioMedium);
+    if (radioMedium == null) {
+      throw new MoteType.MoteTypeCreationException("Could not load " + cfg.radioMedium);
+    }
+    setRadioMedium(radioMedium);
+    randomSeedGenerated = cfg.generatedSeed;
+    setRandomSeed(cfg.randomSeed);
+    maxMoteStartupDelay = Math.max(0, cfg.moteStartDelay);
+    return true;
   }
 
   /** Create a new script engine that logs to the logTextArea and add it to the list
@@ -537,13 +562,10 @@ public class Simulation extends Observable implements Runnable {
    * Sets the current simulation config depending on the given configuration.
    *
    * @param root Simulation configuration
-   * @param visAvailable True if simulation is allowed to show visualizers
-   * @param manualRandomSeed Simulation random seed. May be null, in which case the configuration is used
    * @return True if simulation was configured successfully
    * @throws Exception If configuration could not be loaded
    */
-  public boolean setConfigXML(Element root,
-      boolean visAvailable, boolean quick, Long manualRandomSeed) throws Exception {
+  public boolean setConfigXML(Element root, boolean quick) throws Exception {
     this.quick = quick;
     // Parse elements
     for (var element : (List<Element>) root.getChildren()) {
@@ -561,17 +583,11 @@ public class Simulation extends Observable implements Runnable {
           break;
         }
         case "randomseed": {
-          long newSeed;
           if (element.getText().equals("generated")) {
             randomSeedGenerated = true;
-            newSeed = new Random().nextLong();
-          } else {
-            newSeed = Long.parseLong(element.getText());
           }
-          if (manualRandomSeed != null) {
-            newSeed = manualRandomSeed;
-          }
-          setRandomSeed(newSeed);
+          // Seed already passed into the constructor, init random generator.
+          setRandomSeed(randomSeed);
           break;
         }
         case "motedelay":
@@ -582,40 +598,27 @@ public class Simulation extends Observable implements Runnable {
           break;
         case "radiomedium": {
           String radioMediumClassName = element.getText().trim();
-          /* Backwards compatibility: se.sics -> org.contikios */
-          if (radioMediumClassName.startsWith("se.sics")) {
-            radioMediumClassName = radioMediumClassName.replaceFirst("se\\.sics", "org.contikios");
-          }
-
-          var radioMediumClass = cooja.tryLoadClass(this, RadioMedium.class, radioMediumClassName);
-          if (radioMediumClass == null) {
-            throw new MoteType.MoteTypeCreationException("Could not load " + radioMediumClassName);
-          }
-          try {
-            currentRadioMedium = radioMediumClass.getConstructor(Simulation.class).newInstance(this);
-          } catch (Exception e) {
-            throw new MoteType.MoteTypeCreationException("Could not create " + radioMediumClassName, e);
-          }
-
+          currentRadioMedium = MoteInterfaceHandler.createRadioMedium(this, radioMediumClassName);
           // Show configure simulation dialog
-          if (visAvailable && !quick) {
+          if (Cooja.isVisualized() && !quick) {
             // FIXME: this should run from the AWT thread.
-            if (!CreateSimDialog.showDialog(this)) {
-              logger.debug("Simulation not created, aborting");
-              throw new Exception("Load aborted by user");
+            if (!setSimConfig(CreateSimDialog.showDialog(getCooja(), getSimConfig()))) {
+              return false;
             }
           }
-
+          if (currentRadioMedium == null) {
+            throw new MoteType.MoteTypeCreationException("Could not load " + radioMediumClassName);
+          }
           // Check if radio medium specific config should be applied
           if (radioMediumClassName.equals(currentRadioMedium.getClass().getName())) {
-            currentRadioMedium.setConfigXML(element.getChildren(), visAvailable);
+            currentRadioMedium.setConfigXML(element.getChildren(), Cooja.isVisualized());
           } else {
             logger.info("Radio Medium changed - ignoring radio medium specific config");
           }
           break;
         }
         case "events":
-          eventCentral.setConfigXML(this, element.getChildren(), visAvailable);
+          eventCentral.setConfigXML(this, element.getChildren(), Cooja.isVisualized());
           break;
         case "motetype": {
           String moteTypeClassName = element.getText().trim();
@@ -631,7 +634,7 @@ public class Simulation extends Observable implements Runnable {
           }
 
           /* Try to recreate simulation using a different mote type */
-          if (visAvailable && !quick) {
+          if (Cooja.isVisualized() && !quick) {
             String newClass = (String) JOptionPane.showInputDialog(
                     Cooja.getTopParentContainer(),
                     "The simulation is about to load '" + moteTypeClassName + "'\n" +
@@ -663,7 +666,7 @@ public class Simulation extends Observable implements Runnable {
             assert moteTypeClass != null : "Selected MoteType class is null";
             moteType = moteTypeClass.getConstructor((Class<? extends MoteType>[]) null).newInstance();
           }
-          if (!moteType.setConfigXML(this, element.getChildren(), visAvailable)) {
+          if (!moteType.setConfigXML(this, element.getChildren(), Cooja.isVisualized())) {
             logger.fatal("Mote type was not created: " + element.getText().trim());
             return false;
           }
@@ -685,7 +688,7 @@ public class Simulation extends Observable implements Runnable {
             throw new Exception("No mote type specified for mote");
           }
           Mote mote = moteType.generateMote(this);
-          if (!mote.setConfigXML(this, element.getChildren(), visAvailable)) {
+          if (!mote.setConfigXML(this, element.getChildren(), Cooja.isVisualized())) {
             logger.fatal("Mote was not created: " + element.getText().trim());
             throw new Exception("All motes were not recreated");
           }

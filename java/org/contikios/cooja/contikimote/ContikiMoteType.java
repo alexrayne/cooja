@@ -44,6 +44,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Random;
+import java.util.Scanner;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -375,14 +376,33 @@ public class ContikiMoteType extends BaseContikiMoteType {
         throw new MoteTypeCreationException("No map data could be loaded: " + mapFile);
       }
       String[] mapData = lines.toArray(new String[0]);
-      dataSecParser = new MapSectionParser(
-              mapData,
-              Cooja.getExternalToolsSetting("MAPFILE_DATA_START"),
-              Cooja.getExternalToolsSetting("MAPFILE_DATA_SIZE"));
-      bssSecParser = new MapSectionParser(
-              mapData,
-              Cooja.getExternalToolsSetting("MAPFILE_BSS_START"),
-              Cooja.getExternalToolsSetting("MAPFILE_BSS_SIZE"));
+      String command = Cooja.getExternalToolsSetting("READELF_COMMAND");
+      if (command != null) {
+        command = Cooja.resolvePathIdentifiers(command);
+      }
+      if (command == null) {
+        logger.info("No readelf command configured, use legacy .map parser");
+        dataSecParser = new MapSectionParser(
+                mapData, 
+                Cooja.getExternalToolsSetting("MAPFILE_DATA_START"),
+                Cooja.getExternalToolsSetting("MAPFILE_DATA_SIZE"));
+        bssSecParser = new MapSectionParser(
+                mapData, 
+                Cooja.getExternalToolsSetting("MAPFILE_BSS_START"),
+                Cooja.getExternalToolsSetting("MAPFILE_BSS_SIZE"));
+      }
+      else {
+          command = command.replace("$(LIBFILE)", firmwareFile.getName().replace(File.separatorChar, '/'));
+          var symbols = String.join("\n", loadCommandData(command, firmwareFile, vis));
+          dataSecParser = new MapSectionParser(
+                  mapData, symbols,
+                  Cooja.getExternalToolsSetting("MAPFILE_DATA_START"),
+                  Cooja.getExternalToolsSetting("MAPFILE_DATA_SIZE"));
+          bssSecParser = new MapSectionParser(
+                  mapData, symbols,
+                  Cooja.getExternalToolsSetting("MAPFILE_BSS_START"),
+                  Cooja.getExternalToolsSetting("MAPFILE_BSS_SIZE"));
+      }
     }
 
     /* We first need the value of Contiki's referenceVar, which tells us the
@@ -434,7 +454,6 @@ public class ContikiMoteType extends BaseContikiMoteType {
   public Class<? extends MoteInterface>[] getAllMoteInterfaceClasses() {
     String[] ifNames = getConfig().getStringArrayValue(ContikiMoteType.class, "MOTE_INTERFACES");
     ArrayList<Class<? extends MoteInterface>> classes = new ArrayList<>();
-
     classes.add(Position.class);
     classes.add(Battery.class);
     classes.add(ContikiVib.class);
@@ -641,6 +660,7 @@ public class ContikiMoteType extends BaseContikiMoteType {
     private final String startRegExp;
     private final String sizeRegExp;
     private String section;
+    private final String readelfData;
 
     public MapSectionParser(String[] mapFileData, String startRegExp, String sizeRegExp) {
       super(mapFileData);
@@ -650,6 +670,7 @@ public class ContikiMoteType extends BaseContikiMoteType {
       assert !sizeRegExp.isEmpty() : "Section size regexp must contain characters";
       this.startRegExp = startRegExp;
       this.sizeRegExp = sizeRegExp;
+      this.readelfData = null;
     }
 
     @Override
@@ -695,9 +716,16 @@ public class ContikiMoteType extends BaseContikiMoteType {
             return true;
         return sec.endsWith("."+var);
     }
-    
+
     @Override
     public Map<String, Symbol> parseSymbols(long offset) {
+        if ((readelfData != null) && (!readelfData.isEmpty()) )
+            return parseELFSymbols(offset);
+        else
+            return parseMapSymbols(offset);
+    }
+    
+    public Map<String, Symbol> parseMapSymbols(long offset) {
       Map<String, Symbol> varNames = new HashMap<>();
 
       Pattern pattern = Pattern.compile(Cooja.getExternalToolsSetting("MAPFILE_VAR_NAME"));
@@ -799,6 +827,47 @@ public class ContikiMoteType extends BaseContikiMoteType {
       }
       return -1;
     }
+    
+
+    public MapSectionParser(String[] mapFileData, String readelfData, String startRegExp, String sizeRegExp) {
+      super(mapFileData);
+      assert startRegExp != null : "Section start regexp must be specified";
+      assert !startRegExp.isEmpty() : "Section start regexp must contain characters";
+      assert sizeRegExp != null : "Section size regexp must be specified";
+      assert !sizeRegExp.isEmpty() : "Section size regexp must contain characters";
+      this.startRegExp = startRegExp;
+      this.sizeRegExp = sizeRegExp;
+      this.readelfData = readelfData;
+    }
+
+    public Map<String, Symbol> parseELFSymbols(long offset) {
+      Map<String, Symbol> varNames = new HashMap<>();
+      var s = new Scanner(readelfData);
+      s.nextLine(); // Skip first blank line.
+      while (s.hasNext()) {
+        var symbolNum = s.next();
+        if (!symbolNum.endsWith(":") || "Num:".equals(symbolNum)) {
+          s.nextLine(); // Skip until line starts with "1:" token.
+          continue;
+        }
+        var addr = s.nextLong(16);
+        var size = s.nextInt();
+        var type = s.next();
+        if (!"OBJECT".equals(type)) {
+          s.nextLine(); // Skip lines that do not define variables.
+          continue;
+        }
+        // Skip 3 tokens that are not required.
+        s.next();
+        s.next();
+        s.next();
+        var name = s.next();
+        varNames.put(name, new Symbol(Symbol.Type.VARIABLE, name, addr + offset, size));
+        s.nextLine(); // Skip rest of line.
+      }
+      return varNames;
+    }
+
   }
 
   /**

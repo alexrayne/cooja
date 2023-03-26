@@ -76,6 +76,7 @@ import java.util.MissingResourceException;
 import java.util.Observable;
 import java.util.Observer;
 import java.util.Properties;
+import java.util.Random;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.SynchronousQueue;
@@ -283,6 +284,7 @@ public class Cooja extends Observable {
     "MAPFILE_VAR_NAME",
     "MAPFILE_VAR_ADDRESS_1", "MAPFILE_VAR_ADDRESS_2",
     "MAPFILE_VAR_SIZE_1", "MAPFILE_VAR_SIZE_2",
+    "READELF_COMMAND",
 
     "PARSE_COMMAND",
     "COMMAND_VAR_NAME_ADDRESS_SIZE",
@@ -764,7 +766,9 @@ public class Cooja extends Observable {
     final var cfgFile = validateFileOrSelectNew(file);
     if (cfgFile == null) return;
 
-    createLoadSimWorker(cfgFile, quick, false, null).execute();
+    var worker = createLoadSimWorker(cfgFile, quick, false, null);
+    if (worker == null) return;
+    worker.execute();
   }
 
   /**
@@ -1094,7 +1098,6 @@ public class Cooja extends Observable {
           menuItem = new JMenuItem(description + "...");
           menuItem.setActionCommand("create mote type");
           menuItem.putClientProperty("class", moteTypeClass);
-        /*  menuItem.setToolTipText(abstractionLevelDescription);*/
           menuItem.addActionListener(guiEventHandler);
 
           /* Add new item directly after cross level separator */
@@ -2459,7 +2462,9 @@ public class Cooja extends Observable {
       return;
     }
 
-    createLoadSimWorker(null, true, false, seed).execute();
+    var worker = createLoadSimWorker(null, true, false, seed);
+    if (worker == null) return;
+    worker.execute();
   }
 
   private static boolean warnMemory() {
@@ -2566,9 +2571,14 @@ public class Cooja extends Observable {
     }
 
     // Create new simulation
-    Simulation newSim = new Simulation(this);
-    boolean createdOK = CreateSimDialog.showDialog(newSim);
-    if (createdOK) {
+    var newSim = new Simulation(Cooja.this, 123456);
+    boolean ok;
+    try {
+          ok = newSim.setSimConfig(CreateSimDialog.showDialog(Cooja.this, newSim.getSimConfig()));
+    } catch (MoteTypeCreationException ex) {
+          ok = false;
+    }
+    if (ok) {
       // Start GUI plugins.
       for (var pluginClass : pluginClasses) {
           int type = pluginClass.getAnnotation(PluginType.class).value();
@@ -2869,17 +2879,11 @@ public class Cooja extends Observable {
       MoteType newMoteType = null;
       final var cmd = e.getActionCommand();
       if (cmd.equals("create mote type")) {
-        // FIXME: Simulation should never be null if this action is enabled.
         // Create mote type
         var clazz = (Class<? extends MoteType>) ((JMenuItem) e.getSource()).getClientProperty("class");
         doCreateMoteType(clazz);
         return;
       } else if (cmd.equals("add motes")) {
-        // FIXME: Simulation should never be null if this action is enabled.
-        if (mySimulation == null) {
-          logger.warn("No simulation active");
-          return;
-        }
         mySimulation.stopSimulation();
         newMoteType = (MoteType) ((JMenuItem) e.getSource()).getClientProperty("motetype");
       } else if (cmd.equals("edit paths")) {
@@ -3241,9 +3245,12 @@ public class Cooja extends Observable {
       }
     }
     System.gc();
-    Simulation newSim = new Simulation(this);
+    var cfgSeed = root.getChild("simulation").getChild("randomseed").getText();
+    long seed = manualRandomSeed != null ? manualRandomSeed
+            : "generated".equals(cfgSeed) ? new Random().nextLong() : Long.parseLong(cfgSeed);
+    var newSim = new Simulation(this, seed);
     try {
-      if (!newSim.setConfigXML(root.getChild("simulation"), isVisualized(), quick, manualRandomSeed)) {
+      if (!newSim.setConfigXML(root.getChild("simulation"), quick)) {
         logger.info("Simulation not loaded");
         return null;
       }

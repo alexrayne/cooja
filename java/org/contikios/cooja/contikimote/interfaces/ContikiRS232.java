@@ -252,15 +252,8 @@ public class ContikiRS232 extends SerialUI
         mote.requestImmediateWakeup();
       }
     };
-    mote.getSimulation().invokeSimulationThread(new Runnable() {
-      @Override
-      public void run() {
-        mote.getSimulation().scheduleEvent(
-            pendingBytesEvent,
-            mote.getSimulation().getSimulationTime()
-        );
-      }
-    });
+    mote.getSimulation().invokeSimulationThread(() ->
+            mote.getSimulation().scheduleEvent(pendingBytesEvent, mote.getSimulation().getSimulationTime()));
   }
 
   @Override
