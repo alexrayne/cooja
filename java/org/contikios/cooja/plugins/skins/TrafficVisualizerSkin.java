@@ -37,6 +37,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Observable;
 import java.util.Observer;
+
+import javax.swing.SwingUtilities;
+
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.RadioConnection;
@@ -69,15 +72,25 @@ public class TrafficVisualizerSkin implements VisualizerSkin {
 
   private final List<RadioConnectionArrow> historyList = new ArrayList<>();
 
+  private final void repaint_async() {
+      SwingUtilities.invokeLater(new Runnable() {
+          @Override
+          public void run() {
+              visualizer.repaint(500);
+          }
+      });
+  }
+  
   private final Observer radioMediumObserver = new Observer() {
     @Override
     public void update(Observable obs, Object obj) {
       RadioConnection last = radioMedium.getLastConnection();
+      
       if (last != null && historyList.size() < MAX_HISTORY_SIZE) {
         synchronized(historyList) {
           historyList.add(new RadioConnectionArrow(last));
-          visualizer.repaint(500);
         }
+        repaint_async();
       }
     }
   };
@@ -95,8 +108,7 @@ public class TrafficVisualizerSkin implements VisualizerSkin {
           /* Try to increase age and remove if max age was reached */
           historyList.removeIf(rca -> !rca.increaseAge());
         }
-
-        visualizer.repaint(500);
+        repaint_async();
       }
 
       /* Reschedule myself */
