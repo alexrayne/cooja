@@ -30,9 +30,6 @@
 package org.contikios.cooja.plugins;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.nio.file.StandardOpenOption.CREATE;
-import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
-import static java.nio.file.StandardOpenOption.WRITE;
 
 import de.sciss.syntaxpane.DefaultSyntaxKit;
 import java.awt.BorderLayout;
@@ -42,15 +39,14 @@ import java.awt.Window;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
+import javax.script.CompiledScript;
 import javax.script.ScriptException;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
@@ -77,6 +73,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
+import org.contikios.cooja.LogScriptEngine;
 import org.contikios.cooja.Plugin;
 import org.contikios.cooja.PluginType;
 import org.contikios.cooja.Simulation;
@@ -106,8 +103,6 @@ public class ScriptRunner implements Plugin {
 
   private boolean activated = false;
 
-  private static BufferedWriter logWriter = null; /* For non-GUI tests */
-
   /** The script text when running in headless mode. */
   private String headlessScript = null;
   private final JEditorPane codeEditor;
@@ -125,18 +120,7 @@ public class ScriptRunner implements Plugin {
       frame = null;
       codeEditor = null;
       logTextArea = null;
-      engine = new LogScriptEngine(simulation, (obs, obj) -> {
-        try {
-          if (logWriter != null) {
-            logWriter.write((String) obj);
-            logWriter.flush();
-          } else {
-            logger.fatal("No log writer: " + obj);
-          }
-        } catch (IOException e) {
-          logger.fatal("Error when writing to test log file: " + obj, e);
-        }
-      });
+      engine = simulation.newScriptEngine(null);
       return;
     }
 
@@ -161,10 +145,7 @@ public class ScriptRunner implements Plugin {
     logTextArea.setMargin(new Insets(5,5,5,5));
     logTextArea.setEditable(false);
     logTextArea.setCursor(null);
-    engine = new LogScriptEngine(simulation, (obs, obj) -> {
-      logTextArea.append((String) obj);
-      logTextArea.setCaretPosition(logTextArea.getText().length());
-    });
+    engine = simulation.newScriptEngine(logTextArea);
 
     var newScript = new JMenuItem("New");
     newScript.addActionListener(l -> {
@@ -202,8 +183,11 @@ public class ScriptRunner implements Plugin {
 
     final JCheckBoxMenuItem activateMenuItem = new JCheckBoxMenuItem("Activate");
     activateMenuItem.addActionListener(ev -> {
-      if (isActive()) {
-        deactivateScript();
+      if (activated) {
+        engine.deactivateScript();
+        activated = false;
+        codeEditor.setEnabled(true);
+        updateTitle();
       } else {
         activateScript();
       }
@@ -220,8 +204,8 @@ public class ScriptRunner implements Plugin {
     MenuListener toggleMenuItems = new MenuListener() {
       @Override
       public void menuSelected(MenuEvent e) {
-        activateMenuItem.setSelected(isActive());
-        examplesMenu.setEnabled(!isActive());
+        activateMenuItem.setSelected(activated);
+        examplesMenu.setEnabled(!activated);
       }
       @Override
       public void menuDeselected(MenuEvent e) {
@@ -291,65 +275,28 @@ public class ScriptRunner implements Plugin {
     return true;
   }
 
-  private void deactivateScript() {
-    activated = false;
-    engine.deactivateScript();
-
-    if (logWriter != null) {
-      try {
-        logWriter.write("Test ended at simulation time: " + simulation.getSimulationTime() + "\n");
-        logWriter.flush();
-        logWriter.close();
-      } catch (IOException e) {
-      }
-      logWriter = null;
-    }
-
-    if (Cooja.isVisualized()) {
-      codeEditor.setEnabled(true);
-      updateTitle();
-    }
-  }
-
   private boolean activateScript() {
-    deactivateScript();
-    activated = true;
-    if (!Cooja.isVisualized()) {
-      try {
-        /* Continuously write test output to file */
-        if (logWriter == null) {
-          /* Warning: static variable, used by all active test editor plugins */
-          var logFile = Paths.get(gui.logDirectory, "COOJA.testlog");
-          logWriter = Files.newBufferedWriter(logFile, UTF_8, WRITE, CREATE, TRUNCATE_EXISTING);
-          logWriter.write("Random seed: " + simulation.getRandomSeed() + "\n");
-          logWriter.flush();
-        }
-      } catch (Exception e) {
-        logger.fatal("Create log writer error: ", e);
-        deactivateScript();
-        return false;
-      }
-    }
-
-    /* Activate engine */
-    boolean active;
+    CompiledScript script;
     try {
-      active = engine.activateScript(Cooja.isVisualized() ? codeEditor.getText() : headlessScript);
-    } catch (RuntimeException | ScriptException e) {
+      script = engine.compileScript(Cooja.isVisualized() ? codeEditor.getText() : headlessScript);
+    } catch (ScriptException e) {
       logger.fatal("Test script error: ", e);
-      deactivateScript();
       if (Cooja.isVisualized()) {
-        Cooja.showErrorDialog(Cooja.getTopParentContainer(),
-                "Script error", e, false);
+        Cooja.showErrorDialog(Cooja.getTopParentContainer(), "Script error", e, false);
       }
       return false;
     }
-    if (active && Cooja.isVisualized()) {
+
+    if (!engine.activateScript(script)) {
+      return false;
+    }
+    activated = true;
+    if (Cooja.isVisualized()) {
       logTextArea.setText("");
       codeEditor.setEnabled(false);
       updateTitle();
     }
-    return active;
+    return true;
   }
 
   private void updateTitle() {
@@ -357,7 +304,7 @@ public class ScriptRunner implements Plugin {
     if (linkedFile != null) {
       title += " (" + linkedFile.getName() + ")";
     }
-    if (isActive()) {
+    if (activated) {
       title += " *active*";
     }
     frame.setTitle(title);
@@ -434,7 +381,7 @@ public class ScriptRunner implements Plugin {
       config.add(element);
     }
 
-    if (isActive()) {
+    if (activated) {
       Element element = new Element("active");
       element.setText(String.valueOf(true));
       config.add(element);
@@ -443,14 +390,10 @@ public class ScriptRunner implements Plugin {
     return config;
   }
 
-  public boolean isActive() {
-    return activated;
-  }
-
   @Override
   public void closePlugin() {
     checkForUpdatesAndSave();
-    deactivateScript();
+    simulation.removeScriptEngine(engine);
   }
 
   @Override

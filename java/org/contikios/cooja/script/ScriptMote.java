@@ -28,7 +28,7 @@
  *
  */
 
-package org.contikios.cooja.plugins;
+package org.contikios.cooja.script;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.interfaces.Log;
 import org.contikios.cooja.interfaces.SerialPort;
@@ -56,7 +56,7 @@ public class ScriptMote {
 
   public void write(String data) {
     if (mote == null) return;
-    SerialPort serialPort = (SerialPort) mote.getInterfaces().getSerial();
+    SerialPort serialPort = (SerialPort) mote.getInterfaces().getInterfaceOfType(Log.class);
     serialPort.writeString(data);
   }
 }

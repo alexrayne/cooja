@@ -28,7 +28,7 @@
  *
  */
 
-package org.contikios.cooja.plugins;
+package org.contikios.cooja.script;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -60,6 +60,8 @@ public class ScriptParser {
     code = replaceYields(code);
 
     code = replaceWaitUntils(code);
+
+    code = replaceTestStatus(code);
 
     this.code = code;
   }
@@ -141,7 +143,7 @@ public class ScriptParser {
     }
 
     timeoutTime = Long.parseLong(matcher.group(1))*Simulation.MILLISECOND;
-    timeoutCode = matcher.group(2);
+    timeoutCode = replaceTestStatus(matcher.group(2));
 
     matcher.reset(code);
     code = matcher.replaceFirst(";");
@@ -196,17 +198,50 @@ public class ScriptParser {
     return code;
   }
 
+  private static String replaceTestStatus(String code) {
+    code = Pattern.compile("log\\.testOK\\(\\)").matcher(code).replaceAll("throw new TestOK()");
+    return Pattern.compile("log\\.testFailed\\(\\)").matcher(code).replaceAll("throw new TestFailed()");
+  }
+
   public String getJSCode() {
     return getJSCode(code, timeoutCode);
   }
     
   public static String getJSCode(String code, String timeoutCode) {
+    // Nashorn can be created with --language=es6, but "class TestFailed extends Error .." is not supported.
     return
+    "function TestFailed(msg, name, line) {\n"+
+    "  var err = new Error(msg, name, line);\n"+
+    "  Object.setPrototypeOf(err, Object.getPrototypeOf(this));\n"+
+    "  return err;\n"+
+    "}\n"+
+    "TestFailed.prototype = Object.create(Error.prototype, {\n"+
+    "  constructor: { value: Error, enumerable: false, writable: true, configurable: true }\n"+
+    "});\n"+
+    "Object.setPrototypeOf(TestFailed, Error);\n"+
+    "function TestOK(msg, name, line) {\n"+
+    "  var err = new Error(msg, name, line);\n"+
+    "  Object.setPrototypeOf(err, Object.getPrototypeOf(this));\n"+
+    "  return err;\n"+
+    "}\n"+
+    "TestOK.prototype = Object.create(Error.prototype, {\n"+
+    "  constructor: { value: Error, enumerable: false, writable: true, configurable: true }\n"+
+    "});\n"+
+    "Object.setPrototypeOf(TestOK, Error);\n"+
+    "function Shutdown(msg, name, line) {\n"+
+    "  var err = new Error(msg, name, line);\n"+
+    "  Object.setPrototypeOf(err, Object.getPrototypeOf(this));\n"+
+    "  return err;\n"+
+    "}\n"+
+    "Shutdown.prototype = Object.create(Error.prototype, {\n"+
+    "  constructor: { value: Error, enumerable: false, writable: true, configurable: true }\n"+
+    "});\n"+
+    "Object.setPrototypeOf(Shutdown, Error);\n"+
     "timeout_function = null; " +
-    "function run() { " +
+    "function run() { try {" +
     "SEMAPHORE_SIM.acquire(); " +
     "SEMAPHORE_SCRIPT.acquire(); " + /* STARTUP BLOCKS HERE! */
-    "if (SHUTDOWN) { SCRIPT_KILL(); } " +
+    "if (SHUTDOWN) { throw new Shutdown(); } " +
     "if (TIMEOUT) { SCRIPT_TIMEOUT(); } " +
     "msg = new java.lang.String(msg); " +
     "node.setMoteMsg(mote, msg); " +
@@ -214,40 +249,35 @@ public class ScriptParser {
     "\n" +
     "\n" +
     "while (true) { SCRIPT_SWITCH(); } " /* SCRIPT ENDED */+
+    "} catch (error) { " +
+    "if (error instanceof TestOK) return 0; " +
+    "if (error instanceof TestFailed) return 1; " +
+    "if (error instanceof Shutdown) return -1; " +
+    "throw(error); }" +
     "};" +
     "\n" +
     "function GENERATE_MSG(time, msg) { " +
     " log.generateMessage(time, msg); " +
     "};\n" +
     "\n" +
-    "function SCRIPT_KILL() { " +
-    " SEMAPHORE_SIM.release(100); " +
-    " throw('test script killed'); " +
-    "};\n" +
-    "\n" +
     "function SCRIPT_TIMEOUT() { " +
     timeoutCode + "; " +
     " if (timeout_function != null) { timeout_function(); } " +
     " log.log('TEST TIMEOUT\\n'); " +
-    " log.testFailed(); " +
-    " while (!SHUTDOWN) { " +
-    "  SEMAPHORE_SIM.release(); " +
-    "  SEMAPHORE_SCRIPT.acquire(); " /* SWITCH BLOCKS HERE! */ +
-    " } " +
-    " SCRIPT_KILL(); " +
+    " throw new TestFailed(); " +
     "};\n" +
     "\n" +
     "function SCRIPT_SWITCH() { " +
     " SEMAPHORE_SIM.release(); " +
     " SEMAPHORE_SCRIPT.acquire(); " /* SWITCH BLOCKS HERE! */ +
-    " if (SHUTDOWN) { SCRIPT_KILL(); } " +
+    " if (SHUTDOWN) { throw new Shutdown(); } " +
     " if (TIMEOUT) { SCRIPT_TIMEOUT(); } " +
     " msg = new java.lang.String(msg); " +
     " node.setMoteMsg(mote, msg); " +
     "};\n" +
     "\n" +
     "function write(mote,msg) { " +
-    " mote.getInterfaces().getSerial().writeString(msg); " +
+    " mote.getInterfaces().getLog().writeString(msg); " +
     "};\n" +
     "run();\n";
   }

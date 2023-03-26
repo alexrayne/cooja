@@ -748,12 +748,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
         return;
       }
 
-      try {
-        BufferedWriter outStream = new BufferedWriter(
-            new OutputStreamWriter(
-                new FileOutputStream(
-                    saveFile), UTF_8));
-
+      try (var outStream = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(saveFile), UTF_8))) {
         if(true) {
             dumpEventsTimeOrder(outStream, allMoteEvents);
         }
@@ -779,8 +774,6 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
             outStream.write(events.mote + "\t" + ev.time + "\t" + ev + "\n");
           }
         }
-
-        outStream.close();
       }
       catch (IOException ex) {
           logger.fatal("Could not write to file: " + saveFile);

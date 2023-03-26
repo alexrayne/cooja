@@ -92,6 +92,16 @@ import org.apache.logging.log4j.LogManager;
 public class ProjectConfig {
   private static final Logger logger = LogManager.getLogger(ProjectConfig.class);
 
+  /**
+   * Default extension configuration filename.
+   */
+  public static final String PROJECT_DEFAULT_CONFIG_FILENAME = "/cooja_default.config";
+
+  /**
+   * User extension configuration filename.
+   */
+  public static final String PROJECT_CONFIG_FILENAME = "cooja.config";
+
   private Properties myConfig = new Properties();
   private ArrayList<File> myProjectDirHistory = new ArrayList<>();
 
@@ -108,14 +118,13 @@ public class ProjectConfig {
   public ProjectConfig(boolean useDefault) throws IOException,
       FileNotFoundException {
     if (useDefault) {
-      InputStream input = Cooja.class
-          .getResourceAsStream(Cooja.PROJECT_DEFAULT_CONFIG_FILENAME);
+      var input = Cooja.class.getResourceAsStream(PROJECT_DEFAULT_CONFIG_FILENAME);
       if (input != null) {
         try (input) {
           appendConfigStream(input);
         }
       } else {
-        throw new FileNotFoundException(Cooja.PROJECT_DEFAULT_CONFIG_FILENAME);
+        throw new FileNotFoundException(PROJECT_DEFAULT_CONFIG_FILENAME);
       }
     }
   }
@@ -141,7 +150,7 @@ public class ProjectConfig {
       throw new FileNotFoundException("Project directory does not exist: " + projectDir.getAbsolutePath());
     }
     
-    File projectConfig = new File(projectDir.getPath(), Cooja.PROJECT_CONFIG_FILENAME);
+    File projectConfig = new File(projectDir.getPath(), PROJECT_CONFIG_FILENAME);
     if (!projectConfig.exists()) {
       throw new FileNotFoundException("Project config does not exist: " + projectConfig.getAbsolutePath());
     }

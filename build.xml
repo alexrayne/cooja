@@ -15,7 +15,7 @@
     </condition>
   </fail>
 
-  <property name="languageversion" value="11" />
+  <property name="languageversion" value="17" />
   <property name="java" location="java"/>
   <property name="build" location="build"/>
   <property name="javadoc" location="javadoc"/>

@@ -101,15 +101,15 @@ public class IPUtils {
   }
 
   /**
-   * Convert IPv6 Byte-array in uncompressed IPv6-Address String.
+   * Convert IPv6 Byte-array in compressed IPv6-Address String.
    *
    * @param ip byte array holding IPv6 address information
-   * @return uncompressed IPv6 representation string
+   * @return String representation
    */
   public static String getUncompressedIPv6AddressString(byte[] ip) {
-    StringBuilder ipBuilder = new StringBuilder();
-    IPUtils.getUncompressedIPv6AddressString(ipBuilder, ip);
-    return ipBuilder.toString();
+    StringBuilder build = new StringBuilder();
+    IPUtils.getUncompressedIPv6AddressString(build, ip);
+    return build.toString();
   }
   
   /**

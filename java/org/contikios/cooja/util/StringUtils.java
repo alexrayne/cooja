@@ -39,6 +39,8 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.GZIPInputStream;
 
 /**
@@ -196,6 +198,18 @@ public class StringUtils {
     }
   }
 
+  public static List<String> splitOnNewline(String commands) {
+    final ArrayList<String> cmdList = new ArrayList<>();
+    for (String cmd: commands.split("\n")) {
+      cmd = cmd.trim();
+      if (cmd.isEmpty()) {
+        continue;
+      }
+      cmdList.add(cmd);
+    }
+    return cmdList;
+  }
+  
   public static
   String dumpStackTrace(Throwable ex) {
       StringWriter writer = new StringWriter();

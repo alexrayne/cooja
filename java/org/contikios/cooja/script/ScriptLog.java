@@ -28,15 +28,15 @@
  *
  */
 
-package org.contikios.cooja.plugins;
+package org.contikios.cooja.script;
 
 
 /* Morty: This interface must be public, otherwise openjdk will fail */
 
 public interface ScriptLog {
     void log(String log);
-    void testOK();
-    void testFailed();
+    //void testOK();
+    //void testFailed();
     void generateMessage(long delay, String msg);
     void append(String filename, String msg);
     void writeFile(String filename, String msg);

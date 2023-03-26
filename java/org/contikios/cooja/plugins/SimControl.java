@@ -388,7 +388,7 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
           if (source == stepButton) {
             getSimulation().stepMillisecondSimulation();
           } else if (source == reloadButton) {
-            gui.reloadCurrentSimulation();
+            gui.reloadCurrentSimulation(getSimulation().getRandomSeed());
           }
           java.awt.EventQueue.invokeLater(() -> toolbarListener.updateToolbar(false));
         }
@@ -569,7 +569,7 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
   private final Action reloadAction = new AbstractAction("Reload") {
         @Override
         public void actionPerformed(ActionEvent e) {
-          simulation.getCooja().reloadCurrentSimulation();
+          simulation.getCooja().reloadCurrentSimulation( simulation.getRandomSeed() );
         }
   };
 

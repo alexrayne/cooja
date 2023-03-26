@@ -32,18 +32,14 @@ package org.contikios.cooja.dialogs;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
-import java.awt.Container;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
-import java.io.File;
 import java.nio.file.Path;
-import java.lang.reflect.InvocationTargetException;
 
-import java.util.HashSet;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.JButton;
@@ -54,15 +50,10 @@ import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
-import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.table.DefaultTableModel;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
-
-import org.contikios.cooja.Cooja;
-import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.contikimote.ContikiMoteType;
 import org.contikios.cooja.contikimote.ContikiMoteType.NetworkStack;
@@ -74,64 +65,28 @@ import org.contikios.cooja.mote.BaseContikiMoteType;
  * @author Fredrik Osterlind
  */
 public class ContikiMoteCompileDialog extends AbstractCompileDialog {
-  private static final Logger logger = LogManager.getLogger(ContikiMoteCompileDialog.class);
-
   private final JComboBox<?> netStackComboBox = new JComboBox<>(NetworkStack.values());
 
-  public static boolean showDialog(Container parent, Simulation sim, ContikiMoteType mote) {
-    final var dialog = new ContikiMoteCompileDialog(parent, sim, mote);
-    dialog.setVisible(true); // Blocks.
-    return dialog.createdOK();
-  }
-
-  private ContikiMoteCompileDialog(Container parent, Simulation simulation, ContikiMoteType moteType) {
-    super(parent, simulation, moteType);
-
-    if (contikiSource != null) {
-      /* Make sure compilation variables are updated */
-      getDefaultCompileCommands(contikiSource);
-    }
-
+  public ContikiMoteCompileDialog(Simulation sim, ContikiMoteType moteType, BaseContikiMoteType.MoteTypeConfig cfg) {
+    super(sim, moteType, cfg);
     /* Add Contiki mote type specifics */
     addAdvancedTab(tabbedPane);
+    createEnvironmentTab(tabbedPane);
   }
 
   @Override
-  public boolean canLoadFirmware(File file) {
+  public boolean canLoadFirmware(String name) {
     return false; // Always recompile, CoreComm needs fresh names.
   }
 
   @Override
-  public String getDefaultCompileCommands(final File source) {
+  public String getDefaultCompileCommands(String name) {
       String save_command = getCompileCommands();
-
-    if (source == null || !source.exists()) {
-      return save_command; // Not ready to compile yet.
-    }
-
-    if (moteType.getIdentifier() == null) {
-      var usedNames = new HashSet<String>();
-      for (var mote : simulation.getMoteTypes()) {
-        usedNames.add(mote.getIdentifier());
-      }
-      moteType.setIdentifier(ContikiMoteType.generateUniqueMoteTypeID(usedNames));
-    }
-
-    moteType.setContikiSourceFile(source);
-    var env = moteType.getCompilationEnvironment();
-    compilationEnvironment = BaseContikiMoteType.oneDimensionalEnv(env);
-    if (SwingUtilities.isEventDispatchThread()) {
-      createEnvironmentTab(tabbedPane, env);
-    } else {
-      try {
-        SwingUtilities.invokeAndWait(() -> createEnvironmentTab(tabbedPane, env));
-      } catch (InvocationTargetException | InterruptedException e) {
-        logger.fatal("Error when updating for source " + source + ": " + e.getMessage(), e);
-      }
-    }
+      if ( save_command.isEmpty() ) 
+          save_command = super.getDefaultCompileCommands(name);
 
     /*"make clean TARGET=cooja\n" + */
-    final String target = moteType.getExpectedFirmwareFile(source).getName();
+    final String target = moteType.getExpectedFirmwareFile(name).getName();
     String command = setCommandTarget(save_command, target);
 
     final String newstack = ((ContikiMoteType) moteType).getNetworkStack().getHeaderFile(); 
@@ -177,7 +132,7 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
           return command.substring(0, cmd_finish) + make;
       }
       else {
-          String new_command = Cooja.getExternalToolsSetting("PATH_MAKE") + " -j$(CPUS) "
+          String new_command = gui.getExternalToolsSetting("PATH_MAKE") + " -j$(CPUS) "
                   + target + " "+target_cmd
                   ;
           return command + "\n"+new_command;
@@ -190,16 +145,6 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
           //{"[APPS_DIR]","PATH_APPS","apps"}
       };
 
-  @Override
-  public Class<? extends MoteInterface>[] getAllMoteInterfaces() {
-    return ((ContikiMoteType)moteType).getAllMoteInterfaceClasses();
-  }
-
-  @Override
-  public Class<? extends MoteInterface>[] getDefaultMoteInterfaces() {
-	  return getAllMoteInterfaces();
-  }
-
 
 
   final JTextField netstack_headerTextField = new JTextField();
@@ -210,9 +155,6 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
   };
 
   private void addAdvancedTab(JTabbedPane parent) {
-
-    /* TODO System symbols */
-
     /* Communication stack */
     JLabel label = new JLabel("Default network stack header");
     label.setPreferredSize(LABEL_DIMENSION);
@@ -271,55 +213,38 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
     parent.addTab("Advanced", null, new JScrollPane(container), "Advanced Contiki Mote Type settings");
   }
 
-  private void createEnvironmentTab(JTabbedPane parent, Object[][] env) {
-    /* Remove any existing environment tabs */
-    for (int i=0; i < tabbedPane.getTabCount(); i++) {
-      if (tabbedPane.getTitleAt(i).equals("Environment")) {
-        tabbedPane.removeTabAt(i--);
-      }
-    }
-
+  private void createEnvironmentTab(JTabbedPane parent) {
     /* Create new tab, fill with current environment data */
-    String[] columnNames = { "Variable", "Value" };
-    JTable table = new JTable(env, columnNames) {
+    JTable table = new JTable(0, 2) {
       @Override
       public boolean isCellEditable(int row, int column) {
         return false;
       }
     };
-
+    final var model = (DefaultTableModel) table.getModel();
+    String[] columnNames = { "Variable", "Value" };
+    model.setColumnIdentifiers(columnNames);
+    for (var entry : moteType.getCompilationEnvironment().entrySet()) {
+      model.addRow(new Object[] { entry.getKey(), entry.getValue() });
+    }
     JPanel panel = new JPanel(new BorderLayout());
     JButton button = new JButton("Change environment variables: Open external tools dialog");
     button.addActionListener(new ActionListener() {
       @Override
       public void actionPerformed(ActionEvent e) {
-        /* Show external tools dialog */
-        ExternalToolsDialog.showDialog(Cooja.getTopParentContainer());
-
-        /* Update and select environment tab */
-        SwingUtilities.invokeLater(new Runnable() {
-          @Override
-          public void run() {
-            getDefaultCompileCommands(moteType.getContikiSourceFile());
-            for (int i=0; i < tabbedPane.getTabCount(); i++) {
-              if (tabbedPane.getTitleAt(i).equals("Environment")) {
-                tabbedPane.setSelectedIndex(i);
-                break;
-              }
-            }
-            setDialogState(DialogState.AWAITING_COMPILATION);
-          }
-        });
-
+        ExternalToolsDialog.showDialog();
+        // Update data in the table.
+        model.setRowCount(0);
+        for (var entry : moteType.getCompilationEnvironment().entrySet()) {
+          model.addRow(new Object[]{entry.getKey(), entry.getValue()});
+        }
+        // User might have changed compiler, force recompile.
+        setDialogState(DialogState.SELECTED_SOURCE);
       }
     });
     panel.add(BorderLayout.NORTH, button);
     panel.add(BorderLayout.CENTER, new JScrollPane(table));
 
     parent.addTab("Environment", null, panel, "Environment variables");
-  }
-
-  @Override
-  public void writeSettingsToMoteType() {
   }
 }

@@ -37,6 +37,7 @@ import java.util.Collection;
 import java.util.Map;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.contikios.cooja.contikimote.ContikiMoteType;
 import org.contikios.cooja.contikimote.interfaces.ContikiBeeper;
 import org.contikios.cooja.contikimote.interfaces.ContikiButton;
 import org.contikios.cooja.contikimote.interfaces.ContikiCFS;
@@ -64,6 +65,10 @@ import org.contikios.cooja.interfaces.Position;
 import org.contikios.cooja.interfaces.Radio;
 import org.contikios.cooja.interfaces.RimeAddress;
 import org.contikios.cooja.interfaces.SerialIO;
+import org.contikios.cooja.motes.DisturberMoteType;
+import org.contikios.cooja.motes.ImportAppMoteType;
+import org.contikios.cooja.mspmote.SkyMoteType;
+import org.contikios.cooja.mspmote.Z1MoteType;
 
 /**
  * The mote interface handler holds all interfaces for a specific mote.
@@ -93,7 +98,8 @@ public class MoteInterfaceHandler {
           entry("org.contikios.cooja.contikimote.interfaces.ContikiCFS", ContikiCFS.class),
           entry("org.contikios.cooja.contikimote.interfaces.ContikiEEPROM", ContikiEEPROM.class),
           entry("org.contikios.cooja.interfaces.Mote2MoteRelations", Mote2MoteRelations.class),
-          entry("org.contikios.cooja.interfaces.MoteAttributes", MoteAttributes.class));
+          entry("org.contikios.cooja.interfaces.MoteAttributes", MoteAttributes.class)
+          );
 
   private final ArrayList<MoteInterface> moteInterfaces = new ArrayList<>();
 
@@ -124,6 +130,22 @@ public class MoteInterfaceHandler {
     }
   }
 
+  /** Fast translation from class name to object for builtin mote types.
+   * @param cooja Cooja
+   * @param name Name of mote type to create
+   * @return Object or null
+   */
+  public static MoteType createMoteType(Cooja cooja, String name) {
+    switch (name) {
+      case "org.contikios.cooja.motes.ImportAppMoteType":       return new ImportAppMoteType();
+      case "org.contikios.cooja.motes.DisturberMoteType":       return new DisturberMoteType();
+      case "org.contikios.cooja.contikimote.ContikiMoteType":   return new ContikiMoteType(cooja);
+      case "org.contikios.cooja.mspmote.SkyMoteType":           return new SkyMoteType();
+      case "org.contikios.cooja.mspmote.Z1MoteType":            return new Z1MoteType();
+    };
+    return null;
+  }
+
   /** Fast translation from class name to class file for builtin interfaces. Uses the classloader
    * to load other interfaces.
    * @param gui Cooja
@@ -132,6 +154,9 @@ public class MoteInterfaceHandler {
    * @return Found class or null
    */
   public static Class<? extends MoteInterface> getInterfaceClass(Cooja gui, Object caller, String name) {
+    if (name.startsWith("se.sics")) {
+      name = name.replaceFirst("se\\.sics", "org.contikios");
+    }
     var clazz = builtinInterfaces.get(name);
     if (clazz != null) {
       return clazz;
