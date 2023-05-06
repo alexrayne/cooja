@@ -32,14 +32,11 @@ package org.contikios.cooja.dialogs;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.nio.file.Path;
-
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.JButton;
@@ -47,14 +44,13 @@ import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 
-import org.contikios.cooja.Simulation;
+import org.contikios.cooja.Cooja;
 import org.contikios.cooja.contikimote.ContikiMoteType;
 import org.contikios.cooja.contikimote.ContikiMoteType.NetworkStack;
 import org.contikios.cooja.mote.BaseContikiMoteType;
@@ -65,13 +61,93 @@ import org.contikios.cooja.mote.BaseContikiMoteType;
  * @author Fredrik Osterlind
  */
 public class ContikiMoteCompileDialog extends AbstractCompileDialog {
-  private final JComboBox<?> netStackComboBox = new JComboBox<>(NetworkStack.values());
 
-  public ContikiMoteCompileDialog(Simulation sim, ContikiMoteType moteType, BaseContikiMoteType.MoteTypeConfig cfg) {
-    super(sim, moteType, cfg);
-    /* Add Contiki mote type specifics */
-    addAdvancedTab(tabbedPane);
-    createEnvironmentTab(tabbedPane);
+  public ContikiMoteCompileDialog(Cooja gui, ContikiMoteType moteType, BaseContikiMoteType.MoteTypeConfig cfg) {
+    super(gui, moteType, cfg);
+    // Add Contiki mote type specifics.
+    // Communication stack.
+
+    JLabel label = new JLabel("Default network stack header");
+    label.setPreferredSize(LABEL_DIMENSION);
+    final var headerTextField = new JTextField();
+    headerTextField.setText(moteType.getNetworkStack().manualHeader);
+    headerTextField.getDocument().addDocumentListener(new DocumentListener() {
+      @Override
+      public void insertUpdate(DocumentEvent e) {
+        updateHeader();
+      }
+      @Override
+      public void removeUpdate(DocumentEvent e) {
+        updateHeader();
+      }
+      @Override
+      public void changedUpdate(DocumentEvent e) {
+        updateHeader();
+      }
+      private void updateHeader() {
+        moteType.getNetworkStack().manualHeader = headerTextField.getText();
+      }
+    });
+    final Box netStackHeaderBox = Box.createHorizontalBox();
+    netStackHeaderBox.setAlignmentX(Component.LEFT_ALIGNMENT);
+    netStackHeaderBox.add(label);
+    netStackHeaderBox.add(Box.createHorizontalStrut(20));
+    netStackHeaderBox.add(headerTextField);
+
+    label = new JLabel("Default network stack");
+    label.setPreferredSize(LABEL_DIMENSION);
+    final var netStackComboBox = new JComboBox<>(NetworkStack.values());
+    netStackComboBox.setSelectedItem(moteType.getNetworkStack());
+    netStackComboBox.setEnabled(true);
+    netStackComboBox.addActionListener(e -> {
+      moteType.setNetworkStack((NetworkStack)netStackComboBox.getSelectedItem());
+      netStackHeaderBox.setVisible(netStackComboBox.getSelectedItem() == NetworkStack.MANUAL);
+      setDialogState(DialogState.SELECTED_SOURCE);
+    });
+    Box netStackBox = Box.createHorizontalBox();
+    netStackBox.setAlignmentX(Component.LEFT_ALIGNMENT);
+    netStackBox.add(label);
+    netStackBox.add(Box.createHorizontalStrut(20));
+    netStackBox.add(netStackComboBox);
+    netStackHeaderBox.setVisible(netStackComboBox.getSelectedItem() == NetworkStack.MANUAL);
+
+    // Advanced tab.
+    Box box = Box.createVerticalBox();
+    box.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+    box.add(netStackBox);
+    box.add(netStackHeaderBox);
+    box.add(Box.createVerticalGlue());
+    JPanel container = new JPanel(new BorderLayout());
+    container.add(BorderLayout.NORTH, box);
+    tabbedPane.addTab("Advanced", null, new JScrollPane(container), "Advanced Contiki Mote Type settings");
+    // Create new tab, fill with current environment data.
+    var table = new JTable(0, 2) {
+      @Override
+      public boolean isCellEditable(int row, int column) {
+        return false;
+      }
+    };
+    final var model = (DefaultTableModel) table.getModel();
+    String[] columnNames = { "Variable", "Value" };
+    model.setColumnIdentifiers(columnNames);
+    for (var entry : moteType.getCompilationEnvironment().entrySet()) {
+      model.addRow(new Object[] { entry.getKey(), entry.getValue() });
+    }
+    JPanel panel = new JPanel(new BorderLayout());
+    JButton button = new JButton("Change environment variables: Open external tools dialog");
+    button.addActionListener(e -> {
+      ExternalToolsDialog.showDialog();
+      // Update data in the table.
+      model.setRowCount(0);
+      for (var entry : moteType.getCompilationEnvironment().entrySet()) {
+        model.addRow(new Object[]{entry.getKey(), entry.getValue()});
+      }
+      // User might have changed compiler, force recompile.
+      setDialogState(DialogState.SELECTED_SOURCE);
+    });
+    panel.add(BorderLayout.NORTH, button);
+    panel.add(BorderLayout.CENTER, new JScrollPane(table));
+    tabbedPane.addTab("Environment", null, panel, "Environment variables");
   }
 
   @Override
@@ -132,119 +208,11 @@ public class ContikiMoteCompileDialog extends AbstractCompileDialog {
           return command.substring(0, cmd_finish) + make;
       }
       else {
-          String new_command = gui.getExternalToolsSetting("PATH_MAKE") + " -j$(CPUS) "
+          String new_command = Cooja.getExternalToolsSetting("PATH_MAKE") + " -j$(CPUS) "
                   + target + " "+target_cmd
                   ;
           return command + "\n"+new_command;
       }
   }
-
-  private final static String[][] PATH_IDENTIFIER = {
-          {"[CONTIKI_DIR]","PATH_CONTIKI",""},
-          //{"[COOJA_DIR]","PATH_COOJA",""},
-          //{"[APPS_DIR]","PATH_APPS","apps"}
-      };
-
-
-
-  final JTextField netstack_headerTextField = new JTextField();
-  private void updateForNetstack() {
-      final String content = netstack_headerTextField.getText();
-      ((ContikiMoteType)moteType).getNetworkStack().manualHeader = content;
-      setDialogState(DialogState.SELECTED_SOURCE);
-  };
-
-  private void addAdvancedTab(JTabbedPane parent) {
-    /* Communication stack */
-    JLabel label = new JLabel("Default network stack header");
-    label.setPreferredSize(LABEL_DIMENSION);
-    final JTextField headerTextField = netstack_headerTextField;
-
-    headerTextField.setText(((ContikiMoteType)moteType).getNetworkStack().manualHeader);
-    headerTextField.addActionListener(new ActionListener(){
-        public void actionPerformed(ActionEvent e){
-            updateForNetstack();
-        }
-    });
-    headerTextField.addFocusListener(new FocusListener() {
-        public void focusLost(FocusEvent e) {
-          if (!e.isTemporary()) {
-              updateForNetstack();
-          }
-        }
-        public void focusGained(FocusEvent e) { };
-      });
-
-    final Box netStackHeaderBox = Box.createHorizontalBox();
-    netStackHeaderBox.setAlignmentX(Component.LEFT_ALIGNMENT);
-    netStackHeaderBox.add(label);
-    netStackHeaderBox.add(Box.createHorizontalStrut(20));
-    netStackHeaderBox.add(headerTextField);
-
-    label = new JLabel("Default network stack");
-    label.setPreferredSize(LABEL_DIMENSION);
-    netStackComboBox.setSelectedItem(((ContikiMoteType)moteType).getNetworkStack());
-    netStackComboBox.setEnabled(true);
-    netStackComboBox.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        ((ContikiMoteType)moteType).setNetworkStack((NetworkStack)netStackComboBox.getSelectedItem());
-        netStackHeaderBox.setVisible(netStackComboBox.getSelectedItem() == NetworkStack.MANUAL);
-        setDialogState(DialogState.SELECTED_SOURCE);
-      }
-    });
-    Box netStackBox = Box.createHorizontalBox();
-    netStackBox.setAlignmentX(Component.LEFT_ALIGNMENT);
-    netStackBox.add(label);
-    netStackBox.add(Box.createHorizontalStrut(20));
-    netStackBox.add(netStackComboBox);
-    netStackHeaderBox.setVisible(netStackComboBox.getSelectedItem() == NetworkStack.MANUAL);
-
-
-    /* Advanced tab */
-    Box box = Box.createVerticalBox();
-    box.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
-    /*box.add(symbolsCheckBox);*/
-    box.add(netStackBox);
-    box.add(netStackHeaderBox);
-    box.add(Box.createVerticalGlue());
-    JPanel container = new JPanel(new BorderLayout());
-    container.add(BorderLayout.NORTH, box);
-    parent.addTab("Advanced", null, new JScrollPane(container), "Advanced Contiki Mote Type settings");
-  }
-
-  private void createEnvironmentTab(JTabbedPane parent) {
-    /* Create new tab, fill with current environment data */
-    JTable table = new JTable(0, 2) {
-      @Override
-      public boolean isCellEditable(int row, int column) {
-        return false;
-      }
-    };
-    final var model = (DefaultTableModel) table.getModel();
-    String[] columnNames = { "Variable", "Value" };
-    model.setColumnIdentifiers(columnNames);
-    for (var entry : moteType.getCompilationEnvironment().entrySet()) {
-      model.addRow(new Object[] { entry.getKey(), entry.getValue() });
-    }
-    JPanel panel = new JPanel(new BorderLayout());
-    JButton button = new JButton("Change environment variables: Open external tools dialog");
-    button.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        ExternalToolsDialog.showDialog();
-        // Update data in the table.
-        model.setRowCount(0);
-        for (var entry : moteType.getCompilationEnvironment().entrySet()) {
-          model.addRow(new Object[]{entry.getKey(), entry.getValue()});
-        }
-        // User might have changed compiler, force recompile.
-        setDialogState(DialogState.SELECTED_SOURCE);
-      }
-    });
-    panel.add(BorderLayout.NORTH, button);
-    panel.add(BorderLayout.CENTER, new JScrollPane(table));
-
-    parent.addTab("Environment", null, panel, "Environment variables");
-  }
+  
 }

@@ -31,7 +31,6 @@
 package org.contikios.cooja.plugins;
 
 import java.awt.BorderLayout;
-import java.util.Observable;
 import java.util.Observer;
 
 import javax.swing.DefaultCellEditor;
@@ -42,9 +41,6 @@ import javax.swing.ListSelectionModel;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellEditor;
-
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
@@ -68,8 +64,6 @@ import org.contikios.cooja.radiomediums.DirectedGraphMedium;
 @SupportedArguments(radioMediums = { AbstractRadioMedium.class })
 
 public class BaseRSSIconf extends VisPlugin {
-	private static final Logger logger = LogManager.getLogger(BaseRSSIconf.class);
-
 	private final static int IDX_Mote = 0;
 	private final static int IDX_BaseRSSI = 1;
 
@@ -219,12 +213,12 @@ public class BaseRSSIconf extends VisPlugin {
 			}
 
 			if (column == IDX_Mote) {
-				gui.signalMoteHighlight(radioMedium.getRegisteredRadios()[row]
+				Cooja.signalMoteHighlight(radioMedium.getRegisteredRadios()[row]
 						.getMote());
 				return false;
 			}
 			if (column == IDX_BaseRSSI) {
-				gui.signalMoteHighlight(radioMedium.getRegisteredRadios()[row]
+				Cooja.signalMoteHighlight(radioMedium.getRegisteredRadios()[row]
 						.getMote());
 				return true;
 			}

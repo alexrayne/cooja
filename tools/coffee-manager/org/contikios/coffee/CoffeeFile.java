@@ -38,12 +38,12 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 
 public class CoffeeFile {
-	protected CoffeeFS coffeeFS;
-	protected CoffeeHeader header;
-	private String name;
+	protected final CoffeeFS coffeeFS;
+	protected final CoffeeHeader header;
+	private final String name;
 	private int length;
-	private int reservedSize;
-	private CoffeeMicroLog microLog;
+	private final int reservedSize;
+	private final CoffeeMicroLog microLog;
 	private boolean knownLength;
 
 	public CoffeeFile(CoffeeFS coffeeFS, CoffeeHeader header) throws IOException {

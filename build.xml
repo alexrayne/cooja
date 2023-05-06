@@ -8,8 +8,8 @@
   </fail>
 
   <!-- Ant ignores the release tag when using an old JDK. Make sure
-       we fail when detecting a class that was removed in Java 11. -->
-  <fail message="Java 11+ is required to build">
+       we fail when detecting a class that was removed in Java 17. -->
+  <fail message="Java 17+ is required to build">
     <condition>
       <available classname="javax.xml.ws.Service"/>
     </condition>
@@ -157,11 +157,11 @@ The COOJA Simulator
                 currently crashes on 64-bit Ubuntu on machines with >8G
                 memory if we don't set maxmemory. -->
     <java fork="yes" dir="${build}" jar="${dist}/cooja.jar"
-          failonerror="true" maxmemory="${maxmem}">
+          failonerror="true" maxmemory="${maxmem}" >
       <sysproperty key="user.language" value="en"/>
       <jvmarg value="-Dnashorn.args=--no-deprecation-warning" />
       <jvmarg line="${jvmargs}" />
-      <arg line="${args}"/>
+      <arg line="${args} -javac=${java} "/>
     </java>
   </target>
 

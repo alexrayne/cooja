@@ -259,7 +259,7 @@ public class RadioLogger extends VisPlugin
       public boolean isCellEditable(int row, int col) {
         if (col == COLUMN_FROM) {
           /* Highlight source */
-          gui.signalMoteHighlight(connections.get(row).connection.getSource().getMote());
+          Cooja.signalMoteHighlight(connections.get(row).connection.getSource().getMote());
           return false;
         }
 
@@ -267,7 +267,7 @@ public class RadioLogger extends VisPlugin
           /* Highlight all destinations */
           Radio[] dests = connections.get(row).connection.getDestinations();
           for (Radio dest: dests) {
-            gui.signalMoteHighlight(dest.getMote());
+            Cooja.signalMoteHighlight(dest.getMote());
           }
           return false;
         }
@@ -1105,7 +1105,7 @@ public class RadioLogger extends VisPlugin
     verboseBox.setText("");
 
     setTitle("Radio messages: showing " + dataTable.getRowCount() + "/" + connections.size() + " packets");
-    simulation.getCooja().getDesktopPane().repaint();
+    Cooja.getDesktopPane().repaint();
   }
 
   private Action createAnalyzerAction(String name, final String actionName,

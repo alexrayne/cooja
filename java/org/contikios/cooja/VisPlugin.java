@@ -70,15 +70,18 @@ public class VisPlugin extends JInternalFrame implements Plugin {
     addInternalFrameListener(new InternalFrameAdapter() {
       @Override
       public void internalFrameClosing(InternalFrameEvent e) {
-        gui.removePlugin(parent, true);
+        gui.removePlugin(parent);
+        if (!gui.hasStartedPlugins()) {
+          gui.doRemoveSimulation(true);
+        }
       }
       @Override
       public void internalFrameActivated(InternalFrameEvent e) {
         /* Highlight mote in COOJA */
         if (parent instanceof MotePlugin) {
-          gui.signalMoteHighlight(((MotePlugin)parent).getMote());
+          Cooja.signalMoteHighlight(((MotePlugin)parent).getMote());
         }
-        gui.loadQuickHelp(parent);
+        Cooja.loadQuickHelp(parent);
       }
     }
     );

@@ -98,8 +98,6 @@ public class SerialSocketServer implements Plugin, MotePlugin {
   private static final Color COLOR_NEUTRAL = Color.DARK_GRAY;
   private static final Color COLOR_POSITIVE = new Color(0, 161, 83);
   private static final Color COLOR_NEGATIVE = Color.RED;
-  
-  private final int SERVER_DEFAULT_PORT;
 
   private final SerialPort serialPort;
   private Observer serialDataObserver;
@@ -126,7 +124,7 @@ public class SerialSocketServer implements Plugin, MotePlugin {
     this.mote = mote;
     this.simulation = simulation;
 
-    SERVER_DEFAULT_PORT = 60000 + mote.getID();
+    int SERVER_DEFAULT_PORT = 60000 + mote.getID();
 
     serialPort = (SerialPort) mote.getInterfaces().getSerial();
     if (serialPort == null) {
@@ -466,8 +464,8 @@ public class SerialSocketServer implements Plugin, MotePlugin {
             break;
           }
         }
-        // No reasonable way to communicate results with Cooja, so just exit upon completion for now.
-        simulation.getCooja().doQuit(false, rv);
+        simulation.stopSimulation(rv > 0 ? rv : null);
+        stopServer();
       }, "SerialSocketServer commands").start();
     }
     return true;
@@ -601,18 +599,10 @@ public class SerialSocketServer implements Plugin, MotePlugin {
     
     for (Element element : configXML) {
       switch (element.getName()) {
-        case "port":
-          port = Integer.parseInt(element.getText());
-          break;
-        case "bound":
-          bound = Boolean.parseBoolean(element.getText());
-          break;
-        case "commands":
-          commands = element.getText();
-          break;
-        default:
-          logger.warn("Unknown config element: " + element.getName());
-          break;
+        case "port" -> port = Integer.parseInt(element.getText());
+        case "bound" -> bound = Boolean.parseBoolean(element.getText());
+        case "commands" -> commands = element.getText();
+        default -> logger.warn("Unknown config element: " + element.getName());
       }
     }
     if (Cooja.isVisualized()) {

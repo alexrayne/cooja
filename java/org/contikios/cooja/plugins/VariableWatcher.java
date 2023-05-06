@@ -99,7 +99,7 @@ public class VariableWatcher extends VisPlugin implements MotePlugin, HasQuickHe
   private final static int LABEL_WIDTH = 170;
   private final static int LABEL_HEIGHT = 15;
 
-  private final JComboBox varNameCombo;
+  private final JComboBox<String> varNameCombo;
   private final JComboBox<VarTypes> varTypeCombo;
   private final JComboBox<VarFormats> varFormatCombo;
   private final JFormattedTextField varAddressField;
@@ -113,8 +113,6 @@ public class VariableWatcher extends VisPlugin implements MotePlugin, HasQuickHe
   private final VarMemory moteMemory;
 
   MemoryInterface.SegmentMonitor memMonitor;
-  long monitorAddr;
-  int monitorSize;
 
   private final ValueFormatter hf;
 
@@ -231,7 +229,7 @@ public class VariableWatcher extends VisPlugin implements MotePlugin, HasQuickHe
     List<String> allPotentialVarNames = new ArrayList<>(moteMemory.getVariableNames());
     Collections.sort(allPotentialVarNames);
 
-    varNameCombo = new JComboBox(allPotentialVarNames.toArray());
+    varNameCombo = new JComboBox<>(allPotentialVarNames.toArray(new String[0]));
     AutoCompleteDecorator.decorate(varNameCombo);
     varNameCombo.setEditable(true);
     varNameCombo.setSelectedItem("");
@@ -623,19 +621,11 @@ public class VariableWatcher extends VisPlugin implements MotePlugin, HasQuickHe
         case DEC:
         case HEX:
           try {
-            switch (mType) {
-              case BYTE:
-              case SHORT:
-                ret = Integer.decode(text);
-                break;
-              case INT:
-              case LONG:
-              case ADDR:
-                ret = Long.decode(text);
-                break;
-              default:
-                ret = null;
-            }
+            ret = switch (mType) {
+              case BYTE, SHORT -> Integer.decode(text);
+              case INT, LONG, ADDR -> Long.decode(text);
+              default -> null;
+            };
           }
           catch (NumberFormatException ex) {
             ret = 0;
@@ -653,15 +643,11 @@ public class VariableWatcher extends VisPlugin implements MotePlugin, HasQuickHe
         return "N/A";
       }
 
-      switch (mFormat) {
-        case CHAR:
-        case DEC:
-          return value.toString();
-        case HEX:
-          return String.format("0x%x", ((Number)value).longValue());
-        default:
-          return "";
-      }
+      return switch (mFormat) {
+        case CHAR, DEC -> value.toString();
+        case HEX -> String.format("0x%x", ((Number) value).longValue());
+        default -> "";
+      };
     }
 
     /* Do not override TEXT_NOT_TO_TOUCH */
@@ -833,15 +819,9 @@ public class VariableWatcher extends VisPlugin implements MotePlugin, HasQuickHe
   public boolean setConfigXML(Collection<Element> configXML, boolean visAvailable) {
     for (Element element : configXML) {
       switch (element.getName()) {
-        case "varname":
-          varNameCombo.setSelectedItem(element.getText());
-          break;
-        case "vartype":
-          varTypeCombo.setSelectedIndex(Integer.parseInt(element.getText()));
-          break;
-        case "varformat":
-          varFormatCombo.setSelectedIndex(Integer.parseInt(element.getText()));
-          break;
+        case "varname" -> varNameCombo.setSelectedItem(element.getText());
+        case "vartype" -> varTypeCombo.setSelectedIndex(Integer.parseInt(element.getText()));
+        case "varformat" -> varFormatCombo.setSelectedIndex(Integer.parseInt(element.getText()));
       }
     }
     updateNumberOfValues();

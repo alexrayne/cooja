@@ -213,12 +213,12 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
 
   /* Generic visualization */
   private final MoteCountListener newMotesListener;
-  private Observer posObserver;
-  private Observer moteHighligtObserver;
+  private final Observer posObserver;
+  private final Observer moteHighligtObserver;
   private final ArrayList<Mote> highlightedMotes = new ArrayList<>();
   private final static Color HIGHLIGHT_COLOR = Color.CYAN;
   private final static Color MOVE_COLOR = Color.WHITE;
-  private Observer moteRelationsObserver;
+  private final Observer moteRelationsObserver;
 
   /* Popup menu */
   public interface SimulationMenuAction {
@@ -415,7 +415,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     }
 
     /* Observe mote highlights */
-    gui.addMoteHighlightObserver(moteHighligtObserver = new Observer() {
+    Cooja.addMoteHighlightObserver(moteHighligtObserver = new Observer() {
       @Override
       public void update(Observable obs, Object obj) {
         if (!(obj instanceof Mote)) {
@@ -451,7 +451,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     });
 
     /* Observe mote relations */
-    gui.addMoteRelationsObserver(moteRelationsObserver = (obs, obj) -> repaint());
+    Cooja.addMoteRelationsObserver(moteRelationsObserver = (obs, obj) -> repaint());
 
     canvas.getInputMap().put(KeyStroke.getKeyStroke("ESCAPE"), "abort_action");
     canvas.getInputMap().put(KeyStroke.getKeyStroke("DELETE"), "delete_motes");
@@ -599,7 +599,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
         dtde.acceptDrop(DnDConstants.ACTION_COPY_OR_MOVE);
 
         try {
-          List<Object> transferList = Arrays.asList(
+          List<Object> transferList = List.of(
                   transferable.getTransferData(DataFlavor.javaFileListFlavor)
           );
           if (transferList.size() != 1) {
@@ -638,7 +638,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
           return false;
         }
         try {
-          List<Object> transferList = Arrays.asList(
+          List<Object> transferList = List.of(
                   transferable.getTransferData(DataFlavor.javaFileListFlavor)
           );
           if (transferList.size() != 1) {
@@ -783,7 +783,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
 
       /* Add registered mote actions */
       for (final Mote mote : motes) {
-        menu.add(simulation.getCooja().createMotePluginsSubmenu(mote));
+        menu.add(Cooja.createMotePluginsSubmenu(mote));
         for (Class<? extends MoteMenuAction> menuActionClass : moteMenuActions) {
           try {
             final MoteMenuAction menuAction = menuActionClass.getDeclaredConstructor().newInstance();
@@ -1492,10 +1492,10 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     }
     currentSkins.clear();
     if (moteHighligtObserver != null) {
-      gui.deleteMoteHighlightObserver(moteHighligtObserver);
+      Cooja.deleteMoteHighlightObserver(moteHighligtObserver);
     }
     if (moteRelationsObserver != null) {
-      gui.deleteMoteRelationsObserver(moteRelationsObserver);
+      Cooja.deleteMoteRelationsObserver(moteRelationsObserver);
     }
 
     simulation.getEventCentral().removeMoteCountListener(newMotesListener);
@@ -1697,7 +1697,6 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
       MoteInterfaceViewer viewer
               = (MoteInterfaceViewer) simulation.getCooja().tryStartPlugin(
                       MoteInterfaceViewer.class,
-                      simulation.getCooja(),
                       simulation,
                       mote);
       if (viewer == null) {
@@ -1746,7 +1745,6 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
       MoteInterfaceViewer viewer
               = (MoteInterfaceViewer) simulation.getCooja().tryStartPlugin(
                       MoteInterfaceViewer.class,
-                      simulation.getCooja(),
                       simulation,
                       mote);
       if (viewer == null) {

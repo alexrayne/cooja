@@ -31,33 +31,27 @@
 package org.contikios.cooja.mspmote;
 
 import javax.swing.JScrollPane;
-import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 
-import org.contikios.cooja.Simulation;
+import org.contikios.cooja.Cooja;
 import org.contikios.cooja.dialogs.AbstractCompileDialog;
 import org.contikios.cooja.mote.BaseContikiMoteType;
 
 public class MspCompileDialog extends AbstractCompileDialog {
-  public MspCompileDialog(Simulation sim, MspMoteType moteType, BaseContikiMoteType.MoteTypeConfig cfg) {
-    super(sim, moteType, cfg);
+  public MspCompileDialog(Cooja gui, MspMoteType moteType, BaseContikiMoteType.MoteTypeConfig cfg) {
+    super(gui, moteType, cfg);
     setTitle("Create Mote Type: Compile Contiki for " + moteType.getMoteType());
-    addCompilationTipsTab(tabbedPane);
-  }
-
-  private static void addCompilationTipsTab(JTabbedPane parent) {
-    JTextArea textArea = new JTextArea();
+    var textArea = new JTextArea();
     textArea.setEditable(false);
     textArea.append("# Without low-power radio:\n" +
     		"DEFINES=NETSTACK_MAC=nullmac_driver,NETSTACK_RDC=nullrdc_noframer_driver,CC2420_CONF_AUTOACK=0\n" +
     		"# (remember to \"make clean\" after changing compilation flags)"
     );
-
-    parent.addTab("Tips", null, new JScrollPane(textArea), "Compilation tips");
+    tabbedPane.addTab("Tips", null, new JScrollPane(textArea), "Compilation tips");
   }
 
   @Override
   public boolean canLoadFirmware(String name) {
-    return name.endsWith("." + moteType.getMoteType()) || name.equals("main.exe");
+    return name.endsWith("." + targetName) || name.equals("main.exe");
   }
 }

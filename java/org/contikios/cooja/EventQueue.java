@@ -37,7 +37,7 @@ import java.util.function.Predicate;
  * @author Joakim Eriksson (ported to COOJA by Fredrik Osterlind)
  *         Matthew Bradbury <matt-bradbury@live.co.uk>
  */
-public final class EventQueue {
+final class EventQueue {
 
   private long count = 0;
 

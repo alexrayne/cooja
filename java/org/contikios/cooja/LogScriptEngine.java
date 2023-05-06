@@ -71,7 +71,6 @@ public class LogScriptEngine {
   private final NashornScriptEngine engine = (NashornScriptEngine) new NashornScriptEngineFactory().getScriptEngine();
 
   private final BufferedWriter logWriter; // For non-GUI tests.
-  private static int engineInstances = 0;
 
   private final LogOutputListener logOutputListener = new LogOutputListener() {
     @Override
@@ -100,12 +99,10 @@ public class LogScriptEngine {
       } catch (UndeclaredThrowableException e) {
         logger.fatal("Exception: " + e.getMessage(), e);
         if (Cooja.isVisualized()) {
-          Cooja.showErrorDialog(Cooja.getTopParentContainer(),
-              e.getMessage(),
-              e, false);
+          Cooja.showErrorDialog(e.getMessage(), e, false);
         }
         deactivateScript();
-        simulation.stopSimulation(false, 1);
+        simulation.stopSimulation(1);
       }
     }
     @Override
@@ -124,11 +121,11 @@ public class LogScriptEngine {
   private long startTime;
   private long startRealTime;
 
-  protected LogScriptEngine(Simulation simulation, JTextArea logTextArea) {
+  protected LogScriptEngine(Simulation simulation, String logDir, int logNumber, JTextArea logTextArea) {
     this.simulation = simulation;
     if (!Cooja.isVisualized()) {
-      var logName = engineInstances++ == 0 ? "COOJA.testlog" : String.format("COOJA-%02d.testlog", engineInstances);
-      var logFile = Paths.get(simulation.getCooja().logDirectory, logName);
+      var logName = logNumber == 0 ? "COOJA.testlog" : String.format("COOJA-%02d.testlog", logNumber);
+      var logFile = Paths.get(logDir, logName);
       try {
         logWriter = Files.newBufferedWriter(logFile, UTF_8);
         logWriter.write("Random seed: " + simulation.getRandomSeed() + "\n");
@@ -243,7 +240,7 @@ public class LogScriptEngine {
   /** Allocate semaphores, set up the internal state of the engine, and start the script thread. */
   public boolean activateScript(final CompiledScript script) {
     semaphoreScript = new Semaphore(1);
-    semaphoreSim = new Semaphore(1);
+    semaphoreSim = new Semaphore(0);
     try {
       semaphoreScript.acquire();
     } catch (InterruptedException e) {
@@ -276,11 +273,9 @@ public class LogScriptEngine {
               // Something else is shutting down Cooja, for example the SerialSocket commands in 17-tun-rpl-br.
               break;
             case 0:
-              logger.info("TEST OK\n");
               scriptLogObserver.update(null, "TEST OK\n");
               break;
             default:
-              logger.warn("TEST FAILED\n");
               scriptLogObserver.update(null, "TEST FAILED\n");
               break;
           }
@@ -288,21 +283,20 @@ public class LogScriptEngine {
           rv = 1;
           logger.fatal("Script error:", e);
           if (Cooja.isVisualized()) {
-            Cooja.showErrorDialog(Cooja.getTopParentContainer(), "Script error", e, false);
+            Cooja.showErrorDialog("Script error", e, false);
           }
         }
         deactivateScript();
-        simulation.stopSimulation(false, rv >= 0 ? rv : null);
+        simulation.stopSimulation(rv > 0 ? rv : null);
       }
     }, "script");
     scriptThread.start();
-    // Wait for script thread to reach barrier in the beginning of the JavaScript run function.
-    while (!semaphoreScript.hasQueuedThreads()) {
-      try {
-        Thread.sleep(50);
-      } catch (InterruptedException e) {
-        // FIXME: Something called interrupt() on this thread, stop the computation.
-      }
+    try {
+      semaphoreSim.acquire();
+    } catch (InterruptedException e) {
+      logger.error("Thread interrupted:", e);
+      deactivateScript();
+      return false;
     }
     startRealTime = System.currentTimeMillis();
     startTime = simulation.getSimulationTime();
@@ -318,7 +312,7 @@ public class LogScriptEngine {
       engine.put("TIMEOUT", true);
       stepScript();
       deactivateScript();
-      simulation.stopSimulation(false, 1);
+      simulation.stopSimulation(); // stepScript will set return value.
     }
   };
   private final TimeEvent timeoutProgressEvent = new TimeEvent() {
@@ -357,8 +351,7 @@ public class LogScriptEngine {
     }
 
     @Override
-    public void generateMessage(final long delay, final String msg) {
-      final Mote currentMote = (Mote) engine.get("mote");
+    public void generateMsg(final Mote currentMote, final long delay, final String msg) {
       final TimeEvent generateEvent = new TimeEvent() {
         @Override
         public void execute(long t) {

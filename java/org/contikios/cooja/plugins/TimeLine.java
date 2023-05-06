@@ -215,7 +215,6 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
 	    }
     });
     viewMenu.add(new JCheckBoxMenuItem(logEventMoteColorAction) {
-        private static final long serialVersionUID = 8314556794750277114L;
         @Override
         public boolean isSelected() {
             return logEventColorOfMote;
@@ -384,7 +383,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
     /* Update timeline for the duration of the plugin */
     repaintTimelineTimer.start();
 
-    gui.addMoteHighlightObserver(moteHighlightObserver = new Observer() {
+    Cooja.addMoteHighlightObserver(moteHighlightObserver = new Observer() {
       @Override
       public void update(Observable obs, Object obj) {
         if (!(obj instanceof Mote)) {
@@ -419,8 +418,8 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
     });
 
     /* XXX HACK: here we set the position and size of the window when it appears on a blank simulation screen. */
-    this.setLocation(0, gui.getDesktopPane().getHeight() - 166);
-    this.setSize(gui.getDesktopPane().getWidth(), 166);
+    this.setLocation(0, Cooja.getDesktopPane().getHeight() - 166);
+    this.setSize(Cooja.getDesktopPane().getWidth(), 166);
   }
 
   @Override
@@ -1066,8 +1065,6 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
   };
 
   private final Action logEventMoteColorAction = new AbstractAction("use Mote colors") {
-      private static final long serialVersionUID = -8626118368774023257L;
-      
       @Override
       public void actionPerformed(ActionEvent e) {
           logEventColorOfMote = !logEventColorOfMote;
@@ -1367,7 +1364,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
     repaintTimelineTimer.stop();
 
     if (moteHighlightObserver != null) {
-      simulation.getCooja().deleteMoteHighlightObserver(moteHighlightObserver);
+      Cooja.deleteMoteHighlightObserver(moteHighlightObserver);
     }
 
     simulation.getEventCentral().removeMoteCountListener(newMotesListener);
@@ -1973,7 +1970,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
           if (m == null) {
             return;
           }
-          simulation.getCooja().signalMoteHighlight(m);
+          Cooja.signalMoteHighlight(m);
 
           sortItem.setText("Sort by distance: " + m);
           sortItem.putClientProperty("mote", m);

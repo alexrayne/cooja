@@ -41,8 +41,6 @@ import java.awt.BorderLayout;
 import java.awt.Font;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.ComponentListener;
@@ -215,19 +213,15 @@ public class MessageListUI extends JList<MessageContainer> implements MessageLis
       PipedOutputStream output = new PipedOutputStream(input);
       final BufferedReader stringInput = new BufferedReader(new InputStreamReader(input, UTF_8));
 
-      Thread readThread = new Thread(new Runnable() {
-        @Override
-        public void run() {
-          String readLine;
-          try {
-            while ((readLine = stringInput.readLine()) != null) {
-              addMessage(readLine, type);
-            }
-          } catch (IOException e) {
-            // Occurs when write end closes pipe - die quietly
+      Thread readThread = new Thread(() -> {
+        String readLine;
+        try {
+          while ((readLine = stringInput.readLine()) != null) {
+            addMessage(readLine, type);
           }
+        } catch (IOException e) {
+          // Occurs when write end closes pipe - die quietly
         }
-
       }, "MessageListUI read thread");
       readThread.start();
 
@@ -341,53 +335,44 @@ public class MessageListUI extends JList<MessageContainer> implements MessageLis
         /* Create default menu items */
         final JMenuItem hideNormalMenuItem = new JCheckBoxMenuItem("Hide normal output");
         hideNormalMenuItem.setEnabled(true);
-        hideNormalMenuItem.addActionListener(new ActionListener() {
-          @Override
-          public void actionPerformed(ActionEvent e) {
-            MessageListUI.this.hideNormal = hideNormalMenuItem.isSelected();
-            ((MessageModel)getModel()).updateList();
-          }
+        hideNormalMenuItem.addActionListener(e -> {
+          MessageListUI.this.hideNormal = hideNormalMenuItem.isSelected();
+          ((MessageModel)getModel()).updateList();
         });
         popup.add(hideNormalMenuItem);
 
         JMenuItem consoleOutputMenuItem = new JMenuItem("Output to console");
         consoleOutputMenuItem.setEnabled(true);
-        consoleOutputMenuItem.addActionListener(new ActionListener() {
+        consoleOutputMenuItem.addActionListener(e -> {
           
-          @Override
-          public void actionPerformed(ActionEvent e) {
-        	MessageContainer[] messages = getSelectedMessages();
-            logger.info("\nCOMPILATION OUTPUT:\n");
-            for (MessageContainer msg: messages) {
+          MessageContainer[] messages = getSelectedMessages();
+          logger.info("\nCOMPILATION OUTPUT:\n");
+          for (MessageContainer msg: messages) {
               if (hideNormal && msg.type == NORMAL) {
-                continue;
-              }
-              logger.info(msg);
+              continue;
             }
-            logger.info("\n");
+            logger.info(msg);
           }
+          logger.info("\n");
         });
         popup.add(consoleOutputMenuItem);
 
         JMenuItem clipboardMenuItem = new JMenuItem("Copy to clipboard");
         clipboardMenuItem.setEnabled(true);
-        clipboardMenuItem.addActionListener(new ActionListener() {
-          @Override
-          public void actionPerformed(ActionEvent e) {
-            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        clipboardMenuItem.addActionListener(e -> {
+          Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 
-            StringBuilder sb = new StringBuilder();
+          StringBuilder sb = new StringBuilder();
             MessageContainer[] messages = getSelectedMessages();
-            for (MessageContainer msg: messages) {
+          for (MessageContainer msg: messages) {
               if (hideNormal && msg.type == NORMAL) {
-                continue;
-              }
-              sb.append(msg).append("\n");
+              continue;
             }
-
-            StringSelection stringSelection = new StringSelection(sb.toString());
-            clipboard.setContents(stringSelection, null);
+            sb.append(msg).append("\n");
           }
+
+          StringSelection stringSelection = new StringSelection(sb.toString());
+          clipboard.setContents(stringSelection, null);
         });
         popup.add(clipboardMenuItem);
 

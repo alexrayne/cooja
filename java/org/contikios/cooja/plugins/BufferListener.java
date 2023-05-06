@@ -193,7 +193,7 @@ public class BufferListener extends VisPlugin
 
   private final Simulation simulation;
 
-  private JTextField filterTextField;
+  private final JTextField filterTextField;
   private final JLabel filterLabel = new JLabel("Filter: ");
   private final Color filterTextFieldBackground;
 
@@ -484,7 +484,7 @@ public class BufferListener extends VisPlugin
         if (d == null) {
           return;
         }
-        simulation.getCooja().signalMoteHighlight(d.mote);
+        Cooja.signalMoteHighlight(d.mote);
       }
     });
 
@@ -498,7 +498,16 @@ public class BufferListener extends VisPlugin
     bufferMenu.addMenuListener(new MenuListener() {
       @Override
       public void menuSelected(MenuEvent e) {
-        updateBufferMenu();
+        bufferMenu.removeAll();
+        for (var btClass: bufferTypes) {
+          if (btClass == CustomVariableBuffer.class) {
+            bufferMenu.addSeparator();
+          }
+          JCheckBoxMenuItem mi = new JCheckBoxMenuItem(Cooja.getDescriptionOf(btClass), btClass == buffer.getClass());
+          mi.putClientProperty("CLASS", btClass);
+          mi.addActionListener(bufferSelectedListener);
+          bufferMenu.add(mi);
+        }
       }
       @Override
       public void menuDeselected(MenuEvent e) {
@@ -511,7 +520,13 @@ public class BufferListener extends VisPlugin
     parserMenu.addMenuListener(new MenuListener() {
       @Override
       public void menuSelected(MenuEvent e) {
-        updateParserMenu();
+        parserMenu.removeAll();
+        for (var bpClass: bufferParsers) {
+          JCheckBoxMenuItem mi = new JCheckBoxMenuItem(Cooja.getDescriptionOf(bpClass), bpClass == parser.getClass());
+          mi.putClientProperty("CLASS", bpClass);
+          mi.addActionListener(parserSelectedListener);
+          parserMenu.add(mi);
+        }
       }
       @Override
       public void menuDeselected(MenuEvent e) {
@@ -540,60 +555,45 @@ public class BufferListener extends VisPlugin
     popupMenu.addSeparator();
     colorCheckbox = new JCheckBoxMenuItem("Mote-specific coloring");
     popupMenu.add(colorCheckbox);
-    colorCheckbox.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        backgroundColors = colorCheckbox.isSelected();
-        repaint();
-      }
+    colorCheckbox.addActionListener(e -> {
+      backgroundColors = colorCheckbox.isSelected();
+      repaint();
     });
     inverseFilterCheckbox = new JCheckBoxMenuItem("Inverse filter");
     popupMenu.add(inverseFilterCheckbox);
-    inverseFilterCheckbox.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        inverseFilter = inverseFilterCheckbox.isSelected();
-        if (inverseFilter) {
-          filterLabel.setText("Exclude:");
-        } else {
-          filterLabel.setText("Filter:");
-        }
-        setFilter(getFilter());
-        repaint();
+    inverseFilterCheckbox.addActionListener(e -> {
+      inverseFilter = inverseFilterCheckbox.isSelected();
+      if (inverseFilter) {
+        filterLabel.setText("Exclude:");
+      } else {
+        filterLabel.setText("Filter:");
       }
+      setFilter(getFilter());
+      repaint();
     });
     hideReadsCheckbox = new JCheckBoxMenuItem("Hide READs", hideReads);
     popupMenu.add(hideReadsCheckbox);
-    hideReadsCheckbox.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        hideReads = hideReadsCheckbox.isSelected();
-        setFilter(getFilter());
-        repaint();
-      }
+    hideReadsCheckbox.addActionListener(e -> {
+      hideReads = hideReadsCheckbox.isSelected();
+      setFilter(getFilter());
+      repaint();
     });
 
     withStackTraceCheckbox = new JCheckBoxMenuItem("Capture stack traces", withStackTrace);
     popupMenu.add(withStackTraceCheckbox);
-    withStackTraceCheckbox.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        withStackTrace = withStackTraceCheckbox.isSelected();
-        setFilter(getFilter());
-        repaint();
-      }
+    withStackTraceCheckbox.addActionListener(e -> {
+      withStackTrace = withStackTraceCheckbox.isSelected();
+      setFilter(getFilter());
+      repaint();
     });
 
     logTable.setComponentPopupMenu(popupMenu);
 
     /* Column width adjustment */
-    java.awt.EventQueue.invokeLater(new Runnable() {
-      @Override
-      public void run() {
-        /* Make sure this happens *after* adding history */
-        adjuster.setDynamicAdjustment(true);
-        adjuster.setAdjustColumn(COLUMN_DATA, false);
-      }
+    java.awt.EventQueue.invokeLater(() -> {
+      /* Make sure this happens *after* adding history */
+      adjuster.setDynamicAdjustment(true);
+      adjuster.setAdjustColumn(COLUMN_DATA, false);
     });
 
     logUpdateAggregator.start();
@@ -622,31 +622,21 @@ public class BufferListener extends VisPlugin
     filterPanel.add(Box.createHorizontalStrut(2));
     filterPanel.add(filterLabel);
     filterPanel.add(filterTextField);
-    filterTextField.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        String str = filterTextField.getText();
-        setFilter(str);
-
-        /* Autoscroll */
-        SwingUtilities.invokeLater(new Runnable() {
-          @Override
-          public void run() {
-            int s = logTable.getSelectedRow();
-            if (s < 0) {
-              return;
-            }
-
-            s = logTable.getRowSorter().convertRowIndexToView(s);
-            if (s < 0) {
-              return;
-            }
-
-            int v = logTable.getRowHeight()*s;
-            logTable.scrollRectToVisible(new Rectangle(0, v-5, 1, v+5));
-          }
-        });
-      }
+    filterTextField.addActionListener(e -> {
+      setFilter(filterTextField.getText());
+      // Autoscroll.
+      SwingUtilities.invokeLater(() -> {
+        int s = logTable.getSelectedRow();
+        if (s < 0) {
+          return;
+        }
+        s = logTable.getRowSorter().convertRowIndexToView(s);
+        if (s < 0) {
+          return;
+        }
+        int v = logTable.getRowHeight()*s;
+        logTable.scrollRectToVisible(new Rectangle(0, v-5, 1, v+5));
+      });
     });
     filterPanel.add(Box.createHorizontalStrut(2));
 
@@ -655,8 +645,8 @@ public class BufferListener extends VisPlugin
 
     updateTitle();
     pack();
-    setSize(gui.getDesktopPane().getWidth(), 150);
-    setLocation(0, gui.getDesktopPane().getHeight() - 300);
+    setSize(Cooja.getDesktopPane().getWidth(), 150);
+    setLocation(0, Cooja.getDesktopPane().getHeight() - 300);
   }
 
   private boolean startMonitoring(Mote mote) throws Exception {
@@ -975,22 +965,19 @@ public class BufferListener extends VisPlugin
   }
 
   public void trySelectTime(final long time) {
-    java.awt.EventQueue.invokeLater(new Runnable() {
-      @Override
-      public void run() {
-        for (int i=0; i < logs.size(); i++) {
-          if (logs.get(i).time < time) {
-            continue;
-          }
-
-          int view = logTable.convertRowIndexToView(i);
-          if (view < 0) {
-            continue;
-          }
-          logTable.scrollRectToVisible(logTable.getCellRect(view, 0, true));
-          logTable.setRowSelectionInterval(view, view);
-          return;
+    java.awt.EventQueue.invokeLater(() -> {
+      for (int i=0; i < logs.size(); i++) {
+        if (logs.get(i).time < time) {
+          continue;
         }
+
+        int view = logTable.convertRowIndexToView(i);
+        if (view < 0) {
+          continue;
+        }
+        logTable.scrollRectToVisible(logTable.getCellRect(view, 0, true));
+        logTable.setRowSelectionInterval(view, view);
+        return;
       }
     });
   }
@@ -1264,56 +1251,18 @@ public class BufferListener extends VisPlugin
     }
   };
 
-  private final ActionListener parserSelectedListener = new ActionListener() {
-    @SuppressWarnings("unchecked")
-    @Override
-    public void actionPerformed(ActionEvent e) {
-      Class<? extends Parser> bpClass =
-        (Class<? extends Parser>)
-        ((JMenuItem) e.getSource()).getClientProperty("CLASS");
-      setParser(bpClass);
-    }
-  };
-  private void updateParserMenu() {
-    parserMenu.removeAll();
+  private final ActionListener parserSelectedListener =
+          e -> setParser((Class<? extends Parser>) ((JMenuItem) e.getSource()).getClientProperty("CLASS"));
 
-    for (Class<? extends Parser> bpClass: bufferParsers) {
-      JCheckBoxMenuItem mi = new JCheckBoxMenuItem(Cooja.getDescriptionOf(bpClass), bpClass==parser.getClass());
-      mi.putClientProperty("CLASS", bpClass);
-      mi.addActionListener(parserSelectedListener);
-      parserMenu.add(mi);
-    }
-  }
 
-  private final ActionListener bufferSelectedListener = new ActionListener() {
-    @SuppressWarnings("unchecked")
-    @Override
-    public void actionPerformed(ActionEvent e) {
-      Class<? extends Buffer> btClass =
-        (Class<? extends Buffer>)
-        ((JMenuItem) e.getSource()).getClientProperty("CLASS");
-
-      Buffer b = createBufferInstance(btClass);
-      if (b != null) {
-        if (b.configure(BufferListener.this)) {
-          setBuffer(b);
-        }
+  private final ActionListener bufferSelectedListener = e -> {
+    var b = createBufferInstance((Class<? extends Buffer>) ((JMenuItem) e.getSource()).getClientProperty("CLASS"));
+    if (b != null) {
+      if (b.configure(BufferListener.this)) {
+        setBuffer(b);
       }
     }
   };
-  private void updateBufferMenu() {
-    bufferMenu.removeAll();
-
-    for (Class<? extends Buffer> btClass: bufferTypes) {
-      if (btClass == CustomVariableBuffer.class) {
-        bufferMenu.addSeparator();
-      }
-      JCheckBoxMenuItem mi = new JCheckBoxMenuItem(Cooja.getDescriptionOf(btClass), btClass==buffer.getClass());
-      mi.putClientProperty("CLASS", btClass);
-      mi.addActionListener(bufferSelectedListener);
-      bufferMenu.add(mi);
-    }
-  }
 
   private void setParser(Class<? extends Parser> bpClass) {
     Parser bp;

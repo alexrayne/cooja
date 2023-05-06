@@ -67,28 +67,32 @@ public class CoffeeManager {
 				}
 			}
 
-			if(args[i].equals("-p")) {
-				platform = args[i + 1];
-				i++;
-			} else if (args[i].equals("-i")) {
-				command = Command.INSERT;
-				filename = args[i + 1];
-				i++;
-			} else if (args[i].equals("-r")) {
-				command = Command.REMOVE;
-				filename = args[i + 1];
-				i++;
-			} else if (args[i].equals("-e")) {
-				command = Command.EXTRACT;
-				filename = args[i + 1];
-				i++;
-			} else if (args[i].equals("-l")) {
-				command = Command.LIST;
-			} else if (args[i].equals("-s")) {
-				command = Command.STATS;
-			} else {
-				System.err.println(usage);
-				System.exit(1);
+			switch (args[i]) {
+				case "-p" -> {
+					platform = args[i + 1];
+					i++;
+				}
+				case "-i" -> {
+					command = Command.INSERT;
+					filename = args[i + 1];
+					i++;
+				}
+				case "-r" -> {
+					command = Command.REMOVE;
+					filename = args[i + 1];
+					i++;
+				}
+				case "-e" -> {
+					command = Command.EXTRACT;
+					filename = args[i + 1];
+					i++;
+				}
+				case "-l" -> command = Command.LIST;
+				case "-s" -> command = Command.STATS;
+				default -> {
+					System.err.println(usage);
+					System.exit(1);
+				}
 			}
 		}
 		fsImage = args[args.length - 1];
@@ -97,42 +101,39 @@ public class CoffeeManager {
 			CoffeeConfiguration conf = new CoffeeConfiguration(platform + ".properties");
 			CoffeeFS coffeeFS = new CoffeeFS(new CoffeeImageFile(fsImage, conf));
 			switch (command) {
-			case INSERT:
-				if (coffeeFS.getFiles().get(filename) != null) {
-					System.err.println("error: file \"" +
-						filename + "\" already exists");
-					break;
+				case INSERT -> {
+					if (coffeeFS.getFiles().get(filename) != null) {
+						System.err.println("error: file \"" +
+										filename + "\" already exists");
+						break;
+					}
+					if (coffeeFS.insertFile(filename) != null) {
+						System.out.println("Inserted the local file \"" +
+										filename +
+										"\" into the file system image");
+					}
 				}
-				if (coffeeFS.insertFile(filename) != null) {
-					System.out.println("Inserted the local file \"" +
-						filename +
-						"\" into the file system image");
+				case EXTRACT -> {
+					if (!coffeeFS.extractFile(filename)) {
+						System.err.println("Inexistent file: " +
+										filename);
+						System.exit(1);
+					}
+					System.out.println("Saved the file \"" +
+									filename + "\"");
 				}
-				break;
-			case EXTRACT:
-				if (!coffeeFS.extractFile(filename)) {
-					System.err.println("Inexistent file: " +
-						filename);
+				case REMOVE -> {
+					coffeeFS.removeFile(filename);
+					System.out.println("Removed the file \"" +
+									filename +
+									"\" from the Coffee file system image");
+				}
+				case LIST -> printFiles(coffeeFS.getFiles());
+				case STATS -> printStatistics(coffeeFS);
+				default -> {
+					System.err.println("Unknown command!");
 					System.exit(1);
 				}
-				System.out.println("Saved the file \"" +
-					filename + "\"");
-				break;
-			case REMOVE:
-				coffeeFS.removeFile(filename);
-				System.out.println("Removed the file \"" +
-					filename +
-					"\" from the Coffee file system image");
-				break;
-			case LIST:
-				printFiles(coffeeFS.getFiles());
-				break;
-			case STATS:
-				printStatistics(coffeeFS);
-				break;
-			default:
-				System.err.println("Unknown command!");
-				System.exit(1);
 			}
 		} catch (IOException | CoffeeFileException | CoffeeException e) {
 			System.err.println(e.getMessage());

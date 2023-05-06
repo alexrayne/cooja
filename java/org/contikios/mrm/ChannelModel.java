@@ -129,117 +129,66 @@ public class ChannelModel {
     captureEffectSignalTreshold;
 
     public static Object getDefaultValue(Parameter p) {
-      switch (p) {
-      case apply_random:
-        return Boolean.FALSE;
-      case snr_threshold:
-        return 6.0;
-      case bg_noise_mean:
-        return AbstractRadioMedium.SS_NOTHING;
-      case bg_noise_var:
-        return 1.0;
-      case system_gain_mean:
-        return 0.0;
-      case system_gain_var:
-        return 4.0;
-      case frequency: /* MHz */
-        return 2400.0;
-      case tx_power:
-        return 1.5;
-      case tx_with_gain:
-        return Boolean.TRUE;
-      case rx_sensitivity:
-        return -100.0;
-      case rx_with_gain:
-        return Boolean.FALSE;
-      case rt_disallow_direct_path:
-        return Boolean.FALSE;
-      case rt_ignore_non_direct:
-        return Boolean.FALSE;
-      case rt_fspl_on_total_length:
-        return Boolean.TRUE;
-      case rt_max_rays:
-        return 1;
-      case rt_max_refractions:
-        return 1;
-      case rt_max_reflections:
-        return 1;
-      case rt_max_diffractions:
-        return 0;
-      case rt_use_scattering:
-        return Boolean.FALSE;
-      case rt_refrac_coefficient:
-        return -3.0;
-      case rt_reflec_coefficient:
-        return -5.0;
-      case rt_diffr_coefficient:
-        return -10.0;
-      case rt_scatt_coefficient:
-        return -20.0;
-      case obstacle_attenuation:
-        return -3.0;
-      case captureEffect:
-        return true;
-      case captureEffectPreambleDuration:
-        return 1000*1000*4*0.5*8/250000; /* 2 bytes, 250kbit/s, us */
-      case captureEffectSignalTreshold:
-        return 3.0; /* dB, according to previous 802.15.4 studies */
-      }
-      throw new RuntimeException("Unknown default value: " + p);
+      return switch (p) {
+        case apply_random -> Boolean.FALSE;
+        case snr_threshold -> 6.0;
+        case bg_noise_mean -> AbstractRadioMedium.SS_NOTHING;
+        case bg_noise_var -> 1.0;
+        case system_gain_mean -> 0.0;
+        case system_gain_var -> 4.0;
+        case frequency -> 2400.0; // MHz.
+        case tx_power -> 1.5;
+        case tx_with_gain -> Boolean.TRUE;
+        case rx_sensitivity -> -100.0;
+        case rx_with_gain -> Boolean.FALSE;
+        case rt_disallow_direct_path -> Boolean.FALSE;
+        case rt_ignore_non_direct -> Boolean.FALSE;
+        case rt_fspl_on_total_length -> Boolean.TRUE;
+        case rt_max_rays -> 1;
+        case rt_max_refractions -> 1;
+        case rt_max_reflections -> 1;
+        case rt_max_diffractions -> 0;
+        case rt_use_scattering -> Boolean.FALSE;
+        case rt_refrac_coefficient -> -3.0;
+        case rt_reflec_coefficient -> -5.0;
+        case rt_diffr_coefficient -> -10.0;
+        case rt_scatt_coefficient -> -20.0;
+        case obstacle_attenuation -> -3.0;
+        case captureEffect -> true;
+        case captureEffectPreambleDuration -> 1000 * 1000 * 4 * 0.5 * 8 / 250000; // 2 bytes, 250kbit/s, us.
+        case captureEffectSignalTreshold -> 3.0; // dB, according to previous 802.15.4 studies.
+      };
     }
     
     public static Parameter fromString(String name) {
       /* Backwards compatability */
-      if (name.equals("apply_random")) {
-        return apply_random;
-      } else if (name.equals("snr_threshold")) {
-        return snr_threshold;
-      } else if (name.equals("bg_noise_mean")) {
-        return bg_noise_mean;
-      } else if (name.equals("bg_noise_var")) {
-        return bg_noise_var;
-      } else if (name.equals("system_gain_mean")) {
-        return system_gain_mean;
-      } else if (name.equals("system_gain_var")) {
-        return system_gain_var;
-      } else if (name.equals("tx_power")) {
-        return tx_power;
-      } else if (name.equals("rx_sensitivity")) {
-        return rx_sensitivity;
-      } else if (name.equals("rt_disallow_direct_path")) {
-        return rt_disallow_direct_path;
-      } else if (name.equals("rt_ignore_non_direct")) {
-        return rt_ignore_non_direct;
-      } else if (name.equals("rt_fspl_on_total_length")) {
-        return rt_fspl_on_total_length;
-      } else if (name.equals("rt_max_rays")) {
-        return rt_max_rays;
-      } else if (name.equals("rt_max_refractions")) {
-        return rt_max_refractions;
-      } else if (name.equals("rt_max_reflections")) {
-        return rt_max_reflections;
-      } else if (name.equals("rt_max_diffractions")) {
-        return rt_max_diffractions;
-      } else if (name.equals("rt_use_scattering")) {
-        return rt_use_scattering;
-      } else if (name.equals("rt_refrac_coefficient")) {
-        return rt_refrac_coefficient;
-      } else if (name.equals("rt_reflec_coefficient")) {
-        return rt_reflec_coefficient;
-      } else if (name.equals("rt_diffr_coefficient")) {
-        return rt_diffr_coefficient;
-      } else if (name.equals("rt_scatt_coefficient")) {
-        return rt_scatt_coefficient;
-      } else if (name.equals("obstacle_attenuation")) {
-        return obstacle_attenuation;
-      } else if (name.equals("captureEffect")) {
-        return captureEffect;
-      } else if (name.equals("captureEffectPreambleDuration")) {
-        return captureEffectPreambleDuration;
-      } else if (name.equals("captureEffectSignalTreshold")) {
-        return captureEffectSignalTreshold;
-      }
-      return null;
+      return switch (name) {
+        case "apply_random" -> apply_random;
+        case "snr_threshold" -> snr_threshold;
+        case "bg_noise_mean" -> bg_noise_mean;
+        case "bg_noise_var" -> bg_noise_var;
+        case "system_gain_mean" -> system_gain_mean;
+        case "system_gain_var" -> system_gain_var;
+        case "tx_power" -> tx_power;
+        case "rx_sensitivity" -> rx_sensitivity;
+        case "rt_disallow_direct_path" -> rt_disallow_direct_path;
+        case "rt_ignore_non_direct" -> rt_ignore_non_direct;
+        case "rt_fspl_on_total_length" -> rt_fspl_on_total_length;
+        case "rt_max_rays" -> rt_max_rays;
+        case "rt_max_refractions" -> rt_max_refractions;
+        case "rt_max_reflections" -> rt_max_reflections;
+        case "rt_max_diffractions" -> rt_max_diffractions;
+        case "rt_use_scattering" -> rt_use_scattering;
+        case "rt_refrac_coefficient" -> rt_refrac_coefficient;
+        case "rt_reflec_coefficient" -> rt_reflec_coefficient;
+        case "rt_diffr_coefficient" -> rt_diffr_coefficient;
+        case "rt_scatt_coefficient" -> rt_scatt_coefficient;
+        case "obstacle_attenuation" -> obstacle_attenuation;
+        case "captureEffect" -> captureEffect;
+        case "captureEffectPreambleDuration" -> captureEffectPreambleDuration;
+        case "captureEffectSignalTreshold" -> captureEffectSignalTreshold;
+        default -> null;
+      };
     }
 
     public static String getDescription(Parameter p) {
@@ -1341,8 +1290,6 @@ public class ChannelModel {
             unhandledAngles = AngleInterval.subtract(unhandledAngles, visibleLineCandidateAngleInterval);
             visibleLines.add(visibleLineCandidate);
 
-            //logger.info("Added visible line and removed angle interval: " + visibleLineCandidateAngleInterval);
-            //logger.info("Number of visible lines sofar: " + visibleLines.size());
             break;
           }
 

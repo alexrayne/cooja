@@ -389,28 +389,22 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
     });
     hideDebugCheckbox = new JCheckBoxMenuItem("Hide \"DEBUG: \" messages");
     showMenu.add(hideDebugCheckbox);
-    hideDebugCheckbox.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        hideDebug = hideDebugCheckbox.isSelected();
-        setFilter(getFilter());
-        repaint();
-      }
+    hideDebugCheckbox.addActionListener(e -> {
+      hideDebug = hideDebugCheckbox.isSelected();
+      setFilter(getFilter());
+      repaint();
     });
     inverseFilterCheckbox = new JCheckBoxMenuItem("Inverse filter");
     showMenu.add(inverseFilterCheckbox);
-    inverseFilterCheckbox.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        inverseFilter = inverseFilterCheckbox.isSelected();
-        if (inverseFilter) {
-          filterLabel.setText("Exclude:");
-        } else {
-          filterLabel.setText("Filter:");
-        }
-        setFilter(getFilter());
-        repaint();
+    inverseFilterCheckbox.addActionListener(e -> {
+      inverseFilter = inverseFilterCheckbox.isSelected();
+      if (inverseFilter) {
+        filterLabel.setText("Exclude:");
+      } else {
+        filterLabel.setText("Filter:");
       }
+      setFilter(getFilter());
+      repaint();
     });
 
 
@@ -552,7 +546,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
         lastClick = System.currentTimeMillis();
 
         if (columnIndex == COLUMN_FROM) {
-            simulation.getCooja().signalMoteHighlight(d.ev.getMote());
+            Cooja.signalMoteHighlight(d.ev.getMote());
         }
 
     	}
@@ -582,13 +576,9 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
         LogData data = new LogData(historyEv);
         logs.add(data);
       }
-      java.awt.EventQueue.invokeLater(new Runnable() {
-        @Override
-        public void run() {
-          model.fireTableDataChanged();
-          logTable.scrollRectToVisible(
-              new Rectangle(0, logTable.getHeight() - 2, 1, logTable.getHeight()));
-        }
+      java.awt.EventQueue.invokeLater(() -> {
+        model.fireTableDataChanged();
+        logTable.scrollRectToVisible(new Rectangle(0, logTable.getHeight() - 2, 1, logTable.getHeight()));
       });
     }
 
@@ -661,7 +651,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
     /* XXX HACK: here we set the position and size of the window when it appears on a blank simulation screen. */
     this.setLocation(400, 160);
-    this.setSize(gui.getDesktopPane().getWidth() - 400, 240);
+    this.setSize(Cooja.getDesktopPane().getWidth() - 400, 240);
   }
 
   public void registerNewLogOutput(Mote mote, long time, String msg) {
@@ -827,7 +817,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
       filterTextField.setBackground(Color.red);
       filterTextField.setToolTipText("Syntax error in regular expression: " + e.getMessage());
     }
-    simulation.getCooja().getDesktopPane().repaint();
+    Cooja.getDesktopPane().repaint();
   }
 
   public void trySelectTime(final long time) {

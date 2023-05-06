@@ -244,24 +244,13 @@ public class MemoryBuffer {
    * @return integer at the buffer's current position
    */
   public int getInt() {
-    int value;
-    try {
-    switch (memLayout.intSize) {
-      case 2:
-        value = bbuf.getShort();
-        break;
-      case 4:
-        value = bbuf.getInt();
-        break;
-      default:
-        throw new RuntimeException("Unknown int size");
-    }
+    int value = switch (memLayout.intSize) {
+      case 2 -> bbuf.getShort();
+      case 4 -> bbuf.getInt();
+      default -> throw new RuntimeException("Unknown int size");
+    };
     skipPaddingBytesFor(DataType.INT);
     return value;
-    }
-    catch( BufferUnderflowException | BufferOverflowException e ) {
-        throw e;
-    }
   }
 
   /**
@@ -289,20 +278,12 @@ public class MemoryBuffer {
    * @return pointer at the buffer's current position
    */
   public long getAddr() {
-    long value;
-    switch (memLayout.addrSize) {
-      case 2:
-        value = bbuf.getShort();
-        break;
-      case 4:
-        value = bbuf.getInt();
-        break;
-      case 8:
-        value = bbuf.getLong();
-        break;
-      default:
-        throw new RuntimeException("Unknown address size");
-    }
+    long value = switch (memLayout.addrSize) {
+      case 2 -> bbuf.getShort();
+      case 4 -> bbuf.getInt();
+      case 8 -> bbuf.getLong();
+      default -> throw new RuntimeException("Unknown address size");
+    };
     skipPaddingBytesFor(DataType.POINTER);
     return value;
   }
@@ -421,15 +402,9 @@ public class MemoryBuffer {
    */
   public MemoryBuffer putInt(int value) {
     switch (memLayout.intSize) {
-      case 2:
-        // TODO: check for size?
-        bbuf.putShort((short) value);
-        break;
-      case 4:
-        bbuf.putInt(value);
-        break;
-      default:
-        throw new RuntimeException("Unknown int size");
+      case 2 -> bbuf.putShort((short) value); // TODO: check for size?
+      case 4 -> bbuf.putInt(value);
+      default -> throw new RuntimeException("Unknown int size");
     }
     skipPaddingBytesFor(DataType.INT);
     return this;
@@ -466,17 +441,10 @@ public class MemoryBuffer {
   public MemoryBuffer putAddr(long value) {
     // TODO: check for size?
     switch (memLayout.addrSize) {
-      case 2:
-        bbuf.putShort((short) value);
-        break;
-      case 4:
-        bbuf.putInt((int) value);
-        break;
-      case 8:
-        bbuf.putLong(value);
-        break;
-      default:
-        throw new RuntimeException("Unknown address size");
+      case 2 -> bbuf.putShort((short) value);
+      case 4 -> bbuf.putInt((int) value);
+      case 8 -> bbuf.putLong(value);
+      default -> throw new RuntimeException("Unknown address size");
     }
     skipPaddingBytesFor(DataType.POINTER);
     return this;
