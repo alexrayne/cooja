@@ -166,9 +166,7 @@ The COOJA Simulator
     <java fork="yes" dir="${build}" jar="${dist}/cooja.jar"
           failonerror="true" maxmemory="${maxmem}" >
       <sysproperty key="user.language" value="en"/>
-      <jvmarg value="-Dnashorn.args=--no-deprecation-warning" />
       <jvmarg line="${jvmargs}" />
-      <arg line="${args} --javac=${java} "/>
     </java>
   </target>
 
@@ -196,7 +194,6 @@ The COOJA Simulator
            the library into the JVM. -->
       <env key="LD_PRELOAD" value="${libasan}"/>
       <env key="ASAN_OPTIONS" value="${asan_options}"/>
-      <jvmarg value="-Dnashorn.args=--no-deprecation-warning" />
       <jvmarg line="${jvmargs}" />
       <arg line="${args}"/>
     </java>
@@ -213,7 +210,6 @@ The COOJA Simulator
   <target name="run_bigmem" depends="jar">
     <java fork="yes" dir="${build}" jar="${dist}/cooja.jar"
           failonerror="true" maxmemory="${maxmem}">
-      <jvmarg value="-Dnashorn.args=--no-deprecation-warning" />
       <jvmarg line="${jvmargs}" />
       <arg line="${args}"/>
     </java>

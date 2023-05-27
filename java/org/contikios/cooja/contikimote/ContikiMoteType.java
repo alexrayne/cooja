@@ -1218,7 +1218,7 @@ public class ContikiMoteType extends BaseContikiMoteType {
     String[] cmd = new String[] {cooja.configuration.javac(),
             "-cp", System.getProperty("java.class.path"), "--release", String.valueOf(Runtime.version().feature()),
             // Disable warnings to avoid 3 lines of "warning: using incubating module(s): jdk.incubator.foreign".
-            "-nowarn", "--add-modules", "jdk.incubator.foreign",
+            "-nowarn", 
             tempDir + "/org/contikios/cooja/corecomm/" + className + ".java" };
     ProcessBuilder pb = new ProcessBuilder(cmd);
     Process p;

@@ -285,14 +285,23 @@ public class Cooja extends Observable {
    * Internal constructor for Cooja.
    */
   private Cooja() throws ParseProjectsException {
-    if (configuration.javac == null)
-        configuration.javac = getExternalToolsSetting("PATH_JAVAC");
-    else
+    
+    if (configuration.javac != null)
     if (!Files.exists(Path.of(configuration.javac))) {
           System.err.println("Java compiler '" + configuration.javac + "' does not exist, use setup");
-          configuration.javac = getExternalToolsSetting("PATH_JAVAC");
+          configuration.javac = null;
     }
 
+    if (configuration.javac == null)
+        configuration.javac = getExternalToolsSetting("PATH_JAVAC");
+    if (configuration.javac != null)
+    if (!Files.exists(Path.of(configuration.javac))) {
+        System.err.println("Java compiler '" + configuration.javac + "' setup not valid, use runner");
+          configuration.javac = null;
+    }
+
+    if (configuration.javac == null)
+        configuration.javac = Path.of( System.getProperty("java.home"), "/bin/javac").toString();
 
     // Register default extension directories.
     String defaultProjectDirs = getExternalToolsSetting("DEFAULT_PROJECTDIRS", null);
