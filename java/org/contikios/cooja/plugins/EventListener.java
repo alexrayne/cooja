@@ -48,7 +48,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
 
-import org.jdom.Element;
+import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
@@ -73,7 +73,7 @@ import org.contikios.cooja.interfaces.Radio;
  * @author Fredrik Osterlind
  */
 @ClassDescription("Breakpoints")
-@PluginType(PluginType.SIM_PLUGIN)
+@PluginType(PluginType.PType.SIM_PLUGIN)
 public class EventListener extends VisPlugin {
   private final Simulation mySimulation;
 

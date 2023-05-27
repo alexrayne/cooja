@@ -35,7 +35,6 @@ import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Point;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.util.ArrayList;
 import java.util.Collection;
 
@@ -46,7 +45,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSeparator;
 
-import org.jdom.Element;
+import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
@@ -64,7 +63,7 @@ import org.contikios.cooja.VisPlugin;
  * @author Fredrik Osterlind
  */
 @ClassDescription("Mote Interface Viewer")
-@PluginType(PluginType.MOTE_PLUGIN)
+@PluginType(PluginType.PType.MOTE_PLUGIN)
 public class MoteInterfaceViewer extends VisPlugin implements HasQuickHelp, MotePlugin {
   private final Mote mote;
   private MoteInterface selectedMoteInterface = null;
@@ -98,37 +97,33 @@ public class MoteInterfaceViewer extends VisPlugin implements HasQuickHelp, Mote
       selectInterfaceComboBox.addItem(Cooja.getDescriptionOf(intf));
     }
 
-    selectInterfaceComboBox.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(ActionEvent e) {
+    selectInterfaceComboBox.addActionListener(e -> {
 
-        // Release old interface visualizer if any
-        if (selectedMoteInterface != null && currentInterfaceVisualizer != null) {
-          selectedMoteInterface.releaseInterfaceVisualizer(currentInterfaceVisualizer);
-        }
-
-        // View selected interface if any
-        interfacePanel.removeAll();
-        String interfaceDescription = (String) selectInterfaceComboBox.getSelectedItem();
-        selectedMoteInterface = null;
-        Collection<MoteInterface> intfs = mote.getInterfaces().getInterfaces();
-        for (MoteInterface intf : intfs) {
-          if (Cooja.getDescriptionOf(intf).equals(interfaceDescription)) {
-            selectedMoteInterface = intf;
-            Cooja.loadQuickHelp(MoteInterfaceViewer.this);
-            break;
-          }
-        }
-        currentInterfaceVisualizer = selectedMoteInterface.getInterfaceVisualizer();
-        if (currentInterfaceVisualizer != null) {
-          interfacePanel.add(BorderLayout.CENTER, currentInterfaceVisualizer);
-          currentInterfaceVisualizer.setVisible(true);
-        } else {
-          interfacePanel.add(new JLabel("No interface visualizer", JLabel.CENTER));
-          currentInterfaceVisualizer = null;
-        }
-        setSize(getSize());
+      // Release old interface visualizer if any
+      if (selectedMoteInterface != null && currentInterfaceVisualizer != null) {
+        selectedMoteInterface.releaseInterfaceVisualizer(currentInterfaceVisualizer);
       }
+
+      // View selected interface if any
+      interfacePanel.removeAll();
+      String interfaceDescription = (String) selectInterfaceComboBox.getSelectedItem();
+      selectedMoteInterface = null;
+      for (var intf : mote.getInterfaces().getInterfaces()) {
+        if (Cooja.getDescriptionOf(intf).equals(interfaceDescription)) {
+          selectedMoteInterface = intf;
+          Cooja.loadQuickHelp(MoteInterfaceViewer.this);
+          break;
+        }
+      }
+      currentInterfaceVisualizer = selectedMoteInterface.getInterfaceVisualizer();
+      if (currentInterfaceVisualizer != null) {
+        interfacePanel.add(BorderLayout.CENTER, currentInterfaceVisualizer);
+        currentInterfaceVisualizer.setVisible(true);
+      } else {
+        interfacePanel.add(new JLabel("No interface visualizer", JLabel.CENTER));
+        currentInterfaceVisualizer = null;
+      }
+      setSize(getSize());
     });
     selectInterfaceComboBox.setSelectedIndex(0);
 

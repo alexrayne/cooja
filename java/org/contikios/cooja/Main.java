@@ -29,6 +29,9 @@
 package org.contikios.cooja;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.Filter;
 import org.apache.logging.log4j.core.appender.ConsoleAppender;
@@ -42,13 +45,13 @@ import picocli.CommandLine;
 import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
 
 import java.awt.GraphicsEnvironment;
 import java.io.File;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 /**
  * Contains the command line parameters and is the main entry point for Cooja.
@@ -59,52 +62,64 @@ import java.nio.file.Paths;
         "OS: ${os.name} ${os.version} ${os.arch}"})
 class Main {
   /**
+   * Option for specifying if a GUI should be used.
+   */
+  @Option(names = "--gui", description = "use graphical mode", negatable = true)
+  Boolean gui;
+
+  /**
    * Option for specifying log4j2 config file.
    */
-  @Option(names = "-log4j2", paramLabel = "FILE", description = "the log4j2 config file")
+  @Option(names = "--log4j2", paramLabel = "FILE", description = "the log4j2 config file")
   String logConfigFile;
 
   /**
    * Option for specifying log directory.
    */
-  @Option(names = "-logdir", paramLabel = "DIR", description = "the log directory use")
+  @Option(names = {"-logdir", "--logdir"}, paramLabel = "DIR", description = "the log directory use")
   String logDir = ".";
 
   /**
    * Option for also logging stdout output to a file.
    */
-  @Option(names = "-logname", paramLabel = "NAME", description = "the filename for the log")
+  @Option(names = "--logname", paramLabel = "NAME", description = "the filename for the log")
   String logName;
 
   /**
    * Option for specifying Contiki-NG path.
    */
-  @Option(names = "-contiki", paramLabel = "DIR", description = "the Contiki-NG directory")
+  @Option(names = {"-contiki", "--contiki"}, paramLabel = "DIR", description = "the Contiki-NG directory")
   String contikiPath;
 
   /**
    * Option for specifying Cooja path.
    */
-  @Option(names = "-cooja", paramLabel = "DIR", description = "the Cooja directory")
+  @Option(names = "--cooja", paramLabel = "DIR", description = "the Cooja directory")
   String coojaPath;
 
   /**
    * Option for specifying javac path.
    */
-  @Option(names = "-javac", paramLabel = "FILE", description = "the javac binary")
+  @Option(names = "--javac", paramLabel = "FILE", description = "the javac binary")
   String javac;
 
   /**
-   * Option for specifying external config file of tools.
+   * Option for specifying external user config file.
    */
-  @Option(names = "-external_tools_config", paramLabel = "FILE", description = "the filename for external config")
-  String externalToolsConfig;
+  @Option(names = "--config", paramLabel = "FILE", description = "the filename for external user config")
+  String externalUserConfig;
 
   /**
    * Option for specifying seed used for simulation.
    */
-  @Option(names = "-random-seed", paramLabel = "SEED", description = "the random seed")
+  @Option(names = {"-random-seed", "--random-seed"}, paramLabel = "SEED", description = "the random seed")
   Long randomSeed;
+
+  /**
+   * Automatically start simulations.
+   */
+  @Option(names = "--autostart", description = "automatically start -nogui/-quickstart simulations")
+  boolean autoStart;
 
   /**
    * The action to take after starting. No action means start GUI.
@@ -119,20 +134,26 @@ class Main {
     /**
      * Option for specifying file to start the simulation with.
      */
-    @Option(names = "-quickstart", paramLabel = "FILE", description = "start simulation with file")
+    @Option(names = {"-quickstart", "--quickstart"}, paramLabel = "FILE", description = "start simulation with file [DEPRECATED]")
     String[] quickstart;
 
     /**
      * Option for specifying file to start the simulation with.
      */
-    @Option(names = "-nogui", paramLabel = "FILE", description = "start simulation with file")
+    @Option(names = {"-nogui", "--nogui"}, paramLabel = "FILE", description = "start simulation with file [DEPRECATED]")
     String[] nogui;
   }
 
   /**
+   * Option for specifying simulation files to load.
+   */
+  @Parameters(paramLabel = "FILE", description = "one or more simulation files")
+  String[] simulationFiles;
+
+  /**
    * Option for instructing Cooja to update the simulation file (.csc).
    */
-  @Option(names = "-update-simulation", description = "write an updated simulation file (.csc) and exit")
+  @Option(names = "--update-simulation", description = "write an updated simulation file (.csc) and exit")
   boolean updateSimulation;
 
   @Option(names = "--version", versionHelp = true,
@@ -160,19 +181,20 @@ class Main {
       commandLine.printVersionHelp(System.out);
       return;
     }
+    // Let gui control GUI mode, otherwise use -nogui as indicator for headless mode.
+    options.gui = options.gui == null ? options.action == null || options.action.nogui == null : options.gui;
 
-    if ((options.action == null || options.action.nogui == null) &&
-        GraphicsEnvironment.isHeadless()) {
+    if (options.gui && GraphicsEnvironment.isHeadless()) {
       System.err.println("Trying to start GUI in headless environment, aborting");
       System.exit(1);
     }
 
-    if (options.updateSimulation && (options.action == null || options.action.quickstart == null)) {
-      System.err.println("Can only update simulation with -quickstart");
+    if (options.updateSimulation && !options.gui) {
+      System.err.println("Can only update simulation with --gui");
       System.exit(1);
     }
 
-    if (options.action != null && options.action.nogui != null) {
+    if (!options.gui) {
       // Ensure no UI is used by Java
       System.setProperty("java.awt.headless", "true");
       Path logDirPath = Path.of(options.logDir);
@@ -186,28 +208,52 @@ class Main {
       }
     }
 
-    // Verify soundness of -nogui/-quickstart argument.
+    ArrayList<String> simulationFiles = new ArrayList<>();
     if (options.action != null) {
-      for (var file : options.action.nogui == null ? options.action.quickstart : options.action.nogui) {
-        if (!file.endsWith(".csc") && !file.endsWith(".csc.gz")) {
-          String option = options.action.nogui == null ? "-quickstart" : "-nogui";
-          System.err.println("Cooja " + option + " expects a filename extension of '.csc'");
+      Collections.addAll(simulationFiles, options.action.nogui == null ? options.action.quickstart : options.action.nogui);
+    }
+    if (options.simulationFiles != null) {
+      Collections.addAll(simulationFiles, options.simulationFiles);
+    }
+    // Parse and verify soundness of -nogui/-quickstart/files argument.
+    ArrayList<Simulation.SimConfig> simConfigs = new ArrayList<>();
+    for (String arg : simulationFiles) {
+      // Argument on the form "file.csc[,key1=value1,key2=value2, ..]"
+      var map = new HashMap<String, String>();
+      String file = null;
+      for (var item : arg.split(",", -1)) {
+        if (file == null) {
+          file = item;
+          continue;
+        }
+        var pair = item.split("=", -1);
+        if (pair.length != 2) {
+          System.err.println("Faulty key=value specification: " + item);
           System.exit(1);
         }
-        if (!Files.exists(Path.of(file))) {
-          System.err.println("File '" + file + "' does not exist");
-          System.exit(1);
-        }
+        map.put(pair[0], pair[1]);
       }
+      if (file == null) {
+        System.err.println("Failed argument parsing of simulation file " + arg);
+        System.exit(1);
+      }
+      if (!file.endsWith(".csc") && !file.endsWith(".csc.gz")) {
+        System.err.println("Cooja expects simulation filenames to have an extension of '.csc' or '.csc.gz");
+        System.exit(1);
+      }
+      if (!Files.exists(Path.of(file))) {
+        System.err.println("File '" + file + "' does not exist");
+        System.exit(1);
+      }
+      var autoStart = map.getOrDefault("autostart", Boolean.toString(options.autoStart || !options.gui));
+      var updateSim = map.getOrDefault("update-simulation", Boolean.toString(options.updateSimulation));
+      var logDir = map.getOrDefault("logdir", options.logDir);
+      simConfigs.add(new Simulation.SimConfig(file, Boolean.parseBoolean(autoStart), Boolean.parseBoolean(updateSim),
+                                              logDir, map));
     }
 
     if (options.logConfigFile != null && !Files.exists(Path.of(options.logConfigFile))) {
       System.err.println("Configuration file '" + options.logConfigFile + "' does not exist");
-      System.exit(1);
-    }
-
-    if (options.externalToolsConfig != null && !Files.exists(Path.of(options.externalToolsConfig))) {
-      System.err.println("Specified external tools configuration '" + options.externalToolsConfig + "' not found");
       System.exit(1);
     }
 
@@ -220,7 +266,7 @@ class Main {
       try {
         /* Find path to Cooja installation directory from code base */
         URI domain_uri = Cooja.class.getProtectionDomain().getCodeSource().getLocation().toURI();
-        Path path = Paths.get(domain_uri).toAbsolutePath();
+        Path path = Path.of(domain_uri).toAbsolutePath();
         File fp = path.toFile();
         if (fp.isFile()) {
           // Get the directory where the JAR file is placed
@@ -248,20 +294,8 @@ class Main {
       options.logName += ".log";
     }
 
-    var vis = options.action == null || options.action.quickstart != null;
-    if (vis) {
-      try {
-        GUI.setLookAndFeel();
-      } catch (Exception e) {
-        System.err.println("Could not set look and feel: " + e.getMessage());
-        System.exit(1);
-      }
-    }
-
-    var cfg = new Config(options.randomSeed, options.externalToolsConfig, options.updateSimulation,
-            options.logDir, options.contikiPath, options.coojaPath, options.javac,
-            options.action == null ? null : options.action.quickstart,
-            options.action == null ? null : options.action.nogui);
+    var cfg = new Config(options.gui, options.randomSeed, options.externalUserConfig,
+            options.logDir, options.contikiPath, options.coojaPath, options.javac);
     // Configure logger
     if (options.logConfigFile == null) {
       ConfigurationBuilder<BuiltConfiguration> builder = ConfigurationBuilderFactory.newConfigurationBuilder();
@@ -301,10 +335,10 @@ class Main {
       //        but go immediately returns which causes the log file to be closed
       //        while the simulation is still running.
       Configurator.initialize(builder.build());
-      Cooja.go(cfg);
+      Cooja.go(cfg, simConfigs);
     } else {
       Configurator.initialize("ConfigFile", options.logConfigFile);
-      Cooja.go(cfg);
+      Cooja.go(cfg, simConfigs);
     }
   }
 }

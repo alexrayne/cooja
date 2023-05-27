@@ -44,7 +44,7 @@ import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
 import javax.swing.plaf.basic.BasicInternalFrameUI;
 
-import org.jdom.Element;
+import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
@@ -53,7 +53,7 @@ import org.contikios.cooja.Simulation;
 import org.contikios.cooja.VisPlugin;
 
 @ClassDescription("Notes")
-@PluginType(PluginType.SIM_STANDARD_PLUGIN)
+@PluginType(PluginType.PType.SIM_STANDARD_PLUGIN)
 public class Notes extends VisPlugin {
   private final JTextArea notes = new JTextArea("Enter notes here");
   private boolean decorationsVisible = true;

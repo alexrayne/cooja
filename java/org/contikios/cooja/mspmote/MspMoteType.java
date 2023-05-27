@@ -40,7 +40,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
 import org.contikios.cooja.dialogs.AbstractCompileDialog;
 import org.contikios.cooja.mote.BaseContikiMoteType;
-import org.jdom.Element;
+import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
@@ -72,13 +72,8 @@ public abstract class MspMoteType extends BaseContikiMoteType {
   public Collection<Element> getConfigXML(Simulation simulation) {
     ArrayList<Element> config = new ArrayList<>();
 
-    // Identifier
-    var element = new Element("identifier");
-    element.setText(getIdentifier());
-    config.add(element);
-
     // Description
-    element = new Element("description");
+    var element = new Element("description");
     element.setText(getDescription());
     config.add(element);
 

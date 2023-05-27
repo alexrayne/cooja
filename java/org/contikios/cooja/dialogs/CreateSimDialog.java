@@ -69,7 +69,7 @@ public class CreateSimDialog extends JDialog {
   private final static int LABEL_WIDTH = 170;
   private final static int LABEL_HEIGHT = 25;
 
-  private Simulation.SimConfig config = null;
+  private SimConfig config = null;
 
   /**
    * Shows a dialog for configuring a simulation.
@@ -78,14 +78,14 @@ public class CreateSimDialog extends JDialog {
    * @param cfg Initial configuration
    * @return Configuration selected by user, null if dialog is cancelled.
    */
-  public static Simulation.SimConfig showDialog(Cooja gui, Simulation.SimConfig cfg) {
+  public static SimConfig showDialog(Cooja gui, SimConfig cfg) {
     final var dialog = new CreateSimDialog(gui, cfg);
     dialog.setVisible(true);
     // Simulation configured correctly
     return dialog.config;
   }
 
-  private CreateSimDialog(Cooja gui, Simulation.SimConfig cfg) {
+  private CreateSimDialog(Cooja gui, SimConfig cfg) {
     super(Cooja.getTopParentContainer(), "Create new simulation", ModalityType.APPLICATION_MODAL);
     Box vertBox = Box.createVerticalBox();
     NumberFormat integerFormat = NumberFormat.getIntegerInstance();
@@ -162,7 +162,6 @@ public class CreateSimDialog extends JDialog {
     label.setPreferredSize(new Dimension(LABEL_WIDTH,LABEL_HEIGHT));
 
     final var delayedStartup = new JFormattedTextField(integerFormat);
-    delayedStartup.setValue(10000);
     delayedStartup.setColumns(4);
 
     horizBox.add(label);
@@ -260,10 +259,10 @@ public class CreateSimDialog extends JDialog {
     }
 
     // Set delayed mote startup time (ms)
-    delayedStartup.setValue(cfg.moteStartDelay());
+    delayedStartup.setValue(cfg.moteStartDelay() / Simulation.MILLISECOND);
 
     createButton.addActionListener(e -> {
-      config = new Simulation.SimConfig(title.getText(),
+      config = new SimConfig(title.getText(),
               gui.getRegisteredRadioMediums().get(radioMediumBox.getSelectedIndex()).getName(),
               randomSeedGenerated.isSelected(),
               randomSeedGenerated.isSelected()
@@ -288,4 +287,6 @@ public class CreateSimDialog extends JDialog {
     });
   }
 
+  /** Basic simulation configuration. */
+  public record SimConfig(String title, String radioMedium, boolean generatedSeed, long randomSeed, long moteStartDelay) {}
 }

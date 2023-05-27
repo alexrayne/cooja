@@ -69,7 +69,7 @@ import javax.swing.text.NumberFormatter;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
-import org.jdom.Element;
+import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
@@ -89,7 +89,7 @@ import org.contikios.cooja.util.CmdUtils;
  * @author Enrico Jorns
  */
 @ClassDescription("Serial Socket (SERVER)")
-@PluginType(PluginType.MOTE_PLUGIN)
+@PluginType(PluginType.PType.MOTE_PLUGIN)
 public class SerialSocketServer implements Plugin, MotePlugin {
   private static final Logger logger = LogManager.getLogger(SerialSocketServer.class);
 
@@ -447,7 +447,7 @@ public class SerialSocketServer implements Plugin, MotePlugin {
       }
     }, "SerialSocketServer").start();
 
-    if (commands != null) {
+    if (commands != null && !simulation.getCfg().updateSim()) {
       // Run commands in a separate thread since Cooja cannot start the simulation before this method returns.
       // The simulation is required to run before tunslip6 can be started.
       new Thread(() -> {

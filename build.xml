@@ -33,7 +33,8 @@
 
   <path id="cooja.classpath">
     <pathelement path="${build}"/>
-    <pathelement location="lib/jdom.jar"/>
+  	<!-- https://mvnrepository.com/artifact/org.jdom/jdom2/2.0.6.1 -->
+    <pathelement location="lib/jdom2-2.0.6.1.jar"/>
     <pathelement location="lib/log4j-core-${log4j.version}.jar"/>
     <pathelement location="lib/log4j-api-${log4j.version}.jar"/>
     
@@ -43,10 +44,16 @@
     <pathelement location="lib/asm-util-9.3.jar"/>
     <pathelement location="lib/asm-commons-9.3.jar"/>
     <pathelement location="lib/asm-tree-9.3.jar"/>
+  	
+    <!-- https://mvnrepository.com/artifact/org.jfree/jfreechart/1.5.4 -->
+  	<pathelement location="lib/jfreechart-1.5.4.jar"/>
     
+    <!-- https://mvnrepository.com/artifact/com.github.cliftonlabs/json-simple/4.0.1 -->
+    <pathelement location="lib/json-simple-4.0.1.jar"/>
+  	
     <!-- Downloaded from
-         https://mvnrepository.com/artifact/info.picocli/picocli/4.6.3 -->
-    <pathelement location="lib/picocli-4.6.3.jar"/>
+         https://mvnrepository.com/artifact/info.picocli/picocli/4.7.3 -->
+    <pathelement location="lib/picocli-4.7.3.jar"/>
     <pathelement location="lib/syntaxpane-1.2.1.jar"/>
     <pathelement location="lib/swingx-autocomplete-1.6.5-1.jar"/>
     <!-- Copied into dist/lib by the mspsim rule -->
@@ -161,7 +168,7 @@ The COOJA Simulator
       <sysproperty key="user.language" value="en"/>
       <jvmarg value="-Dnashorn.args=--no-deprecation-warning" />
       <jvmarg line="${jvmargs}" />
-      <arg line="${args} -javac=${java} "/>
+      <arg line="${args} --javac=${java} "/>
     </java>
   </target>
 

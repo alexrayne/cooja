@@ -38,7 +38,8 @@ import java.util.Map;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
-import org.jdom.Element;
+import org.contikios.cooja.Cooja;
+import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Mote;
@@ -146,7 +147,7 @@ public class LogisticLoss extends AbstractRadioMedium {
 
     /* Bounds for the time-varying component */
     public double TIME_VARIATION_MIN_PL_DB = -10;
-    public double TIME_VARIATION_MAX_PL_DB = +10;
+    public double TIME_VARIATION_MAX_PL_DB = 10;
 
     /* How often to update the time-varying path loss value (in simulation time)? */
     private static final double TIME_VARIATION_STEP_SEC = 10.0;
@@ -163,7 +164,7 @@ public class LogisticLoss extends AbstractRadioMedium {
         super(simulation);
         random = simulation.getRandomGenerator();
         sim = simulation;
-        dgrm = new DirectedGraphMedium() {
+        dgrm = new DirectedGraphMedium(simulation) {
                 @Override
                 protected void analyzeEdges() {
                     /* Create edges according to distances.
@@ -224,15 +225,17 @@ public class LogisticLoss extends AbstractRadioMedium {
         }
         dgrm.requestEdgeAnalysis();
 
-        /* Register visualizer skin */
-        Visualizer.registerVisualizerSkin(LogisticLossVisualizerSkin.class);
+        if (Cooja.isVisualized()) {
+            Visualizer.registerVisualizerSkin(LogisticLossVisualizerSkin.class);
+        }
     }
 
     @Override
     public void removed() {
         super.removed();
-
-        Visualizer.unregisterVisualizerSkin(LogisticLossVisualizerSkin.class);
+        if (Cooja.isVisualized()) {
+            Visualizer.unregisterVisualizerSkin(LogisticLossVisualizerSkin.class);
+        }
     }
   
     @Override

@@ -44,6 +44,7 @@ import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
+import org.contikios.cooja.Simulation;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.SimEventCentral.MoteCountListener;
@@ -78,7 +79,7 @@ public class Mote2MoteRelations extends MoteInterface {
   private final Mote mote;
 
   private final ArrayList<Mote> relations = new ArrayList<>();
-  private final Cooja gui;
+  private final Simulation sim;
 
   private Observer logObserver = new Observer() {
     @Override
@@ -92,7 +93,7 @@ public class Mote2MoteRelations extends MoteInterface {
   
   public Mote2MoteRelations(Mote mote) {
     this.mote = mote;
-    this.gui = mote.getSimulation().getCooja();
+    this.sim = mote.getSimulation();
   }
 
   @Override
@@ -107,7 +108,7 @@ public class Mote2MoteRelations extends MoteInterface {
     }
 
     /* Observe other motes: if removed, remove our relations to them too */
-    mote.getSimulation().getEventCentral().addMoteCountListener(moteCountListener = new MoteCountListener() {
+    sim.getEventCentral().addMoteCountListener(moteCountListener = new MoteCountListener() {
       @Override
       public void moteWasAdded(Mote mote) {
         /* Ignored */
@@ -123,7 +124,7 @@ public class Mote2MoteRelations extends MoteInterface {
         if (!relations.remove(mote)) {
           return;
         }
-        gui.removeMoteRelation(Mote2MoteRelations.this.mote, mote);
+        sim.removeMoteRelation(Mote2MoteRelations.this.mote, mote);
       }
     });
   }
@@ -143,7 +144,7 @@ public class Mote2MoteRelations extends MoteInterface {
     /* Remove all relations to other motes */
     Mote[] relationsArr = relations.toArray(new Mote[0]);
     for (Mote m: relationsArr) {
-      gui.removeMoteRelation(Mote2MoteRelations.this.mote, m);
+        sim.removeMoteRelation(Mote2MoteRelations.this.mote, m);
     }
     relations.clear();
 
@@ -201,10 +202,10 @@ public class Mote2MoteRelations extends MoteInterface {
         return;
       }
       relations.add(destinationMote);
-      gui.addMoteRelation(mote, destinationMote, decodeColor(colorName));
+      sim.addMoteRelation(mote, destinationMote, decodeColor(colorName));
     } else {
       relations.remove(destinationMote);
-      gui.removeMoteRelation(mote, destinationMote);
+      sim.removeMoteRelation(mote, destinationMote);
     }
 
     setChanged();
@@ -214,30 +215,23 @@ public class Mote2MoteRelations extends MoteInterface {
   private static Color decodeColor(String colorString) {
     if (colorString == null) {
       return null;
-    } else if (colorString.equalsIgnoreCase("red")) {
-      return Color.RED;
-    } else if (colorString.equalsIgnoreCase("green")) {
-      return Color.GREEN;
-    } else if (colorString.equalsIgnoreCase("blue")) {
-      return Color.BLUE;
-    } else if (colorString.equalsIgnoreCase("orange")) {
-      return Color.ORANGE;
-    } else if (colorString.equalsIgnoreCase("pink")) {
-      return Color.PINK;
-    } else if (colorString.equalsIgnoreCase("yellow")) {
-      return Color.YELLOW;
-    } else if (colorString.equalsIgnoreCase("gray")) {
-      return Color.GRAY;
-    } else if (colorString.equalsIgnoreCase("magenta")) {
-      return Color.MAGENTA;
-    } else if (colorString.equalsIgnoreCase("black")) {
-      return Color.BLACK;
-    } else {
-      try {
-        return Color.decode(colorString);
-      } catch (NumberFormatException e) {
-      }
-      return null;
+    }
+    switch (colorString.toLowerCase()) {
+      case "red": return Color.RED;
+      case "green": return Color.GREEN;
+      case "blue": return Color.BLUE;
+      case "orange": return Color.ORANGE;
+      case "pink": return Color.PINK;
+      case "yellow": return Color.YELLOW;
+      case "gray": return Color.GRAY;
+      case "magenta": return Color.MAGENTA;
+      case "black": return Color.BLACK;
+      default:
+        try {
+          return Color.decode(colorString);
+        } catch (NumberFormatException e) {
+          return null;
+        }
     }
   }
 

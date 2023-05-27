@@ -75,8 +75,6 @@ import javax.swing.JTextField;
 import javax.swing.JTextPane;
 import javax.swing.KeyStroke;
 import javax.swing.RowFilter;
-import javax.swing.event.ListSelectionEvent;
-import javax.swing.event.ListSelectionListener;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableModel;
 import javax.swing.table.TableRowSorter;
@@ -103,7 +101,7 @@ import org.contikios.cooja.plugins.analyzers.IPv6PacketAnalyzer;
 import org.contikios.cooja.plugins.analyzers.PacketAnalyzer;
 import org.contikios.cooja.plugins.analyzers.RadioLoggerAnalyzerSuite;
 import org.contikios.cooja.util.StringUtils;
-import org.jdom.Element;
+import org.jdom2.Element;
 
 /**
  * Radio logger listens to the simulation radio medium and lists all transmitted
@@ -112,7 +110,7 @@ import org.jdom.Element;
  * @author Fredrik Osterlind
  */
 @ClassDescription("Radio messages")
-@PluginType(PluginType.SIM_PLUGIN)
+@PluginType(PluginType.PType.SIM_PLUGIN)
 public class RadioLogger extends VisPlugin
     implements TimeSelect
 {
@@ -375,7 +373,7 @@ public class RadioLogger extends VisPlugin
         if (e.getKeyCode() == KeyEvent.VK_SPACE) {
           showInAllAction.actionPerformed(null);
         } else if (e.getKeyCode() == KeyEvent.VK_F
-                && (e.getModifiers() & KeyEvent.CTRL_MASK) != 0) {
+                && (e.getModifiersEx() & KeyEvent.CTRL_DOWN_MASK) != 0) {
           searchField.setVisible(true);
           searchField.requestFocus();
           searchField.selectAll();
@@ -394,22 +392,19 @@ public class RadioLogger extends VisPlugin
     }
     dataTable.setRowSorter(logFilter);
 
-    dataTable.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
-      @Override
-      public void valueChanged(ListSelectionEvent e) {
-        int row = dataTable.getSelectedRow();
-        if (row < 0) {
-          return;
+    dataTable.getSelectionModel().addListSelectionListener(e -> {
+      int row = dataTable.getSelectedRow();
+      if (row < 0) {
+        return;
+      }
+      int modelRowIndex = dataTable.convertRowIndexToModel(row);
+      if (modelRowIndex >= 0) {
+        RadioConnectionLog conn = connections.get(modelRowIndex);
+        if (conn.tooltip == null) {
+          prepareTooltipString(conn);
         }
-        int modelRowIndex = dataTable.convertRowIndexToModel(row);
-        if (modelRowIndex >= 0) {
-          RadioConnectionLog conn = connections.get(modelRowIndex);
-          if (conn.tooltip == null) {
-            prepareTooltipString(conn);
-          }
-          verboseBox.setText(conn.tooltip);
-          verboseBox.setCaretPosition(0);
-        }
+        verboseBox.setText(conn.tooltip);
+        verboseBox.setCaretPosition(0);
       }
     });
     // Set data column width greedy
@@ -636,7 +631,7 @@ public class RadioLogger extends VisPlugin
         if (e.getKeyCode() == KeyEvent.VK_ENTER) {
           searchSelectNext(
                   searchField.getText(),
-                  (e.getModifiers() & KeyEvent.SHIFT_MASK) != 0);
+                  (e.getModifiersEx() & KeyEvent.SHIFT_DOWN_MASK) != 0);
         } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
           searchField.setVisible(false);
           dataTable.requestFocus();
@@ -758,26 +753,20 @@ public class RadioLogger extends VisPlugin
    * @param time Start time
    */
   public void trySelectTime(final long time) {
-    java.awt.EventQueue.invokeLater(new Runnable() {
-      @Override
-      public void run() {
-        if (dataTable.getRowCount() == 0) {
-          return;
-        }
-        for (int ai = 0; ai < model.getRowCount(); ai++) {
-          int index = dataTable.convertRowIndexToModel(ai);
-          if (connections.get(index).endTime < time) {
-            continue;
-          }
-
-          dataTable.scrollRectToVisible(dataTable.getCellRect(ai, 0, true));
-          dataTable.setRowSelectionInterval(ai, ai);
-          return;
-        }
-        dataTable.scrollRectToVisible(dataTable.getCellRect(dataTable.getRowCount() - 1, 0, true));
-        dataTable.setRowSelectionInterval(dataTable.getRowCount() - 1, dataTable.getRowCount() - 1);
+    if (dataTable.getRowCount() == 0) {
+      return;
+    }
+    for (int ai = 0; ai < model.getRowCount(); ai++) {
+      int index = dataTable.convertRowIndexToModel(ai);
+      if (connections.get(index).endTime < time) {
+        continue;
       }
-    });
+      dataTable.scrollRectToVisible(dataTable.getCellRect(ai, 0, true));
+      dataTable.setRowSelectionInterval(ai, ai);
+      return;
+    }
+    dataTable.scrollRectToVisible(dataTable.getCellRect(dataTable.getRowCount() - 1, 0, true));
+    dataTable.setRowSelectionInterval(dataTable.getRowCount() - 1, dataTable.getRowCount() - 1);
   }
 
   private void applyFilter() {
@@ -1016,13 +1005,8 @@ public class RadioLogger extends VisPlugin
         String analyzerName = element.getAttributeValue("name");
         final Action action;
         if (analyzerName != null && ((action = analyzerMap.get(analyzerName)) != null)) {
-          java.awt.EventQueue.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-              action.putValue(Action.SELECTED_KEY, Boolean.TRUE);
-              action.actionPerformed(null);
-            }
-          });
+          action.putValue(Action.SELECTED_KEY, Boolean.TRUE);
+          action.actionPerformed(null);
         }
       } else if (name.equals("pcap_file")) {
         pcapFile = simulation.getCooja().restorePortablePath(new File(element.getText()));

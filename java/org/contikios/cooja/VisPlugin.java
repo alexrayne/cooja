@@ -36,7 +36,7 @@ import javax.swing.JInternalFrame;
 import javax.swing.event.InternalFrameAdapter;
 import javax.swing.event.InternalFrameEvent;
 
-import org.jdom.Element;
+import org.jdom2.Element;
 
 /**
  * Visualized plugins can extend VisPlugin for basic visualization functionality.
@@ -54,16 +54,15 @@ public class VisPlugin extends JInternalFrame implements Plugin {
    * Reference to Cooja so public variables can be accessed.
    */
   protected final Cooja gui;
-  protected Plugin parent;
-
-  public VisPlugin(String title, final Cooja gui, Plugin parent) {
-    this(title, gui);
-    this.parent = parent;
-  }
+  protected final Plugin parent;
 
   public VisPlugin(String title, final Cooja gui) {
+    this(title, gui, null);
+  }
+
+  public VisPlugin(String title, final Cooja gui, Plugin parentPlugin) {
     super(title, true, true, true, true);
-    parent = this;
+    parent = parentPlugin == null ? this : parentPlugin;
     this.gui = gui;
     setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
 
@@ -72,14 +71,14 @@ public class VisPlugin extends JInternalFrame implements Plugin {
       public void internalFrameClosing(InternalFrameEvent e) {
         gui.removePlugin(parent);
         if (!gui.hasStartedPlugins()) {
-          gui.doRemoveSimulation(true);
+          Cooja.gui.doRemoveSimulation();
         }
       }
       @Override
       public void internalFrameActivated(InternalFrameEvent e) {
         /* Highlight mote in COOJA */
-        if (parent instanceof MotePlugin) {
-          Cooja.signalMoteHighlight(((MotePlugin)parent).getMote());
+        if (parent instanceof MotePlugin plugin) {
+          Cooja.signalMoteHighlight(plugin.getMote());
         }
         Cooja.loadQuickHelp(parent);
       }

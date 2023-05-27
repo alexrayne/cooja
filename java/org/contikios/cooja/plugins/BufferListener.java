@@ -106,13 +106,13 @@ import org.contikios.cooja.motes.AbstractEmulatedMote;
 import org.contikios.cooja.util.ArrayQueue;
 import org.contikios.cooja.util.IPUtils;
 import org.contikios.cooja.util.StringUtils;
-import org.jdom.Element;
+import org.jdom2.Element;
 
 /**
  * @author Fredrik Osterlind, Niclas Finne
  */
 @ClassDescription("Buffer view")
-@PluginType(PluginType.SIM_PLUGIN)
+@PluginType(PluginType.PType.SIM_PLUGIN)
 public class BufferListener extends VisPlugin
     implements TimeSelect
 {
@@ -649,7 +649,7 @@ public class BufferListener extends VisPlugin
     setLocation(0, Cooja.getDesktopPane().getHeight() - 300);
   }
 
-  private boolean startMonitoring(Mote mote) throws Exception {
+  private void startMonitoring(Mote mote) throws Exception {
     /* If this is a pointer buffer,
      * we must observe both the pointer itself, and the pointed to memory */
 
@@ -659,7 +659,6 @@ public class BufferListener extends VisPlugin
       motes.add(mote);
     }
     updateTitle();
-    return true;
   }
 
   public enum MemoryMonitorType { SEGMENT, POINTER, CONSTPOINTER }

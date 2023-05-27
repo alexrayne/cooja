@@ -59,7 +59,7 @@ import java.awt.event.ActionListener;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
-import org.jdom.Element;
+import org.jdom2.Element;
 
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.Simulation;

@@ -80,7 +80,7 @@ import org.contikios.cooja.mote.memory.MemoryInterface;
 import org.contikios.cooja.mote.memory.UnknownVariableException;
 import org.contikios.cooja.mote.memory.VarMemory;
 import org.jdesktop.swingx.autocomplete.AutoCompleteDecorator;
-import org.jdom.Element;
+import org.jdom2.Element;
 
 /**
  * Variable Watcher enables a user to watch mote variables during a simulation.
@@ -92,7 +92,7 @@ import org.jdom.Element;
  * @author Enrico Jorns
  */
 @ClassDescription("Variable Watcher")
-@PluginType(PluginType.MOTE_PLUGIN)
+@PluginType(PluginType.PType.MOTE_PLUGIN)
 public class VariableWatcher extends VisPlugin implements MotePlugin, HasQuickHelp {
   private static final Logger logger = LogManager.getLogger(VariableWatcher.class.getName());
 
@@ -497,16 +497,9 @@ public class VariableWatcher extends VisPlugin implements MotePlugin, HasQuickHe
           return;
         }
 
-        memMonitor = new MemoryInterface.SegmentMonitor() {
-
-          @Override
-          public void memoryChanged(MemoryInterface memory, EventType type, long address) {
-            bufferedBytes = moteMemory.getByteArray(
-                    (long) varAddressField.getValue(),
-                    Integer.decode(varSizeField.getText()));
-
-            refreshValues();
-          }
+        memMonitor = (memory, type, address) -> {
+          bufferedBytes = moteMemory.getByteArray((long) varAddressField.getValue(), Integer.decode(varSizeField.getText()));
+          refreshValues();
         };
         //System.out.println("Adding monitor " + memMonitor + " for addr " + monitorAddr + ", size " + monitorSize + "");
         mote.getMemory().addSegmentMonitor(
@@ -531,24 +524,19 @@ public class VariableWatcher extends VisPlugin implements MotePlugin, HasQuickHe
     /* Write button */
     writeButton = new JButton("Write");
     writeButton.setEnabled(false);
-    writeButton.addActionListener(new ActionListener() {
-
-      @Override
-      public void actionPerformed(ActionEvent e) {
-
-        /* Convert from input field to byte array */
-        int bytes = ((VarTypes) varTypeCombo.getSelectedItem()).getBytes();
-        for (int element = 0; element < varValues.length; element++) {
-          for (int b = 0; b < bytes; b++) {
-            if (element * bytes + b > bufferedBytes.length - 1) {
-              break;
-            }
-            bufferedBytes[element * bytes + b] = (byte) ((((int) varValues[element].getValue()) >> (b * 8)) & 0xFF);
+    writeButton.addActionListener(e -> {
+      /* Convert from input field to byte array */
+      int bytes = ((VarTypes) varTypeCombo.getSelectedItem()).getBytes();
+      for (int element = 0; element < varValues.length; element++) {
+        for (int b = 0; b < bytes; b++) {
+          if (element * bytes + b > bufferedBytes.length - 1) {
+            break;
           }
+          bufferedBytes[element * bytes + b] = (byte) ((((int) varValues[element].getValue()) >> (b * 8)) & 0xFF);
         }
-        /* Write to memory */
-        moteMemory.setByteArray((long) varAddressField.getValue(), bufferedBytes);
       }
+      /* Write to memory */
+      moteMemory.setByteArray((long) varAddressField.getValue(), bufferedBytes);
     });
 
     smallPane.add(BorderLayout.EAST, writeButton);
@@ -624,7 +612,6 @@ public class VariableWatcher extends VisPlugin implements MotePlugin, HasQuickHe
             ret = switch (mType) {
               case BYTE, SHORT -> Integer.decode(text);
               case INT, LONG, ADDR -> Long.decode(text);
-              default -> null;
             };
           }
           catch (NumberFormatException ex) {
@@ -646,7 +633,6 @@ public class VariableWatcher extends VisPlugin implements MotePlugin, HasQuickHe
       return switch (mFormat) {
         case CHAR, DEC -> value.toString();
         case HEX -> String.format("0x%x", ((Number) value).longValue());
-        default -> "";
       };
     }
 

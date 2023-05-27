@@ -32,7 +32,7 @@ package org.contikios.cooja.radiomediums;
 
 import java.util.Collection;
 
-import org.jdom.Element;
+import org.jdom2.Element;
 
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.interfaces.Radio;
@@ -44,9 +44,6 @@ public class DGRMDestinationRadio extends DestinationRadio {
 	public int lqi = 105;
 	public int channel = -1; /* not set by default */
 
-	public DGRMDestinationRadio() {
-		super();
-	}
 	public DGRMDestinationRadio(Radio dest) {
 		super(dest);
 	}

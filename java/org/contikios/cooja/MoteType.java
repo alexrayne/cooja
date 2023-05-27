@@ -28,13 +28,12 @@
 package org.contikios.cooja;
 
 import java.awt.Container;
-import java.io.File;
 import java.util.Collection;
 import java.util.ArrayList;
 
 import javax.swing.JComponent;
 
-import org.jdom.Element;
+import org.jdom2.Element;
 
 import org.contikios.cooja.contikimote.ContikiMoteType;
 import org.contikios.cooja.dialogs.MessageList;
@@ -83,53 +82,6 @@ public interface MoteType {
    *          New identifier
    */
   void setIdentifier(String identifier);
-
-  /**
-   * Main Contiki source file of mote type.
-   * May be null.
-   *
-   * @return Contiki main process source file.
-   * @see #setContikiSourceFile(File)
-   */
-  File getContikiSourceFile();
-
-  /**
-   * @param file Contiki main process source file.
-   * @see #getContikiSourceFile()
-   */
-  void setContikiSourceFile(File file);
-
-  /**
-   * Compiled Contiki firmware file or library.
-   * May be null.
-   *
-   * @return Contiki firmware file or library.
-   * @see #setContikiFirmwareFile(File)
-   */
-  File getContikiFirmwareFile();
-
-  /**
-   * @param file Contiki firmware file or library.
-   * @see #getContikiFirmwareFile()
-   */
-  void setContikiFirmwareFile(File file);
-
-  /**
-   * Commands used to build the Contiki firmware from the Contiki source.
-   * May be null.
-   *
-   * @return Compile commands used to build firmware
-   * @see #setCompileCommands(String)
-   * @see #getContikiFirmwareFile()
-   * @see #getContikiSourceFile()
-   */
-  String getCompileCommands();
-
-  /**
-   * @param commands Compile commands
-   * @see #getCompileCommands()
-   */
-  void setCompileCommands(String commands);
 
   /**
    * @return Mote interface classes of mote type.
@@ -297,14 +249,16 @@ public interface MoteType {
     public MoteTypeCreationException(String message) {
       super(message);
     }
+    public MoteTypeCreationException(String message, MessageList output) {
+      super(message);
+      compilationOutput = output;
+    }
     public MoteTypeCreationException(String message, Throwable cause) {
       super(message, cause);
     }
-    public boolean hasCompilationOutput() {
-      return compilationOutput != null;
-    }
-    public void setCompilationOutput(MessageList compilationOutput) {
-      this.compilationOutput = compilationOutput;
+    public MoteTypeCreationException(String message, Throwable cause, MessageList output) {
+      super(message, cause);
+      compilationOutput = output;
     }
     public MessageList getCompilationOutput() {
       return compilationOutput;

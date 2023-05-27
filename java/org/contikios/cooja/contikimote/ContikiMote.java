@@ -39,7 +39,7 @@ import org.contikios.cooja.interfaces.PolledAfterActiveTicks;
 import org.contikios.cooja.interfaces.PolledAfterAllTicks;
 import org.contikios.cooja.interfaces.PolledBeforeActiveTicks;
 import org.contikios.cooja.interfaces.PolledBeforeAllTicks;
-import org.jdom.Element;
+import org.jdom2.Element;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.MoteInterfaceHandler;
@@ -166,8 +166,9 @@ public class ContikiMote extends AbstractWakeupMote implements Mote {
     polledBeforePassive.forEach(PolledBeforeAllTicks::doActionsBeforeTick);
 
     /* Check if pre-boot time */
-    if (myInterfaceHandler.getClock().getTime() < 0) {
-      scheduleNextWakeup(simTime + -myInterfaceHandler.getClock().getTime());
+    var moteTime = myInterfaceHandler.getClock().getTime();
+    if (moteTime < 0) {
+      scheduleNextWakeup(simTime + Math.abs(moteTime));
       return;
     }
 

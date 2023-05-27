@@ -35,7 +35,7 @@ import java.util.Observer;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
-import org.jdom.Element;
+import org.jdom2.Element;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.MoteInterfaceHandler;
@@ -167,11 +167,8 @@ public abstract class AbstractApplicationMote extends AbstractWakeupMote impleme
     return "AppMote " + getID();
   }
 
-  /* These methods should be overriden to allow application motes receiving serial data */
-  public void writeArray(byte[] s) {
-  }
-  public void writeByte(byte b) {
-  }
-  public void writeString(String s) {
-  }
+  // These methods should be overridden to allow application motes receiving serial data.
+  public abstract void writeArray(byte[] s);
+  public abstract void writeByte(byte b);
+  public abstract void writeString(String s);
 }

@@ -33,17 +33,19 @@ package org.contikios.cooja.motes;
 
 import java.awt.Container;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.jdom.Element;
+import org.contikios.cooja.Cooja;
+import org.jdom2.Element;
 
 import org.contikios.cooja.AbstractionLevelDescription;
 import org.contikios.cooja.ClassDescription;
@@ -51,7 +53,6 @@ import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteType;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.dialogs.ImportAppMoteDialog;
-import org.contikios.cooja.util.ArrayUtils;
 
 /**
  * @author Fredrik Osterlind
@@ -116,7 +117,7 @@ public class ImportAppMoteType extends AbstractApplicationMoteType {
 
     if (visAvailable) {
       /* Select mote class file */
-      ImportAppMoteDialog dialog = new ImportAppMoteDialog(simulation, this);
+      ImportAppMoteDialog dialog = new ImportAppMoteDialog(simulation.getCooja(), this);
       if (!dialog.waitForUserResponse()) {
         return false;
       }
@@ -129,7 +130,7 @@ public class ImportAppMoteType extends AbstractApplicationMoteType {
       if (moteClassName.indexOf('/') >= 0 || moteClassName.indexOf(File.separatorChar) >= 0) {
         File moteClassFile = new File(moteClassName);
         if (moteClassFile.canRead()) {
-          try (var test = createTestLoader(simulation, moteClassFile)) {
+          try (var test = createTestLoader(simulation.getCooja(), moteClassFile)) {
             // Successfully found the class
             moteClassPath = test.getTestClassPath();
             moteClassName = test.getTestClassName();
@@ -139,13 +140,12 @@ public class ImportAppMoteType extends AbstractApplicationMoteType {
         }
       }
     }
+    ClassLoader parentLoader = getParentClassLoader(simulation.getCooja());
     try {
-      ClassLoader parentLoader = getParentClassLoader(simulation);
       ClassLoader loader;
       if (moteClassPath != null) {
         /* Load class */
-        loader = new URLClassLoader(new java.net.URL[] { moteClassPath.toURI().toURL() },
-            parentLoader);
+        loader = new URLClassLoader(new java.net.URL[] { moteClassPath.toURI().toURL() }, parentLoader);
       } else {
         loader = parentLoader;
       }
@@ -188,17 +188,16 @@ public class ImportAppMoteType extends AbstractApplicationMoteType {
     return moteClassName;
   }
 
-  private ClassLoader getParentClassLoader(Simulation simulation) {
-    ClassLoader ldr = null;
+  private static ClassLoader getParentClassLoader(Cooja cooja) {
     try {
-      ldr = simulation.getCooja().getProjectClassLoader();
+      return cooja.getProjectClassLoader();
     } catch (Exception e) {
       logger.warn("Could not get Cooja classloader: " + e);
+      return ClassLoader.getSystemClassLoader();
     }
-    return ldr == null ? ClassLoader.getSystemClassLoader() : ldr;
   }
 
-  public TestLoader createTestLoader(Simulation sim, File classFile) throws IOException {
+  public static TestLoader createTestLoader(Cooja cooja, File classFile) throws IOException {
     classFile = classFile.getCanonicalFile();
     ArrayList<URL> list = new ArrayList<>();
     for(File parent = classFile.getParentFile();
@@ -206,7 +205,7 @@ public class ImportAppMoteType extends AbstractApplicationMoteType {
         parent = parent.getParentFile()) {
       list.add(parent.toURI().toURL());
     }
-    return new TestLoader(list.toArray(new URL[0]), getParentClassLoader(sim), classFile);
+    return new TestLoader(list.toArray(new URL[0]), getParentClassLoader(cooja), classFile);
   }
 
   public static class TestLoader extends URLClassLoader {
@@ -220,10 +219,7 @@ public class ImportAppMoteType extends AbstractApplicationMoteType {
       super(classpath, parentClassLoader);
       this.classFile = classFile.getCanonicalFile();
 
-      byte[] data = ArrayUtils.readFromFile(classFile);
-      if (data == null) {
-        throw new FileNotFoundException(classFile.getAbsolutePath());
-      }
+      byte[] data = Files.readAllBytes(Path.of(classFile.toURI()));
       this.testClass = defineClass(null, data, 0, data.length);
     }
 

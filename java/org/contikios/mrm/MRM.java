@@ -36,7 +36,8 @@ import java.util.Observable;
 import java.util.Observer;
 import java.util.Random;
 
-import org.jdom.Element;
+import org.contikios.cooja.Cooja;
+import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.RadioConnection;
@@ -113,20 +114,22 @@ public class MRM extends AbstractRadioMedium {
       }
     });
     
-    /* Register plugins */
-    sim.getCooja().registerPlugin(AreaViewer.class);
-    sim.getCooja().registerPlugin(FormulaViewer.class);
-    Visualizer.registerVisualizerSkin(MRMVisualizerSkin.class);
+    if (Cooja.isVisualized()) {
+      sim.getCooja().registerPlugin(AreaViewer.class);
+      sim.getCooja().registerPlugin(FormulaViewer.class);
+      Visualizer.registerVisualizerSkin(MRMVisualizerSkin.class);
+    }
   }
 
   @Override
   public void removed() {
     super.removed();
 
-    /* Unregister plugins */
-    sim.getCooja().unregisterPlugin(AreaViewer.class);
-    sim.getCooja().unregisterPlugin(FormulaViewer.class);
-    Visualizer.unregisterVisualizerSkin(MRMVisualizerSkin.class);
+    if (Cooja.isVisualized()) {
+      sim.getCooja().unregisterPlugin(AreaViewer.class);
+      sim.getCooja().unregisterPlugin(FormulaViewer.class);
+      Visualizer.unregisterVisualizerSkin(MRMVisualizerSkin.class);
+    }
 
     currentChannelModel.deleteSettingsObserver(channelModelObserver);
   }

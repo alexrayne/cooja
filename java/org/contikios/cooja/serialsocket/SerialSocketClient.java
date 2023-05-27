@@ -68,7 +68,7 @@ import javax.swing.text.NumberFormatter;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
-import org.jdom.Element;
+import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
@@ -87,7 +87,7 @@ import org.contikios.cooja.interfaces.SerialPort;
  * @author Enrico Jorns
  */
 @ClassDescription("Serial Socket (CLIENT)")
-@PluginType(PluginType.MOTE_PLUGIN)
+@PluginType(PluginType.PType.MOTE_PLUGIN)
 public class SerialSocketClient implements Plugin, MotePlugin {
   private static final Logger logger = LogManager.getLogger(SerialSocketClient.class);
 

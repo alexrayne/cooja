@@ -15,16 +15,19 @@ repositories {
 }
 
 dependencies {
-  implementation files('lib/jcommon-1.0.14.jar',
-                       'lib/jdom.jar',
-                       'lib/jfreechart-1.0.11.jar',
-                       'lib/jipv6.jar',
-                       'lib/json-simple-1.1.1.jar',
-                       'lib/picocli-4.6.3.jar')
+  implementation files('lib/jipv6.jar')
+  // https://mvnrepository.com/artifact/com.github.cliftonlabs/json-simple
+  implementation 'com.github.cliftonlabs:json-simple:4.0.1'
   // https://mvnrepository.com/artifact/de.sciss/syntaxpane
   implementation 'de.sciss:syntaxpane:1.2.1'
+  // https://mvnrepository.com/artifact/info.picocli/picocli
+  implementation 'info.picocli:picocli:4.7.0'
   // https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-core
   implementation 'org.apache.logging.log4j:log4j-core:2.19.0'
+  // https://mvnrepository.com/artifact/org.jdom/jdom2
+  implementation 'org.jdom:jdom2:2.0.6.1'
+  // https://mvnrepository.com/artifact/org.jfree/jfreechart
+  implementation 'org.jfree:jfreechart:1.5.3'
   // https://mvnrepository.com/artifact/org.openjdk.nashorn/nashorn-core
   implementation 'org.openjdk.nashorn:nashorn-core:15.4'
   // https://mvnrepository.com/artifact/org.swinglabs.swingx/swingx-autocomplete
@@ -67,7 +70,20 @@ application {
     '--enable-native-access', 'ALL-UNNAMED', '--add-modules', 'jdk.incubator.foreign']
 }
 
+tasks.withType(JavaCompile).configureEach {
+  options.compilerArgs += ['--add-modules', 'jdk.incubator.foreign']
+}
+
+tasks.register('copyDependencies', Copy) {
+  description = "Copy jar dependencies into ${buildDir}/libs/lib/."
+  group = "Build"
+  from configurations.runtimeClasspath.files
+  into "build/libs/lib"
+}
+
+// Run Cooja with: java <JVM parameters> -jar build/libs/cooja.jar <Cooja parameters>
 jar {
+  dependsOn copyDependencies
   reproducibleFileOrder = true
   manifest {
     // Set Multi-Release to true to ensure the JVM uses the right class from log4j.
@@ -75,15 +91,12 @@ jar {
       'Class-Path': '. ' + configurations.runtimeClasspath.files.collect { "lib/" + it.getName() }.join(' '),
       'Multi-Release': 'true'
   }
-//  copy {
-//    from file("lib")
-//    into file("build/libs")
-//    include('*.jar')
-//  }
 }
 
 tasks.register('fullJar', Jar) {
-  archiveClassifier = 'full'
+  description = "Assembles a jar that contains all dependencies."
+  group = "Build"
+  archiveClassifier.set('full')
   reproducibleFileOrder = true
   manifest {
     attributes 'Main-Class': 'org.contikios.cooja.Main',
@@ -93,7 +106,7 @@ tasks.register('fullJar', Jar) {
 
   from sourceSets.main.output
 
-  duplicatesStrategy = 'exclude'
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
   dependsOn configurations.runtimeClasspath
   from {
     configurations.runtimeClasspath.findAll { it.name.endsWith('jar') }.collect { zipTree(it) }
@@ -105,8 +118,8 @@ run {
   workingDir = file('build')
   // Bad Cooja location detected with gradle run, explicitly pass -cooja.
   doFirst {
-    args += ['-cooja', "$projectDir",
-             '-javac', javaToolchains.compilerFor {
+    args += ['--cooja', "$projectDir",
+             '--javac', javaToolchains.compilerFor {
                          languageVersion = JavaLanguageVersion.of(javaVersion)
                        }.get().executablePath]
   }
@@ -116,6 +129,7 @@ run {
       systemProperty k - "cooja.", v
     }
   }
+  systemProperty 'picocli.disable.closures', "true"
   // Enable assertions with "-Passertions".
   enableAssertions = project.hasProperty('assertions')
 }

@@ -32,6 +32,7 @@ package org.contikios.cooja;
 
 import static java.util.Map.entry;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
@@ -148,8 +149,20 @@ public class MoteInterfaceHandler {
       case "org.contikios.cooja.contikimote.ContikiMoteType":   return new ContikiMoteType(cooja);
       case "org.contikios.cooja.mspmote.SkyMoteType":           return new SkyMoteType();
       case "org.contikios.cooja.mspmote.Z1MoteType":            return new Z1MoteType();
-    };
-    return null;
+    }
+    Class<? extends MoteType> moteType = null;
+    for (var clazz : cooja.getRegisteredMoteTypes()) {
+      if (name.equals(clazz.getName())) {
+        moteType = clazz;
+        break;
+      }
+    }
+    if (moteType == null) return null;
+    try {
+      return moteType.getConstructor().newInstance();
+    } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+      return null;
+    }
   }
 
   /** Fast translation from class name to object for radio mediums.
@@ -167,7 +180,7 @@ public class MoteInterfaceHandler {
       case "org.contikios.cooja.radiomediums.DirectedGraphMedium": return new DirectedGraphMedium(sim);
       case "org.contikios.cooja.radiomediums.SilentRadioMedium": return new SilentRadioMedium(sim);
       case "org.contikios.cooja.radiomediums.LogisticLoss": return new LogisticLoss(sim);
-      case "org.contikios.cooja.mrm.MRM": return new MRM(sim);
+      case "org.contikios.mrm.MRM": return new MRM(sim);
     }
     var clazz = sim.getCooja().tryLoadClass(sim, RadioMedium.class, name);
     if (clazz == null) {

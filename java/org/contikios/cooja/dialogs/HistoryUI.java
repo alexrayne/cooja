@@ -11,8 +11,8 @@ import javax.swing.JTextField;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
-import org.jdom.Element;
-import org.jdom.Text;
+import org.jdom2.Element;
+import org.jdom2.Text;
 
 // this is a base for messages with RANG/TYPE
 public class HistoryUI {

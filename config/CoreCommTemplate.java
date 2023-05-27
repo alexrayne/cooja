@@ -53,7 +53,7 @@ public class CoreCommTemplate extends CoreComm {
   }
 
   public native void tick();
-  public native void init();
+  protected native void init();
   public native void kill();
   public native void setReferenceAddress(long addr);
   public native void getMemory(long rel_addr, int length, byte[] mem);

@@ -56,7 +56,6 @@ import java.awt.geom.AffineTransform;
 import java.awt.geom.Line2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.net.URL;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.ArrayList;
@@ -89,11 +88,10 @@ import javax.swing.JToolTip;
 import javax.swing.Popup;
 import javax.swing.PopupFactory;
 import javax.swing.ProgressMonitor;
-import javax.swing.filechooser.FileFilter;
-
+import javax.swing.filechooser.FileNameExtensionFilter;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
-import org.jdom.Element;
+import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
@@ -120,7 +118,7 @@ import org.contikios.mrm.ChannelModel.TxPair;
  * @author Fredrik Osterlind
  */
 @ClassDescription("MRM Radio environment")
-@PluginType(PluginType.SIM_PLUGIN)
+@PluginType(PluginType.PType.SIM_PLUGIN)
 @SupportedArguments(radioMediums = {MRM.class})
 public class AreaViewer extends VisPlugin {
   private static final Logger logger = LogManager.getLogger(AreaViewer.class);
@@ -177,7 +175,7 @@ public class AreaViewer extends VisPlugin {
   private final MRM currentRadioMedium;
   private final ChannelModel currentChannelModel;
 
-  private static final String antennaImageFilename = "antenna.png";
+  private static final String antennaImageFilename = "/images/antenna.png";
   private final Image antennaImage;
 
   private Radio selectedRadio = null;
@@ -486,6 +484,165 @@ public class AreaViewer extends VisPlugin {
 
     noneButton = new JRadioButton("No obstacles");
     noneButton.setActionCommand("set no obstacles");
+    // FIXME: make separate action listeners of this.
+    var obstacleHandler = new ActionListener() {
+      @Override
+      public void actionPerformed(ActionEvent e) {
+        switch (e.getActionCommand()) {
+          case "set custom bitmap":
+            if (!setCustomBitmap() || !analyzeBitmapForObstacles()) {
+              backgroundImage = null;
+              currentChannelModel.removeAllObstacles();
+              noneButton.setSelected(true);
+              repaint();
+            }
+            break;
+          case "set predefined 1":
+            currentChannelModel.removeAllObstacles();
+            currentChannelModel.addRectObstacle(0, 0, 50, 5, false);
+            currentChannelModel.addRectObstacle(0, 5, 5, 50, false);
+            currentChannelModel.addRectObstacle(70, 0, 20, 5, false);
+            currentChannelModel.addRectObstacle(0, 70, 5, 20, false);
+            currentChannelModel.notifySettingsChanged();
+            repaint();
+            break;
+          case "set predefined 2":
+            currentChannelModel.removeAllObstacles();
+            currentChannelModel.addRectObstacle(0, 0, 10, 10, false);
+            currentChannelModel.addRectObstacle(30, 0, 10, 10, false);
+            currentChannelModel.addRectObstacle(60, 0, 10, 10, false);
+            currentChannelModel.addRectObstacle(90, 0, 10, 10, false);
+            currentChannelModel.addRectObstacle(5, 90, 10, 10, false);
+            currentChannelModel.addRectObstacle(25, 90, 10, 10, false);
+            currentChannelModel.addRectObstacle(45, 90, 10, 10, false);
+            currentChannelModel.addRectObstacle(65, 90, 10, 10, false);
+            currentChannelModel.addRectObstacle(85, 90, 10, 10, false);
+            currentChannelModel.notifySettingsChanged();
+            repaint();
+            break;
+          case "set no obstacles":
+            backgroundImage = null;
+            currentChannelModel.removeAllObstacles();
+            repaint();
+            break;
+          default:
+            logger.fatal("Unhandled action command: " + e.getActionCommand());
+            break;
+        }
+      }
+
+      private boolean setCustomBitmap() {
+        JFileChooser fileChooser = new JFileChooser();
+        var filter = new FileNameExtensionFilter("All supported images", "gif", "jpg", "jpeg", "png");
+        fileChooser.setFileFilter(filter);
+        if (fileChooser.showOpenDialog(canvas) != JFileChooser.APPROVE_OPTION) {
+          return false;
+        }
+        File file = fileChooser.getSelectedFile();
+        if (!filter.accept(file)) {
+          logger.fatal("Non-supported file type, aborting");
+          return false;
+        }
+        Toolkit toolkit = Toolkit.getDefaultToolkit();
+        Image image = toolkit.getImage(file.getAbsolutePath());
+        MediaTracker tracker = new MediaTracker(canvas);
+        tracker.addImage(image, 1);
+        try {
+          tracker.waitForAll();
+          if (tracker.isErrorAny() || image == null) {
+            logger.info("Error when loading '" + file.getAbsolutePath() + "'");
+            return false;
+          }
+        } catch (InterruptedException ex) {
+          logger.fatal("Interrupted during image loading, aborting");
+          return false;
+        }
+
+        // Set virtual size of image.
+        var dialog = new ImageSettingsDialog();
+        if (!dialog.terminatedOK()) {
+          logger.fatal("User canceled, aborting");
+          return false;
+        }
+
+        // Show loaded image.
+        backgroundStartX = dialog.getVirtualStartX();
+        backgroundStartY = dialog.getVirtualStartY();
+        backgroundWidth = dialog.getVirtualWidth();
+        backgroundHeight = dialog.getVirtualHeight();
+        backgroundImage = image;
+        backgroundImageFile = file;
+        return true;
+      }
+
+      private boolean analyzeBitmapForObstacles() {
+        if (backgroundImage == null) {
+          return false;
+        }
+
+        var parentContainer = Cooja.getTopParentContainer();
+        if (parentContainer == null) {
+          logger.fatal("Unknown parent container");
+          return false;
+        }
+        // Show obstacle finder dialog.
+        var obstacleFinderDialog = new ObstacleFinderDialog(backgroundImage, currentChannelModel, parentContainer);
+        if (!obstacleFinderDialog.exitedOK) {
+          return false;
+        }
+
+        // Register obstacles.
+        final var obstacleArray = obstacleFinderDialog.obstacleArray;
+        final int boxSize = obstacleFinderDialog.sizeSlider.getValue();
+        final ProgressMonitor pm = new ProgressMonitor(Cooja.getTopParentContainer(), "Registering obstacles",
+                null,0, obstacleArray.length - 1);
+        // Thread that will perform the work
+        Thread thread = new Thread(() -> {
+          try {
+            // Remove already existing obstacles.
+            currentChannelModel.removeAllObstacles();
+
+            int foundObstacles = 0;
+            for (int x = 0; x < obstacleArray.length; x++) {
+              for (int y = 0; y < (obstacleArray[0]).length; y++) {
+                if (obstacleArray[x][y]) { // Register obstacle.
+                  double realWidth = (boxSize * backgroundWidth) / backgroundImage.getWidth(null);
+                  double realHeight = (boxSize * backgroundHeight) / backgroundImage.getHeight(null);
+                  double realStartX = backgroundStartX + x * realWidth;
+                  double realStartY = backgroundStartY + y * realHeight;
+                  foundObstacles++;
+                  if (realStartX + realWidth > backgroundStartX + backgroundWidth) {
+                    realWidth = backgroundStartX + backgroundWidth - realStartX;
+                  }
+                  if (realStartY + realHeight > backgroundStartY + backgroundHeight) {
+                    realHeight = backgroundStartY + backgroundHeight - realStartY;
+                  }
+                  currentChannelModel.addRectObstacle(realStartX, realStartY, realWidth, realHeight, false);
+                }
+              }
+              if (pm.isCanceled()) { // User aborted.
+                return;
+              }
+              pm.setProgress(x);
+              pm.setNote("After/Before merging: " + currentChannelModel.getNumberOfObstacles() + "/" + foundObstacles);
+            }
+            currentChannelModel.notifySettingsChanged();
+            AreaViewer.this.repaint();
+          } catch (Exception ex) {
+            if (pm.isCanceled()) {
+              return;
+            }
+            logger.fatal("Obstacle adding exception: " + ex.getMessage());
+            ex.printStackTrace();
+            pm.close();
+            return;
+          }
+          pm.close();
+        }, "analyzeBitmapForObstacles");
+        thread.start();
+        return true;
+      }
+    };
     noneButton.addActionListener(obstacleHandler);
     noneButton.setSelected(true);
 
@@ -715,9 +872,7 @@ public class AreaViewer extends VisPlugin {
     this.add(BorderLayout.EAST, scrollControlPanel);
 
     // Load external images (antenna)
-    Toolkit toolkit = Toolkit.getDefaultToolkit();
-    URL imageURL = this.getClass().getClassLoader().getResource(antennaImageFilename);
-    antennaImage = toolkit.getImage(imageURL);
+    antennaImage = Toolkit.getDefaultToolkit().getImage(getClass().getResource(antennaImageFilename));
 
     MediaTracker tracker = new MediaTracker(canvas);
     tracker.addImage(antennaImage, 1);
@@ -863,353 +1018,6 @@ public class AreaViewer extends VisPlugin {
 
       canvas.repaint();
     }
-  };
-
-  /**
-   * Helps user set a background image which can be analysed for obstacles/freespace.
-   */
-  private final ActionListener obstacleHandler = new ActionListener() {
-
-    /**
-     * Choosable file filter that supports tif, gif, jpg, png, bmp.
-     */
-    class ImageFilter extends FileFilter {
-      @Override
-      public boolean accept(File f) {
-        if (f.isDirectory()) {
-          return true;
-        }
-
-        String filename = f.getName();
-        if (filename == null) {
-          return false;
-        }
-
-        return filename.endsWith(".gif") || filename.endsWith(".GIF") ||
-            filename.endsWith(".jpg") || filename.endsWith(".JPG") ||
-            filename.endsWith(".jpeg") || filename.endsWith(".JPEG") ||
-            filename.endsWith(".png") || filename.endsWith(".PNG");
-      }
-
-      @Override
-      public String getDescription() {
-        return "All supported images";
-      }
-    }
-
-    class ImageSettingsDialog extends JDialog {
-      private double
-      virtualStartX = 0.0,
-      virtualStartY = 0.0,
-      virtualWidth = 0.0,
-      virtualHeight = 0.0;
-
-      private final JFormattedTextField virtualStartXField;
-      private final JFormattedTextField virtualStartYField;
-      private final JFormattedTextField virtualWidthField;
-      private final JFormattedTextField virtualHeightField;
-
-      private boolean terminatedOK = false;
-
-      /**
-       * Creates a new dialog for settings background parameters
-       */
-      private ImageSettingsDialog() {
-        super(Cooja.getTopParentContainer(), "Image settings");
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-
-        // Set layout and add components
-        var mainPanel = new JPanel();
-        mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
-
-        var tempPanel = new JPanel(new GridLayout(1, 2));
-        tempPanel.add(new JLabel("Start X (m)     "));
-        var doubleFormat = NumberFormat.getNumberInstance();
-        doubleFormat.setMinimumIntegerDigits(1);
-        virtualStartXField = new JFormattedTextField(doubleFormat);
-        virtualStartXField.setValue(0.0);
-        tempPanel.add(virtualStartXField);
-        mainPanel.add(tempPanel);
-
-        tempPanel = new JPanel(new GridLayout(1, 2));
-        tempPanel.add(new JLabel("Start Y (m)"));
-        virtualStartYField = new JFormattedTextField(doubleFormat);
-        virtualStartYField.setValue(0.0);
-        tempPanel.add(virtualStartYField);
-        mainPanel.add(tempPanel);
-
-        tempPanel = new JPanel(new GridLayout(1, 2));
-        tempPanel.add(new JLabel("Width (m)"));
-        virtualWidthField = new JFormattedTextField(doubleFormat);
-        virtualWidthField.setValue(100.0);
-        tempPanel.add(virtualWidthField);
-        mainPanel.add(tempPanel);
-
-        tempPanel = new JPanel(new GridLayout(1, 2));
-        tempPanel.add(new JLabel("Height (m)"));
-        virtualHeightField = new JFormattedTextField(doubleFormat);
-        virtualHeightField.setValue(100.0);
-        tempPanel.add(virtualHeightField);
-        mainPanel.add(tempPanel);
-
-        mainPanel.add(Box.createVerticalGlue());
-        mainPanel.add(Box.createVerticalStrut(10));
-
-        tempPanel = new JPanel();
-        tempPanel.setLayout(new BoxLayout(tempPanel, BoxLayout.X_AXIS));
-        tempPanel.add(Box.createHorizontalGlue());
-
-        final JButton okButton = new JButton("OK");
-        this.getRootPane().setDefaultButton(okButton);
-        final JButton cancelButton = new JButton("Cancel");
-        okButton.addActionListener(e -> {
-          virtualStartX = ((Number) virtualStartXField.getValue()).doubleValue();
-          virtualStartY = ((Number) virtualStartYField.getValue()).doubleValue();
-          virtualWidth = ((Number) virtualWidthField.getValue()).doubleValue();
-          virtualHeight = ((Number) virtualHeightField.getValue()).doubleValue();
-
-          terminatedOK = true;
-          dispose();
-        });
-        cancelButton.addActionListener(e -> {
-          terminatedOK = false;
-          dispose();
-        });
-
-        tempPanel.add(okButton);
-        tempPanel.add(cancelButton);
-        mainPanel.add(tempPanel);
-
-        mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        add(mainPanel);
-
-        // Show dialog
-        setModal(true);
-        pack();
-        setLocationRelativeTo(this.getParent());
-        setVisible(true);
-      }
-
-      public boolean terminatedOK() {
-        return terminatedOK;
-      }
-      public double getVirtualStartX() {
-        return virtualStartX;
-      }
-      public double getVirtualStartY() {
-        return virtualStartY;
-      }
-      public double getVirtualWidth() {
-        return virtualWidth;
-      }
-      public double getVirtualHeight() {
-        return virtualHeight;
-      }
-
-    }
-
-    @Override
-    public void actionPerformed(ActionEvent e) {
-      if (e.getActionCommand().equals("set custom bitmap")) {
-        if (!setCustomBitmap() || !analyzeBitmapForObstacles()) {
-          backgroundImage = null;
-          currentChannelModel.removeAllObstacles();
-
-          noneButton.setSelected(true);
-          repaint();
-        }
-      } else if (e.getActionCommand().equals("set predefined 1")) {
-        currentChannelModel.removeAllObstacles();
-        currentChannelModel.addRectObstacle(0, 0, 50, 5, false);
-        currentChannelModel.addRectObstacle(0, 5, 5, 50, false);
-
-        currentChannelModel.addRectObstacle(70, 0, 20, 5, false);
-        currentChannelModel.addRectObstacle(0, 70, 5, 20, false);
-
-        currentChannelModel.notifySettingsChanged();
-        repaint();
-      } else if (e.getActionCommand().equals("set predefined 2")) {
-        currentChannelModel.removeAllObstacles();
-        currentChannelModel.addRectObstacle(0, 0, 10, 10, false);
-        currentChannelModel.addRectObstacle(30, 0, 10, 10, false);
-        currentChannelModel.addRectObstacle(60, 0, 10, 10, false);
-        currentChannelModel.addRectObstacle(90, 0, 10, 10, false);
-
-        currentChannelModel.addRectObstacle(5, 90, 10, 10, false);
-        currentChannelModel.addRectObstacle(25, 90, 10, 10, false);
-        currentChannelModel.addRectObstacle(45, 90, 10, 10, false);
-        currentChannelModel.addRectObstacle(65, 90, 10, 10, false);
-        currentChannelModel.addRectObstacle(85, 90, 10, 10, false);
-        currentChannelModel.notifySettingsChanged();
-        repaint();
-      } else if (e.getActionCommand().equals("set no obstacles")) {
-        backgroundImage = null;
-        currentChannelModel.removeAllObstacles();
-        repaint();
-      } else {
-        logger.fatal("Unhandled action command: " + e.getActionCommand());
-      }
-    }
-
-    private boolean setCustomBitmap() {
-
-      /* Select image file */
-      JFileChooser fileChooser = new JFileChooser();
-      ImageFilter filter = new ImageFilter();
-      fileChooser.setFileFilter(filter);
-
-      int returnVal = fileChooser.showOpenDialog(canvas);
-      if (returnVal != JFileChooser.APPROVE_OPTION) {
-        return false;
-      }
-
-      File file = fileChooser.getSelectedFile();
-      if (!filter.accept(file)) {
-        logger.fatal("Non-supported file type, aborting");
-        return false;
-      }
-
-      logger.info("Opening '" + file.getAbsolutePath() + "'");
-
-      /* Load image data */
-      Toolkit toolkit = Toolkit.getDefaultToolkit();
-      Image image = toolkit.getImage(file.getAbsolutePath());
-
-      MediaTracker tracker = new MediaTracker(canvas);
-      tracker.addImage(image, 1);
-
-      try {
-        tracker.waitForAll();
-        if (tracker.isErrorAny() || image == null) {
-          logger.info("Error when loading '" + file.getAbsolutePath() + "'");
-          return false;
-        }
-      } catch (InterruptedException ex) {
-        logger.fatal("Interrupted during image loading, aborting");
-        return false;
-      }
-
-      /* Set virtual size of image */
-      var dialog = new ImageSettingsDialog();
-      if (!dialog.terminatedOK()) {
-        logger.fatal("User canceled, aborting");
-        return false;
-      }
-
-      /* Show loaded image */
-      backgroundStartX = dialog.getVirtualStartX();
-      backgroundStartY = dialog.getVirtualStartY();
-      backgroundWidth = dialog.getVirtualWidth();
-      backgroundHeight = dialog.getVirtualHeight();
-
-      backgroundImage = image;
-      backgroundImageFile = file;
-
-      return true;
-    }
-
-    private boolean analyzeBitmapForObstacles() {
-      if (backgroundImage == null) {
-        return false;
-      }
-
-      var parentContainer = Cooja.getTopParentContainer();
-      if (parentContainer == null) {
-        logger.fatal("Unknown parent container");
-        return false;
-      }
-      /* Show obstacle finder dialog */
-      var obstacleFinderDialog = new ObstacleFinderDialog(
-            backgroundImage, currentChannelModel, parentContainer
-        );
-
-      if (!obstacleFinderDialog.exitedOK) {
-        return false;
-      }
-
-      /* Register obstacles */
-      final boolean[][] obstacleArray = obstacleFinderDialog.obstacleArray;
-      final int boxSize = obstacleFinderDialog.sizeSlider.getValue();
-
-      // Create progress monitor
-      final ProgressMonitor pm = new ProgressMonitor(
-          Cooja.getTopParentContainer(),
-          "Registering obstacles",
-          null,
-          0,
-          obstacleArray.length - 1
-      );
-
-      // Thread that will perform the work
-      final Runnable runnable = new Runnable() {
-        @Override
-        public void run() {
-          try {
-            /* Remove already existing obstacles */
-            currentChannelModel.removeAllObstacles();
-
-            int foundObstacles = 0;
-            for (int x=0; x < obstacleArray.length; x++) {
-              for (int y=0; y < (obstacleArray[0]).length; y++) {
-
-                if (obstacleArray[x][y]) {
-                  /* Register obstacle */
-                  double realWidth = (boxSize * backgroundWidth) / backgroundImage.getWidth(null);
-                  double realHeight = (boxSize * backgroundHeight) / backgroundImage.getHeight(null);
-                  double realStartX = backgroundStartX + x * realWidth;
-                  double realStartY = backgroundStartY + y * realHeight;
-
-                  foundObstacles++;
-
-                  if (realStartX + realWidth > backgroundStartX + backgroundWidth) {
-                    realWidth = backgroundStartX + backgroundWidth - realStartX;
-                  }
-                  if (realStartY + realHeight > backgroundStartY + backgroundHeight) {
-                    realHeight = backgroundStartY + backgroundHeight - realStartY;
-                  }
-
-                  currentChannelModel.addRectObstacle(
-                      realStartX, realStartY,
-                      realWidth, realHeight,
-                      false
-                  );
-                }
-              }
-
-              /* Check if user has aborted */
-              if (pm.isCanceled()) {
-                return;
-              }
-
-              /* Update progress monitor */
-              pm.setProgress(x);
-              pm.setNote("After/Before merging: " +
-                  currentChannelModel.getNumberOfObstacles() + "/" + foundObstacles);
-            }
-
-            currentChannelModel.notifySettingsChanged();
-            AreaViewer.this.repaint();
-
-          } catch (Exception ex) {
-            if (pm.isCanceled()) {
-              return;
-            }
-            logger.fatal("Obstacle adding exception: " + ex.getMessage());
-            ex.printStackTrace();
-            pm.close();
-            return;
-          }
-          pm.close();
-        }
-      };
-
-      /* Start thread */
-      Thread thread = new Thread(runnable, "analyzeBitmapForObstacles");
-      thread.start();
-
-      return true;
-    }
-
   };
 
   static class ObstacleFinderDialog extends JDialog {
@@ -2443,5 +2251,110 @@ public class AreaViewer extends VisPlugin {
     return true;
   }
 
+  static class ImageSettingsDialog extends JDialog {
+    private double virtualStartX = 0.0;
+    private double virtualStartY = 0.0;
+    private double virtualWidth = 0.0;
+    private double virtualHeight = 0.0;
 
+    private final JFormattedTextField virtualStartXField;
+    private final JFormattedTextField virtualStartYField;
+    private final JFormattedTextField virtualWidthField;
+    private final JFormattedTextField virtualHeightField;
+    private boolean terminatedOK = false;
+
+    /**
+     * Creates a new dialog for settings background parameters
+     */
+    private ImageSettingsDialog() {
+      super(Cooja.getTopParentContainer(), "Image settings");
+      setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+
+      // Set layout and add components
+      var mainPanel = new JPanel();
+      mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
+
+      var tempPanel = new JPanel(new GridLayout(1, 2));
+      tempPanel.add(new JLabel("Start X (m)     "));
+      var doubleFormat = NumberFormat.getNumberInstance();
+      doubleFormat.setMinimumIntegerDigits(1);
+      virtualStartXField = new JFormattedTextField(doubleFormat);
+      virtualStartXField.setValue(0.0);
+      tempPanel.add(virtualStartXField);
+      mainPanel.add(tempPanel);
+
+      tempPanel = new JPanel(new GridLayout(1, 2));
+      tempPanel.add(new JLabel("Start Y (m)"));
+      virtualStartYField = new JFormattedTextField(doubleFormat);
+      virtualStartYField.setValue(0.0);
+      tempPanel.add(virtualStartYField);
+      mainPanel.add(tempPanel);
+
+      tempPanel = new JPanel(new GridLayout(1, 2));
+      tempPanel.add(new JLabel("Width (m)"));
+      virtualWidthField = new JFormattedTextField(doubleFormat);
+      virtualWidthField.setValue(100.0);
+      tempPanel.add(virtualWidthField);
+      mainPanel.add(tempPanel);
+
+      tempPanel = new JPanel(new GridLayout(1, 2));
+      tempPanel.add(new JLabel("Height (m)"));
+      virtualHeightField = new JFormattedTextField(doubleFormat);
+      virtualHeightField.setValue(100.0);
+      tempPanel.add(virtualHeightField);
+      mainPanel.add(tempPanel);
+
+      mainPanel.add(Box.createVerticalGlue());
+      mainPanel.add(Box.createVerticalStrut(10));
+
+      tempPanel = new JPanel();
+      tempPanel.setLayout(new BoxLayout(tempPanel, BoxLayout.X_AXIS));
+      tempPanel.add(Box.createHorizontalGlue());
+
+      final var okButton = new JButton("OK");
+      this.getRootPane().setDefaultButton(okButton);
+      final var cancelButton = new JButton("Cancel");
+      okButton.addActionListener(e -> {
+        virtualStartX = ((Number) virtualStartXField.getValue()).doubleValue();
+        virtualStartY = ((Number) virtualStartYField.getValue()).doubleValue();
+        virtualWidth = ((Number) virtualWidthField.getValue()).doubleValue();
+        virtualHeight = ((Number) virtualHeightField.getValue()).doubleValue();
+        terminatedOK = true;
+        dispose();
+      });
+      cancelButton.addActionListener(e -> {
+        terminatedOK = false;
+        dispose();
+      });
+
+      tempPanel.add(okButton);
+      tempPanel.add(cancelButton);
+      mainPanel.add(tempPanel);
+
+      mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+      add(mainPanel);
+
+      // Show dialog
+      setModal(true);
+      pack();
+      setLocationRelativeTo(this.getParent());
+      setVisible(true);
+    }
+
+    public boolean terminatedOK() {
+      return terminatedOK;
+    }
+    public double getVirtualStartX() {
+      return virtualStartX;
+    }
+    public double getVirtualStartY() {
+      return virtualStartY;
+    }
+    public double getVirtualWidth() {
+      return virtualWidth;
+    }
+    public double getVirtualHeight() {
+      return virtualHeight;
+    }
+  }
 }

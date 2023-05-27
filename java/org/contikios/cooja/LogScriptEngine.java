@@ -38,7 +38,7 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.lang.reflect.UndeclaredThrowableException;
 import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Observer;
 import java.util.concurrent.Semaphore;
@@ -121,11 +121,11 @@ public class LogScriptEngine {
   private long startTime;
   private long startRealTime;
 
-  protected LogScriptEngine(Simulation simulation, String logDir, int logNumber, JTextArea logTextArea) {
+  protected LogScriptEngine(Simulation simulation, int logNumber, JTextArea logTextArea) {
     this.simulation = simulation;
     if (!Cooja.isVisualized()) {
       var logName = logNumber == 0 ? "COOJA.testlog" : String.format("COOJA-%02d.testlog", logNumber);
-      var logFile = Paths.get(logDir, logName);
+      var logFile = Path.of(simulation.getCfg().logDir(), logName);
       try {
         logWriter = Files.newBufferedWriter(logFile, UTF_8);
         logWriter.write("Random seed: " + simulation.getRandomSeed() + "\n");
@@ -145,10 +145,10 @@ public class LogScriptEngine {
       return;
     }
     logWriter = null;
-    scriptLogObserver = (obs, obj) -> {
+    scriptLogObserver = (obs, obj) -> java.awt.EventQueue.invokeLater(() -> {
       logTextArea.append((String) obj);
       logTextArea.setCaretPosition(logTextArea.getText().length());
-    };
+    });
   }
 
   /* Only called from the simulation loop */
@@ -300,8 +300,10 @@ public class LogScriptEngine {
     }
     startRealTime = System.currentTimeMillis();
     startTime = simulation.getSimulationTime();
-    simulation.scheduleEvent(timeoutProgressEvent, startTime + Math.max(1000, timeout / 20));
-    simulation.scheduleEvent(timeoutEvent, startTime + timeout);
+    simulation.invokeSimulationThread(() -> {
+      simulation.scheduleEvent(timeoutProgressEvent, startTime + Math.max(1000, timeout / 20));
+      simulation.scheduleEvent(timeoutEvent, startTime + timeout);
+    });
     return true;
   }
 
@@ -335,7 +337,7 @@ public class LogScriptEngine {
     }
     @Override
     public void append(String filename, String msg) {
-      try (var out = Files.newBufferedWriter(Paths.get(filename), UTF_8, CREATE, APPEND)) {
+      try (var out = Files.newBufferedWriter(Path.of(filename), UTF_8, CREATE, APPEND)) {
         out.write(msg);
       } catch (Exception e) {
         logger.warn("Test append failed: " + filename + ": " + e.getMessage());
@@ -343,7 +345,7 @@ public class LogScriptEngine {
     }
     @Override
     public void writeFile(String filename, String msg) {
-      try (var out = Files.newBufferedWriter(Paths.get(filename), UTF_8)) {
+      try (var out = Files.newBufferedWriter(Path.of(filename), UTF_8)) {
         out.write(msg);
       } catch (Exception e) {
         logger.warn("Write file failed: " + filename + ": " + e.getMessage());

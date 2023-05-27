@@ -31,13 +31,13 @@
 package org.contikios.cooja.radiomediums;
 
 import java.util.Collection;
-import java.util.Observable;
 import java.util.Observer;
 import java.util.Random;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
-import org.jdom.Element;
+import org.contikios.cooja.Cooja;
+import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Mote;
@@ -94,7 +94,7 @@ public class UDGM extends AbstractRadioMedium {
   public UDGM(Simulation simulation) {
     super(simulation);
     random = simulation.getRandomGenerator();
-    dgrm = new DirectedGraphMedium() {
+    dgrm = new DirectedGraphMedium(simulation) {
       @Override
       protected void analyzeEdges() {
         /* Create edges according to distances.
@@ -123,12 +123,7 @@ public class UDGM extends AbstractRadioMedium {
 
     /* Register as position observer.
      * If any positions change, re-analyze potential receivers. */
-    final Observer positionObserver = new Observer() {
-      @Override
-      public void update(Observable o, Object arg) {
-        dgrm.requestEdgeAnalysis();
-      }
-    };
+    final Observer positionObserver = (o, arg) -> dgrm.requestEdgeAnalysis();
     /* Re-analyze potential receivers if radios are added/removed. */
     simulation.getEventCentral().addMoteCountListener(new MoteCountListener() {
       @Override
@@ -147,15 +142,18 @@ public class UDGM extends AbstractRadioMedium {
     }
     dgrm.requestEdgeAnalysis();
 
-    /* Register visualizer skin */
-    Visualizer.registerVisualizerSkin(UDGMVisualizerSkin.class);
+    if (Cooja.isVisualized()) {
+      Visualizer.registerVisualizerSkin(UDGMVisualizerSkin.class);
+    }
   }
 
   @Override
   public void removed() {
   	super.removed();
-  	
-		Visualizer.unregisterVisualizerSkin(UDGMVisualizerSkin.class);
+
+    if (Cooja.isVisualized()) {
+      Visualizer.unregisterVisualizerSkin(UDGMVisualizerSkin.class);
+    }
   }
   
   public void setTxRange(double r) {

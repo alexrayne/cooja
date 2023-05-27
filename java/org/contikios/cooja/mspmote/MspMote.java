@@ -40,7 +40,7 @@ import java.util.HashMap;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
-import org.jdom.Element;
+import org.jdom2.Element;
 import org.contikios.cooja.ContikiError;
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.Mote;
@@ -86,7 +86,9 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
   private final static int EXECUTE_DURATION_US = 1; /* We always execute in 1 us steps */
 
   static {
-    Visualizer.registerVisualizerSkin(CodeVisualizerSkin.class);
+    if (Cooja.isVisualized()) {
+      Visualizer.registerVisualizerSkin(CodeVisualizerSkin.class);
+    }
   }
 
   private final CommandHandler commandHandler = new CommandHandler(System.out, System.err);
@@ -98,15 +100,13 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
 
   /* Stack monitoring variables */
   private boolean stopNextInstruction = false;
+  private boolean loadedDebugInfo = false;
+  // FIXME: move to MspMoteType instead.
+  private HashMap<File, HashMap<Integer, Integer>> debuggingInfo = null;
 
   public MspMote(MspMoteType moteType, Simulation sim, GenericNode node) throws MoteType.MoteTypeCreationException {
     super(sim);
     myMoteType = moteType;
-    try {
-      debuggingInfo = moteType.getFirmwareDebugInfo();
-    } catch (IOException e) {
-      throw new MoteType.MoteTypeCreationException("Error: " + e.getMessage(), e);
-    }
     registry = node.getRegistry();
     node.setCommandHandler(commandHandler);
     node.setup(new ConfigManager());
@@ -261,7 +261,7 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
     if (stopNextInstruction) {
       stopNextInstruction = false;
       scheduleNextWakeup(t);
-      throw new RuntimeException("MSPSim requested simulation stop");
+      throw new MSPSimStop();
     }
 
     if (lastExecute < 0) {
@@ -282,7 +282,7 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
 
     if (stopNextInstruction) {
       stopNextInstruction = false;
-      throw new RuntimeException("MSPSim requested simulation stop");
+      throw new MSPSimStop();
     }
 
     // TODO: Reimplement stack monitoring using MSPSim internals.
@@ -356,7 +356,7 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
     for (Element element: configXML) {
       String name = element.getName();
       if ("breakpoints".equals(name)) {
-        for (Element elem : (Collection<Element>) element.getChildren()) {
+        for (Element elem : element.getChildren()) {
           if (elem.getName().equals("breakpoint")) {
             MspBreakpoint breakpoint = new MspBreakpoint(this);
             if (!breakpoint.setConfigXML(elem.getChildren(), visAvailable)) {
@@ -477,7 +477,6 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
   /* WatchpointMote */
   private final ArrayList<WatchpointListener> watchpointListeners = new ArrayList<>();
   private final ArrayList<MspBreakpoint> watchpoints = new ArrayList<>();
-  private final HashMap<File, HashMap<Integer, Integer>> debuggingInfo;
 
   @Override
   public void addWatchpointListener(WatchpointListener listener) {
@@ -547,7 +546,18 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
 
   @Override
   public int getExecutableAddressOf(File file, int lineNr) {
-    if (file == null || lineNr < 0 || debuggingInfo == null) {
+    if (file == null || lineNr < 0) {
+      return -1;
+    }
+    if (!loadedDebugInfo) {
+      loadedDebugInfo = true;
+      try {
+        debuggingInfo = myMoteType.getFirmwareDebugInfo();
+      } catch (IOException e) {
+        logger.error("Failed reading debug info: {}", e.getMessage(), e);
+      }
+    }
+    if (debuggingInfo == null) {
       return -1;
     }
 
@@ -610,5 +620,12 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
     }
 
     return config;
+  }
+
+  /** Exception for signaling the simulation that MSPSim has stopped. */
+  public static class MSPSimStop extends RuntimeException {
+    public MSPSimStop() {
+      super("MSPSim requested simulation stop");
+    }
   }
 }

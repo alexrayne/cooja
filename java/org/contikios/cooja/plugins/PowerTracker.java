@@ -55,7 +55,7 @@ import javax.swing.table.DefaultTableCellRenderer;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
-import org.jdom.Element;
+import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
@@ -74,7 +74,7 @@ import org.contikios.cooja.interfaces.Radio;
  * @author Fredrik Osterlind, Adam Dunkels
  */
 @ClassDescription("Mote radio duty cycle")
-@PluginType(PluginType.SIM_PLUGIN)
+@PluginType(PluginType.PType.SIM_PLUGIN)
 public class PowerTracker implements Plugin {
   private static final Logger logger = LogManager.getLogger(PowerTracker.class);
 

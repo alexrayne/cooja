@@ -52,6 +52,8 @@ import java.io.InputStreamReader;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.io.PrintStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import javax.swing.DefaultListCellRenderer;
@@ -94,7 +96,7 @@ public class MessageListUI extends JList<MessageContainer> implements MessageLis
   private JPopupMenu popup = null;
   private boolean hideNormal = false;
   private boolean isVerticalScrollable = false;
-
+  private boolean isAutoScrolling = true;
   private int max = -1;
   
   public MessageListUI() {
@@ -112,6 +114,14 @@ public class MessageListUI extends JList<MessageContainer> implements MessageLis
   public MessageListUI(int max) {
     this();
     this.max = max;
+  }
+
+  public boolean isAutoScrolling() {
+    return isAutoScrolling;
+  }
+
+  public void setAutoScrolling(boolean isAutoScrolling) {
+    this.isAutoScrolling = isAutoScrolling;
   }
 
   public void setScrolableVertical() {
@@ -232,11 +242,6 @@ public class MessageListUI extends JList<MessageContainer> implements MessageLis
     }
   }
 
-  @Override
-  public void addMessage(String message) {
-    addMessage(message, NORMAL);
-  }
-
   private final ArrayList<MessageContainer> messages = new ArrayList<>();
 
   @Override
@@ -261,7 +266,7 @@ public class MessageListUI extends JList<MessageContainer> implements MessageLis
   }
 
   private void updateModel() {
-    boolean scroll = getLastVisibleIndex() >= getModel().getSize() - 2;
+    boolean scroll = isAutoScrolling && getLastVisibleIndex() >= getModel().getSize() - 2;
 
     while (messages.size() > getModel().getSize()) {
       ((DefaultListModel<MessageContainer>) getModel()).addElement(messages.get(getModel().getSize()));
@@ -277,6 +282,11 @@ public class MessageListUI extends JList<MessageContainer> implements MessageLis
   }
 
   @Override
+  public void addMessage(String message) {
+    addMessage(message, NORMAL);
+  }
+
+  @Override
   public void addMessage(final String message, final int type) {
       // this is for text messages log/warn/error
       Cooja.setProgressMessage(message, type);
@@ -289,6 +299,17 @@ public class MessageListUI extends JList<MessageContainer> implements MessageLis
     messages.add(msg);
 
     java.awt.EventQueue.invokeLater(this::updateModel);
+  }
+
+  @Override
+  public void addMessage(final Throwable throwable, int type) {
+    StringWriter sw = new StringWriter();
+    try (PrintWriter pw = new PrintWriter(sw)) {
+      throwable.printStackTrace(pw);
+    }
+    for (var line: sw.toString().split("\n")) {
+      addMessage(line, type);
+    }
   }
 
   @Override

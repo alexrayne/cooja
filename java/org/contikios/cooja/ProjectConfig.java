@@ -104,13 +104,8 @@ public class ProjectConfig {
    *
    * @param useDefault
    *          If true the default configuration will be loaded
-   * @throws FileNotFoundException
-   *           If file was not found
-   * @throws IOException
-   *           Stream read error
    */
-  public ProjectConfig(boolean useDefault) throws IOException,
-      FileNotFoundException {
+  public ProjectConfig(boolean useDefault) {
     if (useDefault) {
       var settings = new Properties();
       settings.put("org.contikios.cooja.contikimote.interfaces.ContikiRadio.RADIO_TRANSMISSION_RATE_kbps", "250");
@@ -164,8 +159,7 @@ public class ProjectConfig {
    *          Value or array element
    * @return Project directory defining arguments or null
    */
-  public File getUserProjectDefining(Class callingClass, String key, String arrayElement) {
-
+  public File getUserProjectDefining(Class<?> callingClass, String key, String arrayElement) {
     // Check that key really exists in current config
     if (getStringValue(callingClass, key, null) == null) {
       return null;
@@ -304,13 +298,11 @@ public class ProjectConfig {
    *          Default value to return if id is not found
    * @return Value or defaultValue if id wasn't found
    */
-  public String getStringValue(Class callingClass, String id,
-      String defaultValue) {
+  public String getStringValue(Class<?> callingClass, String id, String defaultValue) {
     return getStringValue(myConfig, callingClass, id, defaultValue);
   }
 
-  private static String getStringValue(Properties currentValues,
-      Class callingClass, String id, String defaultValue) {
+  private static String getStringValue(Properties currentValues, Class<?> callingClass, String id, String defaultValue) {
     String val = currentValues.getProperty(callingClass.getName() + "." + id);
 
     if (val == null) {
@@ -345,7 +337,7 @@ public class ProjectConfig {
    *          Id of value to return
    * @return Value or null if id wasn't found
    */
-  public String getStringValue(Class callingClass, String id) {
+  public String getStringValue(Class<?> callingClass, String id) {
     return getStringValue(callingClass, id, null);
   }
 
@@ -358,7 +350,7 @@ public class ProjectConfig {
    *          Id of value to return
    * @return Value or null if id wasn't found
    */
-  public String[] getStringArrayValue(Class callingClass, String id) {
+  public String[] getStringArrayValue(Class<?> callingClass, String id) {
     String stringVal = getStringValue(callingClass, id, null);
     if (stringVal == null) {
       return new String[0];
@@ -376,7 +368,7 @@ public class ProjectConfig {
    *          Id of value to return
    * @return Value or null if id wasn't found
    */
-  public String getValue(Class callingClass, String id) {
+  public String getValue(Class<?> callingClass, String id) {
     return getStringValue(callingClass, id);
   }
 
@@ -407,7 +399,7 @@ public class ProjectConfig {
    *          Default value to return if id is not found
    * @return Value or defaultValue if id wasn't found
    */
-  public int getIntegerValue(Class callingClass, String id, int defaultValue) {
+  public int getIntegerValue(Class<?> callingClass, String id, int defaultValue) {
     String str = getStringValue(callingClass, id);
     if (str == null) {
       return defaultValue;
@@ -425,7 +417,7 @@ public class ProjectConfig {
    *          Id of value to return
    * @return Value or 0 if id wasn't found
    */
-  public int getIntegerValue(Class callingClass, String id) {
+  public int getIntegerValue(Class<?> callingClass, String id) {
     return getIntegerValue(callingClass, id, 0);
   }
 
@@ -440,8 +432,7 @@ public class ProjectConfig {
    *          Default value to return if id is not found
    * @return Value or defaultValue if id wasn't found
    */
-  public double getDoubleValue(Class callingClass, String id,
-      double defaultValue) {
+  public double getDoubleValue(Class<?> callingClass, String id, double defaultValue) {
     String str = getStringValue(callingClass, id);
     if (str == null) {
       return defaultValue;
@@ -459,7 +450,7 @@ public class ProjectConfig {
    *          Id of value to return
    * @return Value or 0.0 if id wasn't found
    */
-  public double getDoubleValue(Class callingClass, String id) {
+  public double getDoubleValue(Class<?> callingClass, String id) {
     return getDoubleValue(callingClass, id, 0.0);
   }
 
@@ -474,8 +465,7 @@ public class ProjectConfig {
    *          Default value to return if id is not found
    * @return Value or defaultValue if id wasn't found
    */
-  public boolean getBooleanValue(Class callingClass, String id,
-      boolean defaultValue) {
+  public boolean getBooleanValue(Class<?> callingClass, String id, boolean defaultValue) {
     String str = getStringValue(callingClass, id);
     if (str == null) {
       return defaultValue;
@@ -493,7 +483,7 @@ public class ProjectConfig {
    *          Id of value to return
    * @return Value or false if id wasn't found
    */
-  public boolean getBooleanValue(Class callingClass, String id) {
+  public boolean getBooleanValue(Class<?> callingClass, String id) {
     return getBooleanValue(callingClass, id, false);
   }
 

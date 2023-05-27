@@ -42,7 +42,7 @@ import org.apache.logging.log4j.LogManager;
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteInterface;
-import org.jdom.Element;
+import org.jdom2.Element;
 
 /**
  * Mote 3D position.
@@ -175,19 +175,13 @@ public class Position extends MoteInterface {
   public Collection<Element> getConfigXML() {
     ArrayList<Element> config = new ArrayList<Element>();
 
-    // X coordinate
-    Element element = new Element("x");
-    element.setText(Double.toString(getXCoordinate()));
-    config.add(element);
-
-    // Y coordinate
-    element = new Element("y");
-    element.setText(Double.toString(getYCoordinate()));
-    config.add(element);
-
-    // Z coordinate
-    element = new Element("z");
-    element.setText(Double.toString(getZCoordinate()));
+    var element = new Element("pos");
+    element.setAttribute("x", String.valueOf(getXCoordinate()));
+    element.setAttribute("y", String.valueOf(getYCoordinate()));
+    var z = getZCoordinate();
+    if (z != 0) {
+      element.setAttribute("z", String.valueOf(z));
+    }
     config.add(element);
 
     return config;
@@ -198,20 +192,23 @@ public class Position extends MoteInterface {
     double x = 0, y = 0, z = 0;
 
     for (Element element : configXML) {
-      if (element.getName().equals("x")) {
-        x = Double.parseDouble(element.getText());
-      }
-
-      if (element.getName().equals("y")) {
-        y = Double.parseDouble(element.getText());
-      }
-
-      if (element.getName().equals("z")) {
-        z = Double.parseDouble(element.getText());
+      switch (element.getName()) {
+        case "x" -> x = Double.parseDouble(element.getText());
+        case "y" -> y = Double.parseDouble(element.getText());
+        case "z" -> z = Double.parseDouble(element.getText());
+        case "pos" -> {
+          x = getAttributeAsDouble(element, "x", x);
+          y = getAttributeAsDouble(element, "y", y);
+          z = getAttributeAsDouble(element, "z", z);
+        }
       }
     }
 
     setCoordinates(x, y, z);
   }
 
+  private static double getAttributeAsDouble(Element element, String name, double defaultValue) {
+    String value = element.getAttributeValue(name);
+    return value == null ? defaultValue : Double.parseDouble(value);
+  }
 }

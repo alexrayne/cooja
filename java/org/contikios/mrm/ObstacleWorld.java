@@ -34,12 +34,13 @@ import java.awt.Point;
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.Vector;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
-import org.jdom.Element;
+import org.jdom2.Element;
 
 /**
  * This class represents an area with obstacles.
@@ -182,7 +183,6 @@ class ObstacleWorld {
    * @return All obstacles in given angle interval
    */
   public Vector<Rectangle2D> getAllObstaclesInAngleInterval(Point2D center, AngleInterval angleInterval) {
-    Vector<Rectangle2D> obstaclesToReturn = new Vector<>();
     if (!obstaclesOrganized) {
       reorganizeSpatialObstacles();
     }
@@ -256,7 +256,7 @@ class ObstacleWorld {
       }
       currentDistance++;  
     }
-
+    var obstaclesToReturn = new Vector<Rectangle2D>();
     for (var point : pointsToCheck) {
       // Check which obstacles should be in this box
       boolean hit = false;
@@ -277,7 +277,7 @@ class ObstacleWorld {
           }
         }
       }
-      
+
       // Test first diagonal
       if (!hit) {
         AngleInterval testInterval = AngleInterval.getAngleIntervalOfLine(
@@ -583,7 +583,7 @@ class ObstacleWorld {
     logger.info(". Outer boundary min:\t" + getOuterBounds().getMinX() + ", " + getOuterBounds().getMinY());
     logger.info(". Outer boundary max:\t" + getOuterBounds().getMaxX() + ", " + getOuterBounds().getMaxY());
     
-    Vector<Rectangle2D> uniqueSpatialObstacles = new Vector<>();
+    ArrayList<Rectangle2D> uniqueSpatialObstacles = new ArrayList<>();
     for (int x=0; x < spatialResolution; x++)
       for (int y=0; y < spatialResolution; y++) 
         for (int i=0; i < allObstaclesSpatial[x][y].size(); i++) 
@@ -605,7 +605,6 @@ class ObstacleWorld {
       }
       System.out.println();
     }
-    
   }
   
   /**
@@ -615,11 +614,9 @@ class ObstacleWorld {
    * @return XML elements representing the obstacles
    */
   public Collection<Element> getConfigXML() {
-    Vector<Element> config = new Vector<>();
-    Element element;
-
+    var config = new ArrayList<Element>();
     for (Rectangle2D rect: allObstacles) {
-      element = new Element("obst");
+      var element = new Element("obst");
       element.setText(rect.getMinX() + ";" + rect.getMinY() + ";" + rect.getWidth() + ";" + rect.getHeight());
       config.add(element);
     }

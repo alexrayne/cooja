@@ -30,6 +30,7 @@
 package org.contikios.cooja.plugins;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static javax.swing.JTabbedPane.SCROLL_TAB_LAYOUT;
 
 import de.sciss.syntaxpane.DefaultSyntaxKit;
 import java.awt.BorderLayout;
@@ -70,7 +71,7 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.event.MenuEvent;
 import javax.swing.event.MenuListener;
-import javax.swing.filechooser.FileFilter;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.contikios.cooja.ClassDescription;
@@ -84,10 +85,10 @@ import org.contikios.cooja.VisPlugin;
 import org.contikios.cooja.util.StringUtils;
 import org.contikios.cooja.dialogs.MessageList;
 import org.contikios.cooja.dialogs.MessageListUI;
-import org.jdom.Element;
+import org.jdom2.Element;
 
 @ClassDescription("Simulation script editor")
-@PluginType(PluginType.SIM_CONTROL_PLUGIN)
+@PluginType(PluginType.PType.SIM_CONTROL_PLUGIN)
 public class ScriptRunner implements Plugin, HasQuickHelp {
   private static final Logger logger = LogManager.getLogger(ScriptRunner.class);
 
@@ -142,6 +143,7 @@ public class ScriptRunner implements Plugin, HasQuickHelp {
     /* Script area */
     frame.setLayout(new BorderLayout());
     editorTabs = new JTabbedPane();
+    editorTabs.setTabLayoutPolicy(SCROLL_TAB_LAYOUT);
 
     logTextArea = new JTextArea(12,50);
     logTextArea.setMargin(new Insets(5,5,5,5));
@@ -283,7 +285,7 @@ public class ScriptRunner implements Plugin, HasQuickHelp {
    * @return The file
    */
   private File getLinkedFile(int ix){
-    var name = editorTabs.getTitleAt(ix);
+    var name = editorTabs.getToolTipTextAt(ix);
     return name.endsWith(".js") && Files.exists(Path.of(name)) ? new File(name) : null;
   }
 
@@ -357,6 +359,7 @@ public class ScriptRunner implements Plugin, HasQuickHelp {
   private void updateTabTitle(File file) {
     String title = file == null ? "Script" : file.getAbsolutePath();
     editorTabs.setTitleAt(editorTabs.getSelectedIndex(), title);
+    editorTabs.setToolTipTextAt(editorTabs.getSelectedIndex(), title);
   }
 
   /** Check if the script has been updated and offer the user to save the changes. */
@@ -430,10 +433,10 @@ public class ScriptRunner implements Plugin, HasQuickHelp {
     checkForUpdatesAndSave();
     ArrayList<Element> config = new ArrayList<>();
     for (int i = 0; i < editorTabs.getTabCount(); i++) {
-      var name = editorTabs.getTitleAt(i);
-      if (name.endsWith(".js")) {
+      var file = getLinkedFile(i);
+      if (file != null) {
         Element element = new Element("scriptfile");
-        element.setText(gui.createPortablePath(new File(name)).getPath().replace('\\', '/'));
+        element.setText(gui.createPortablePath(file).getPath().replace('\\', '/'));
         config.add(element);
       } else {
         Element element = new Element("script");
@@ -504,16 +507,7 @@ public class ScriptRunner implements Plugin, HasQuickHelp {
     }
     chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
     chooser.setDialogTitle("Select script file");
-    chooser.setFileFilter(new FileFilter() {
-      @Override
-      public boolean accept(File file) {
-        return file.isDirectory() || file.getName().endsWith(".js");
-      }
-      @Override
-      public String getDescription() {
-        return "JavaScript";
-      }
-    });
+    chooser.setFileFilter(new FileNameExtensionFilter("JavaScript", "js"));
     var choice = open ? chooser.showOpenDialog(frame) : chooser.showSaveDialog(frame);
     return choice == JFileChooser.APPROVE_OPTION ? chooser.getSelectedFile() : null;
   }

@@ -28,7 +28,6 @@
 package org.contikios.cooja.motes;
 
 import java.awt.Container;
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 
@@ -36,7 +35,7 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 
-import org.jdom.Element;
+import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
@@ -155,37 +154,6 @@ public abstract class AbstractApplicationMoteType implements MoteType {
     JLabel label = new JLabel(sb.append("</table></html>").toString());
     label.setVerticalTextPosition(JLabel.TOP);
     return label;
-  }
-
-  @Override
-  public File getContikiSourceFile() {
-    return null; /* Contiki-independent */
-  }
-
-  @Override
-  public File getContikiFirmwareFile() {
-    return null; /* Contiki-independent */
-  }
-
-  @Override
-  public void setContikiSourceFile(File file) {
-    /* Contiki-independent */
-  }
-
-  @Override
-  public void setContikiFirmwareFile(File file) {
-    /* Contiki-independent */
-  }
-
-  @Override
-  public String getCompileCommands() {
-    /* Contiki-independent */
-    return null;
-  }
-
-  @Override
-  public void setCompileCommands(String commands) {
-    /* Contiki-independent */
   }
 
   @Override

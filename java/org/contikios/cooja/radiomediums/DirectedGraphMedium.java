@@ -38,7 +38,7 @@ import java.util.Random;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
-import org.jdom.Element;
+import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Mote;
@@ -62,19 +62,14 @@ import org.contikios.cooja.interfaces.Radio;
 public class DirectedGraphMedium extends AbstractRadioMedium {
   private static final Logger logger = LogManager.getLogger(DirectedGraphMedium.class);
 
-  private Simulation simulation;
-  private Random random;
+  private final Simulation simulation;
+  private final Random random;
 
   private final ArrayList<Edge> edges = new ArrayList<>();
   private boolean edgesDirty = true;
 
   /* Used for optimizing lookup time */
   private HashMap<Radio,DGRMDestinationRadio[]> edgesTable = new HashMap<>();
-
-  public DirectedGraphMedium() {
-    /* Do not initialize radio medium: use only for hash table */
-    super(null);
-  }
 
   public DirectedGraphMedium(Simulation simulation) {
     super(simulation);
@@ -252,7 +247,7 @@ public class DirectedGraphMedium extends AbstractRadioMedium {
     /* Create new radio connection using edge hash table */
     RadioConnection newConn = new RadioConnection(source);
     DGRMDestinationRadio[] destinations = getPotentialDestinations(source);
-    if (destinations == null || destinations.length == 0) {
+    if (destinations == null) {
       /* No destinations */
       /*logger.info(sendingRadio + ": No dest");*/
       return newConn;
@@ -351,8 +346,6 @@ public class DirectedGraphMedium extends AbstractRadioMedium {
   public boolean setConfigXML(Collection<Element> configXML, boolean visAvailable) {
     super.setConfigXML(configXML, visAvailable);
 
-    random = simulation.getRandomGenerator();
-
     /* Wait until simulation has been loaded */
     delayedConfiguration = configXML;
     return true;
@@ -369,7 +362,6 @@ public class DirectedGraphMedium extends AbstractRadioMedium {
     boolean oldConfig = false;
     for (Element element : delayedConfiguration) {
       if (element.getName().equals("edge")) {
-        @SuppressWarnings("unchecked")
 		Collection<Element> edgeConfig = element.getChildren();
         Radio source = null;
         DGRMDestinationRadio dest = null;
@@ -418,7 +410,6 @@ public class DirectedGraphMedium extends AbstractRadioMedium {
               }
               try {
                 dest = destClass.getDeclaredConstructor().newInstance();
-                @SuppressWarnings("unchecked")
 				List<Element> children = edgeElement.getChildren();
 				dest.setConfigXML(children, simulation);
               } catch (Exception e) {

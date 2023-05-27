@@ -29,10 +29,8 @@
 package org.contikios.cooja.interfaces;
 
 import java.awt.BorderLayout;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.util.Observable;
 import java.util.Observer;
+import java.util.Observable;
 
 import javax.swing.Box;
 import javax.swing.JButton;
@@ -53,7 +51,7 @@ import javax.swing.JTextField;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import org.jdom.Element;
+import org.jdom2.Element;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
@@ -263,36 +261,28 @@ public abstract class Radio extends MoteInterface {
     box.add(updateButton);
     box.add(channelLabel);
 
-    updateButton.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        ssLabel.setText("Signal strength (not auto-updated): "
-            + printStrength(getCurrentSignalStrength()) );
+    updateButton.addActionListener(e -> ssLabel.setText("Signal strength (not auto-updated): "
+            + printStrength(getCurrentSignalStrength()) ));
+
+    final Observer observer = (obs, obj) -> {
+      if (isTransmitting()) {
+        statusLabel.setText("Transmitting");
+      } else if (isReceiving()) {
+        statusLabel.setText("Receiving");
+      } else {
+        statusLabel.setText("Listening");
       }
-    });
 
-    final Observer observer = new Observer() {
-      @Override
-      public void update(Observable obs, Object obj) {
-        if (isTransmitting()) {
-          statusLabel.setText("Transmitting");
-        } else if (isReceiving()) {
-          statusLabel.setText("Receiving");
-        } else {
-          statusLabel.setText("Listening");
-        }
-
-        lastEventLabel.setText("Last event: " + getLastEvent());
-        ssLabel.setText("Signal strength (not auto-updated): "
+      lastEventLabel.setText("Last event: " + getLastEvent());
+      ssLabel.setText("Signal strength (not auto-updated): "
             + printStrength(getCurrentSignalStrength()) );
-        if (getChannel() == -1) {
-          channelLabel.setText("Current channel: ALL");
-        } else {
-          channelLabel.setText("Current channel: " + getChannel());
-        }
+      if (getChannel() == -1) {
+        channelLabel.setText("Current channel: ALL");
+      } else {
+        channelLabel.setText("Current channel: " + getChannel());
+      }
 
         
-      }
     };
 
     this.addObserver(observer);
@@ -361,13 +351,13 @@ public abstract class Radio extends MoteInterface {
 	    add(field);
 
 	    final Observer observer = new Observer() {
-	        public void update(Observable obs, Object obj) {
-      		    //logger.info("radio: observed motes"+getMote().getID() + " on " + ID);
+            public void update(Observable obs, Object obj) {
+                //logger.info("radio: observed motes"+getMote().getID() + " on " + ID);
 		        Collection<Element> config = getConfigXML();
 		        String value = getXMLText(config, ID);
 		        if (value != null)
 		        	field.setText(value);
-		    }
+            }
 	      };
 	    addObserver(observer);
 		//logger.info("radio: edit motes"+getMote().getID() + " on " + ID);

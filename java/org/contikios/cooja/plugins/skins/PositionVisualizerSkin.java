@@ -33,7 +33,6 @@ package org.contikios.cooja.plugins.skins;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Point;
-import java.util.Observable;
 import java.util.Observer;
 
 import org.contikios.cooja.ClassDescription;
@@ -56,12 +55,7 @@ public class PositionVisualizerSkin implements VisualizerSkin {
   private Simulation simulation = null;
   private Visualizer visualizer = null;
 
-  private final Observer positionObserver = new Observer() {
-    @Override
-    public void update(Observable obs, Object obj) {
-      visualizer.repaint();
-    }
-  };
+  private final Observer positionObserver = (obs, obj) -> visualizer.repaint();
   private final MoteCountListener simObserver = new MoteCountListener() {
     @Override
     public void moteWasAdded(Mote mote) {

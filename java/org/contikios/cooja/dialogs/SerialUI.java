@@ -35,7 +35,6 @@ import java.awt.EventQueue;
 import java.awt.Rectangle;
 import java.awt.Color;
 import java.awt.Font;
-import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
@@ -49,6 +48,7 @@ import java.util.Observable;
 import java.util.Observer;
 import java.util.Arrays;
 
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import javax.swing.JButton;
 import javax.swing.JOptionPane;
@@ -64,7 +64,7 @@ import javax.swing.JToggleButton;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
-import org.jdom.Element;
+import org.jdom2.Element;
 
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteType;
@@ -324,32 +324,29 @@ public abstract class SerialUI extends SerialIO
     final JTextField commandField = new JTextField(5);//15
     JButton sendButton = new JButton("Send data");
 
-    ActionListener sendCommandAction = new ActionListener() {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        final String command = trim(commandField.getText());
-        if (command == null) {
-          commandField.getToolkit().beep();
-          return;
-        }
+    ActionListener sendCommandAction = e -> {
+      final String command = trim(commandField.getText());
+      if (command == null) {
+        commandField.getToolkit().beep();
+        return;
+      }
 
-        try {
+      try {
             history.add(command);
 
-          appendToTextArea(logTextPane, "> " + command);
-          commandField.setText("");
-          if (getMote().getSimulation().isRunning()) {
-            getMote().getSimulation().invokeSimulationThread(() -> writeString(command));
-          } else {
-            writeString(command);
-          }
-        } catch (Exception ex) {
-          logger.error("could not send '" + command + "':", ex);
-          JOptionPane.showMessageDialog(
-              logTextPane,
-              "Could not send '" + command + "':\n" + ex.getMessage(), "Error sending message",
-              JOptionPane.ERROR_MESSAGE);
+        appendToTextArea(logTextPane, "> " + command);
+        commandField.setText("");
+        if (getMote().getSimulation().isRunning()) {
+          getMote().getSimulation().invokeSimulationThread(() -> writeString(command));
+        } else {
+          writeString(command);
         }
+      } catch (Exception ex) {
+        logger.error("could not send '" + command + "':", ex);
+        JOptionPane.showMessageDialog(
+            logTextPane,
+            "Could not send '" + command + "':\n" + ex.getMessage(), "Error sending message",
+            JOptionPane.ERROR_MESSAGE);
       }
     };
     commandField.addActionListener(sendCommandAction);
@@ -365,7 +362,7 @@ public abstract class SerialUI extends SerialIO
     logTextPane.addKeyListener(new KeyAdapter() {
       @Override
       public void keyPressed(KeyEvent e) {
-        if ((e.getModifiers() & (MouseEvent.SHIFT_MASK|MouseEvent.CTRL_MASK)) != 0) {
+        if ((e.getModifiersEx() & (MouseEvent.SHIFT_DOWN_MASK|MouseEvent.CTRL_DOWN_MASK)) != 0) {
           return;
         }
         commandField.requestFocusInWindow();
@@ -389,16 +386,9 @@ public abstract class SerialUI extends SerialIO
 
     /* Mote interface observer */
     Observer observer;
-    this.addObserver(observer = new Observer() {
-      @Override
-      public void update(Observable obs, Object obj) {
+    this.addObserver(observer = (obs, obj) -> {
           if (obs == controlsInform ) {
-              EventQueue.invokeLater(new Runnable() {
-                  @Override
-                  public void run() {
-                      logButton.setSelected(isLogged());
-                  }
-              });
+              EventQueue.invokeLater(() -> logButton.setSelected(isLogged()) );
               return;
           }
 
@@ -423,7 +413,6 @@ public abstract class SerialUI extends SerialIO
             }
           }
         });
-      }
     });
     controlsInform.addObserver(observer);
     panel.putClientProperty("intf_obs", observer);

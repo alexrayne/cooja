@@ -72,7 +72,7 @@ import org.contikios.cooja.VisPlugin;
  * @author Fredrik Osterlind
  */
 @ClassDescription("Simulation control")
-@PluginType(PluginType.SIM_STANDARD_PLUGIN)
+@PluginType(PluginType.PType.SIM_STANDARD_PLUGIN)
 public class SimControl extends VisPlugin implements HasQuickHelp {
   private static final int LABEL_UPDATE_INTERVAL = 150;
 
@@ -294,6 +294,9 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
       pane.add(unlimitedSpeedButton, radioConstraints);
       group.add(unlimitedSpeedButton);
       
+      // The system and Nimbus look and feels size the pane differently. Clamp the size
+      // to prevent the time label to end up to the far right on the toolbar.
+      pane.setMaximumSize(pane.getPreferredSize());
       toolBar.add(pane);
       toolBar.addSeparator();
       final var simulationTime = new JLabel("Time:");
@@ -341,10 +344,10 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
           simulationTime.setText(getTimeString(sim));
           
           var hasSim = sim != null;
-          var state = hasSim && !sim.isRunning() && sim.isRunnable();
+          startButton.setEnabled(hasSim);
           startButton.setEnabled(hasSim && sim.isRunnable());
           startButton.setSelected(hasSim && sim.isRunning());
-          stepButton.setEnabled(state);
+          stepButton.setEnabled(hasSim && !startButton.isSelected());
           reloadButton.setEnabled(hasSim);
           
           slowCrawlSpeedButton.setEnabled(hasSim);
@@ -384,7 +387,7 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
       final var buttonAction = new ActionListener() {
         @Override
         public void actionPerformed(ActionEvent e) {
-          java.awt.EventQueue.invokeLater(() -> toolbarListener.updateToolbar(false));
+          toolbarListener.updateToolbar(false);
         }
       };
       stepButton.addActionListener(buttonAction);
