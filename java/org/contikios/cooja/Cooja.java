@@ -810,6 +810,14 @@ public class Cooja extends Observable {
     return null;
   }
 
+  public Plugin tryStartPlugin(String source, Simulation sim) {
+      Class<? extends Plugin> pluginClass = tryLoadClass(this, Plugin.class, source);
+      if (pluginClass != null)
+          return tryStartPlugin(pluginClass, sim, null);
+      else
+          return null;
+    }
+
   /**
    * Starts given plugin. If visualized, the plugin is also shown.
    *

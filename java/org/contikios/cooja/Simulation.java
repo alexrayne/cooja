@@ -367,7 +367,13 @@ public final class Simulation extends Observable {
         ret = new Cooja.RunnableInEDT<SimulationCreationException>() {
           @Override
           public SimulationCreationException work() {
-            return startPlugins(root, cooja);
+            var ok = startPlugins(root, cooja);
+            
+            if ( cooja.getPlugin("SimControl") == null ) {
+                // use SimControl controller by default for visualised simulation
+                cooja.tryStartPlugin("org.contikios.cooja.plugins.SimControl", Simulation.this);
+            }
+            return ok;
           }
         }.invokeAndWait();
       } else {
