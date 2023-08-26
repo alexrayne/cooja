@@ -33,6 +33,7 @@ package org.contikios.cooja.interfaces;
 import org.contikios.cooja.*;
 
 import java.util.Observer;
+import java.util.Observable;
 import org.contikios.cooja.interfaces.SerialPort;
 
 /**
@@ -42,7 +43,7 @@ import org.contikios.cooja.interfaces.SerialPort;
  * @author Fredrik Osterlind
  */
 @ClassDescription("Serial IO")
-public abstract class SerialIO  //Log //maybe better extends Log?  
+public abstract class SerialIO  extends Observable  //Log //maybe better extends Log?  
 	implements MoteInterface, SerialPort
 {
 	  public abstract void writeByte(byte b);

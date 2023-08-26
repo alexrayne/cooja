@@ -352,10 +352,11 @@ public final class Simulation extends Observable {
           @Override
           public SimulationCreationException work() {
             var ok = startPlugins(root, cooja);
-            
-            if ( cooja.getPlugin("SimControl") == null ) {
+            if (ok != null) // ( cooja.getPlugin("SimControl") == null )
+            {
                 // use SimControl controller by default for visualised simulation
                 cooja.tryStartPlugin("org.contikios.cooja.plugins.SimControl", Simulation.this);
+                ok = null;
             }
             return ok;
           }
