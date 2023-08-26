@@ -1656,6 +1656,12 @@ public class Cooja {
       throw new SimulationCreationException("Unknown error: " + e.getMessage(), e);
     }
     setSimulation(sim);
+
+    if (isVisualized())
+    if ( getPlugin("SimControl") == null ) {
+        // use SimControl controller by default for visualised simulation
+        tryStartPlugin("org.contikios.cooja.plugins.SimControl", sim);
+    }
     return sim;
   }
 
