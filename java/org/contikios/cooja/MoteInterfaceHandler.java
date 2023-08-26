@@ -32,6 +32,7 @@ package org.contikios.cooja;
 
 import static java.util.Map.entry;
 
+import java.lang.Throwable;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -483,7 +484,14 @@ public class MoteInterfaceHandler {
         return false;
       }
     }
-    moteInterface.setConfigXML(element.getChildren(), Cooja.isVisualized());
+    try {
+        moteInterface.setConfigXML(element.getChildren(), Cooja.isVisualized());
+    }
+    catch (Throwable e) {
+        logger.fatal("crushed conf mote " + getMoteID()
+                    + " interface of class: " + moteInterfaceClass);
+        return false;
+    }
     return true;
   }
 
