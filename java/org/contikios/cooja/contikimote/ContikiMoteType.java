@@ -58,6 +58,7 @@ import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.MoteInterfaceHandler;
 import org.contikios.cooja.MoteType;
+import org.contikios.cooja.ProjectConfig;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.contikimote.interfaces.ContikiBeeper;
 import org.contikios.cooja.contikimote.interfaces.ContikiButton;
@@ -184,12 +185,18 @@ public class ContikiMoteType extends BaseContikiMoteType {
    */
   public ContikiMoteType(Cooja gui) {
     this.gui = gui;
-    projectConfig = gui.getProjectConfig().clone();
+    myConfig = new ProjectConfig(gui.getProjectConfig());
   }
 
   @Override
   public String getMoteType() {
     return "cooja";
+  }
+
+  @Override
+  public String getMoteTypeIdentifierPrefix() {
+    // The "mtype" prefix for ContikiMoteType is hardcoded elsewhere, so use that instead of "cooja".
+    return "mtype";
   }
 
   @Override
@@ -289,7 +296,7 @@ public class ContikiMoteType extends BaseContikiMoteType {
 
     // Allocate core communicator class
     final var firmwareFile = getContikiFirmwareFile();
-    myCoreComm = createCoreComm(gui, tmpDir, firmwareFile);
+    myCoreComm = createCoreComm(tmpDir, firmwareFile);
 
     /* Parse addresses using map file
      * or output of command specified in external tools settings (e.g. nm -a )
@@ -980,7 +987,7 @@ public class ContikiMoteType extends BaseContikiMoteType {
    *
    * @return Initial memory of a mote type
    */
-  protected SectionMoteMemory createInitialMemory() {
+  public SectionMoteMemory createInitialMemory() {
     return initialMemory.clone();
   }
 
@@ -991,7 +998,7 @@ public class ContikiMoteType extends BaseContikiMoteType {
    * @param mem
    *          Memory to set
    */
-  protected void getCoreMemory(SectionMoteMemory mem) {
+  public void getCoreMemory(SectionMoteMemory mem) {
     for (var sec : mem.getSections().values()) {
       myCoreComm.getMemory(sec.getStartAddr() - offset, sec.getTotalSize(), sec.getMemory());
     }
@@ -1003,7 +1010,7 @@ public class ContikiMoteType extends BaseContikiMoteType {
    * @param mem
    * New memory
    */
-  protected void setCoreMemory(SectionMoteMemory mem) {
+  public void setCoreMemory(SectionMoteMemory mem) {
     for (var sec : mem.getSections().values()) {
       myCoreComm.setMemory(sec.getStartAddr() - offset, sec.getTotalSize(), sec.getMemory());
     }
@@ -1162,7 +1169,7 @@ public class ContikiMoteType extends BaseContikiMoteType {
     }
 
     fixInterfacesContents(simulation);
-    return configureAndInit(Cooja.getTopParentContainer(), simulation, visAvailable);
+    return configureAndInit(Cooja.getTopParentContainer(), simulation, Cooja.isVisualized());
   }
 
   /**
@@ -1209,13 +1216,12 @@ public class ContikiMoteType extends BaseContikiMoteType {
   /**
    * Compiles Java class.
    *
-   * @param cooja Cooja object
-   * @param tempDir Directory for temporary files
+   * @param tempDir   Directory for temporary files
    * @param className Java class name (without extension)
    * @throws MoteTypeCreationException If Java class compilation error occurs
    */
-  private static void compileSourceFile(Cooja cooja, Path tempDir, String className) throws MoteTypeCreationException {
-    String[] cmd = new String[] {cooja.configuration.javac(),
+  private static void compileSourceFile(Path tempDir, String className) throws MoteTypeCreationException {
+    String[] cmd = new String[] {Cooja.configuration.javac(),
             "-cp", System.getProperty("java.class.path"), "--release", String.valueOf(Runtime.version().feature()),
             // Disable warnings to avoid 3 lines of "warning: using incubating module(s): jdk.incubator.foreign".
             "-nowarn", 
@@ -1256,16 +1262,15 @@ public class ContikiMoteType extends BaseContikiMoteType {
    * Create and return an instance of the core communicator identified by
    * className. This core communicator will load the native library libFile.
    *
-   * @param cooja Cooja object
    * @param tempDir Directory for temporary files
    * @param libFile Native library file
    * @return Core Communicator
    */
-  private static CoreComm createCoreComm(Cooja cooja, Path tempDir, File libFile) throws MoteTypeCreationException {
+  private static CoreComm createCoreComm(Path tempDir, File libFile) throws MoteTypeCreationException {
     // Loading a class might leave residue in the JVM so use a new name for the next call.
     final var className = getAvailableClassName();
     generateLibSourceFile(tempDir, className);
-    compileSourceFile(cooja, tempDir, className);
+    compileSourceFile(tempDir, className);
 
     ++fileCounter;
     Class<?> newCoreCommClass;

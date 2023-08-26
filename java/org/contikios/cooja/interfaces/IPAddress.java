@@ -30,20 +30,25 @@
 
 package org.contikios.cooja.interfaces;
 
+import static org.contikios.cooja.util.EventTriggers.Update;
+
+import java.awt.EventQueue;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Observer;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.contikios.cooja.ClassDescription;
+import org.contikios.cooja.Cooja;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.mote.memory.MemoryInterface;
 import org.contikios.cooja.mote.memory.MemoryInterface.SegmentMonitor;
 import org.contikios.cooja.mote.memory.MemoryLayout;
 import org.contikios.cooja.mote.memory.VarMemory;
+import org.contikios.cooja.util.EventTriggers;
 import org.contikios.cooja.util.IPUtils;
 
 /**
@@ -53,8 +58,7 @@ import org.contikios.cooja.util.IPUtils;
  * @author Enrico Joerns
  */
 @ClassDescription("IP Addresses")
-public class IPAddress extends MoteInterface {
-
+public class IPAddress implements MoteInterface {
   private static final Logger logger = LogManager.getLogger(IPAddress.class);
   private static final int IPv6_MAX_ADDRESSES = 4;
 
@@ -66,6 +70,7 @@ public class IPAddress extends MoteInterface {
 
   private final IPv ipVersion;
 
+  private final Mote mote;
   private final VarMemory moteMem;
   private final MemoryLayout memLayout;
   private IPContainer localIPAddr = null;
@@ -77,7 +82,11 @@ public class IPAddress extends MoteInterface {
   private int ipv6_addr_size = 0;
   private int ipv6_addr_list_offset = 0;
 
+  private final LinkedHashMap<JPanel, JLabel> labels = new LinkedHashMap<>();
+  private final EventTriggers<Update, Mote> triggers = new EventTriggers<>();
+
   public IPAddress(final Mote mote) {
+    this.mote = mote;
     moteMem = new VarMemory(mote.getMemory());
     memLayout = mote.getMemory().getLayout();
 
@@ -95,8 +104,7 @@ public class IPAddress extends MoteInterface {
         /* XXX Quick & Dirty IPv4 update handle */
         if (ipVersion == IPv.IPv4) {
           updateIPAddresses();
-          setChanged();
-          notifyObservers();
+          updateUI();
           return;
         }
 
@@ -124,8 +132,7 @@ public class IPAddress extends MoteInterface {
             /* Initial scan for IP address */
             updateIPAddresses();
             if (ipList.size() > 0) {
-              setChanged();
-              notifyObservers();
+              updateUI();
             }
             // TODO: Remove other listeners?
           }
@@ -138,8 +145,7 @@ public class IPAddress extends MoteInterface {
             lastAccess = address;
             if (accessCount == 16) {
               updateIPAddresses();
-              setChanged();
-              notifyObservers();
+              updateUI();
               lastAccess = 0;
             }
           }
@@ -147,8 +153,7 @@ public class IPAddress extends MoteInterface {
             /* Check if ip write was interrupted unexpectedly last time */
             if (lastAccess != 0) {
               updateIPAddresses();
-              setChanged();
-              notifyObservers();
+              updateUI();
             }
             accessCount = 1;
             lastAccess = address;
@@ -159,7 +164,6 @@ public class IPAddress extends MoteInterface {
 
     /* Determine IP version an add MemoryMonitors */
     if (moteMem.variableExists("uip_hostaddr")) {
-      logger.debug("IPv4 detected");
       ipVersion = IPv.IPv4;
       moteMem.addVarMonitor(
               SegmentMonitor.EventType.WRITE,
@@ -168,7 +172,6 @@ public class IPAddress extends MoteInterface {
     } else if (moteMem.variableExists("uip_ds6_netif_addr_list_offset")
             && moteMem.variableExists("uip_ds6_addr_size")
             && moteMem.variableExists("uip_ds6_if")) {
-      logger.debug("IPv6 detected");
       ipVersion = IPv.IPv6;
       moteMem.addVarMonitor(
               SegmentMonitor.EventType.WRITE,
@@ -289,7 +292,6 @@ public class IPAddress extends MoteInterface {
 
   @Override
   public void removed() {
-    super.removed();
     if (memMonitor != null) {
       if (ipVersion == IPv.IPv4) {
         moteMem.removeVarMonitor("uip_hostaddr",memMonitor);
@@ -302,16 +304,17 @@ public class IPAddress extends MoteInterface {
     }
   }
 
-  @Override
-  public JPanel getInterfaceVisualizer() {
-    JPanel panel = new JPanel();
-    final JLabel ipLabel = new JLabel();
-
-    Observer observer;
-    this.addObserver(observer = (obs, obj) -> {
-      StringBuilder ipStr = new StringBuilder();
-      ipStr.append("<html>");
-      for (IPContainer ipc: ipList) {
+  // FIXME: Call inside updateIPAddresses() instead.
+  private void updateUI() {
+    triggers.trigger(Update.UPDATE, mote);
+    if (!Cooja.isVisualized()) {
+      return;
+    }
+    EventQueue.invokeLater(() -> {
+      for (var label : labels.values()) {
+        var ipStr = new StringBuilder();
+        ipStr.append("<html>");
+        for (IPContainer ipc : ipList) {
           if (ipVersion == IPv.IPv4) {
             ipStr.append("IPv4 address: ")
                     .append(ipc.toString())
@@ -319,31 +322,34 @@ public class IPAddress extends MoteInterface {
           }
           else if (ipVersion == IPv.IPv6) {
             ipStr.append(ipc.isGlobal() ? "Global" : "Local")
-                  .append(" IPv6 address(#").append(ipc.getAddID()).append("): ").append(ipc)
-                  .append("<br>");
-        } else {
-          ipStr.append("Unknown IP<br>");
+                    .append(" IPv6 address(#").append(ipc.getAddID()).append("): ").append(ipc).append("<br>");
+          } else {
+            ipStr.append("Unknown IP<br>");
+          }
         }
+        ipStr.append("</html>");
+        label.setText(ipStr.toString());
       }
-      ipStr.append("</html>");
-      ipLabel.setText(ipStr.toString());
     });
-    observer.update(null, null);
+  }
 
+  @Override
+  public JPanel getInterfaceVisualizer() {
+    JPanel panel = new JPanel();
+    final JLabel ipLabel = new JLabel();
     panel.add(ipLabel);
-    panel.putClientProperty("intf_obs", observer);
-
+    labels.put(panel, ipLabel);
+    updateUI();
     return panel;
   }
 
   @Override
   public void releaseInterfaceVisualizer(JPanel panel) {
-    Observer observer = (Observer) panel.getClientProperty("intf_obs");
-    if (observer == null) {
-      logger.fatal("Error when releasing panel, observer is null");
-      return;
-    }
-    this.deleteObserver(observer);
+    labels.remove(panel);
+  }
+
+  public EventTriggers<Update, Mote> getTriggers() {
+    return triggers;
   }
 
   /**

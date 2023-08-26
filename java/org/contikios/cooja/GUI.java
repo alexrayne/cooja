@@ -54,6 +54,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Objects;
+import java.util.Random;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.SynchronousQueue;
@@ -61,6 +63,7 @@ import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.ButtonGroup;
 import javax.swing.DefaultDesktopManager;
 import javax.swing.InputMap;
@@ -107,10 +110,9 @@ import org.contikios.cooja.dialogs.MessageListUI;
 import org.contikios.cooja.dialogs.ProjectDirectoriesDialog;
 import org.contikios.cooja.interfaces.MoteID;
 import org.contikios.cooja.interfaces.Position;
-import org.contikios.cooja.plugins.MoteTypeInformation;
-import org.contikios.cooja.plugins.SimInformation;
 import org.contikios.cooja.util.ScnObservable;
 import org.jdom2.Element;
+import org.jdom2.Text;
 
 /** The graphical user interface for Cooja. */
 public class GUI {
@@ -131,14 +133,12 @@ public class GUI {
 
   final ScnObservable moteHighlightObservable;
 
-  final ScnObservable moteRelationObservable;
   private final Cooja cooja;
   boolean hasFileHistoryChanged;
 
   public GUI(Cooja cooja) {
     this.cooja = cooja;
     moteHighlightObservable = new ScnObservable();
-    moteRelationObservable = new ScnObservable();
     myDesktopPane = new JDesktopPane() {
       @Override
       public void setBounds(int x, int y, int w, int h) {
@@ -211,8 +211,8 @@ public class GUI {
         var cfg = CreateSimDialog.showDialog(cooja, new CreateSimDialog.SimConfig(null, null,
                 false, 123456, 1000 * Simulation.MILLISECOND));
         if (cfg == null) return;
-        var config = new Simulation.SimConfig(null, false, false, cooja.configuration.logDir(),
-                new HashMap<>());
+        var config = new Simulation.SimConfig(null, cfg.randomSeed(), false, false,
+                Cooja.configuration.logDir(), new HashMap<>());
         Simulation sim;
         try {
           sim = new Simulation(config, cooja, cfg.title(), cfg.generatedSeed(),
@@ -502,11 +502,81 @@ public class GUI {
     reloadSimulationMenuItem.add(new JMenuItem(reloadRandomSimulationAction));
     simulationMenu.add(reloadSimulationMenuItem);
 
-    var guiAction = new StartPluginGUIAction("Information...");
-    var menuItem = new JMenuItem(guiAction);
-    guiActions.add(guiAction);
+    var infoAction = new GUIAction("Information...") {
+      @Override
+      public void actionPerformed(ActionEvent actionEvent) {
+        final var LABEL_WIDTH = 170;
+        final var LABEL_HEIGHT = 15;
+
+        // Radio Medium type.
+        var smallPane = new JPanel();
+        // FIXME: Simplify code with a GridLayout.
+        smallPane.setAlignmentX(Component.LEFT_ALIGNMENT);
+        smallPane.setLayout(new BoxLayout(smallPane, BoxLayout.X_AXIS));
+        var label = new JLabel("Radio medium");
+        label.setPreferredSize(new Dimension(LABEL_WIDTH, LABEL_HEIGHT));
+        smallPane.add(label);
+        smallPane.add(Box.createHorizontalStrut(10));
+        smallPane.add(Box.createHorizontalGlue());
+
+        final var sim = cooja.getSimulation();
+        smallPane.add(new JLabel(Cooja.getDescriptionOf(sim.getRadioMedium().getClass())));
+        var mainPane = new JPanel();
+        mainPane.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        mainPane.setLayout(new BoxLayout(mainPane, BoxLayout.Y_AXIS));
+        mainPane.add(smallPane);
+        mainPane.add(Box.createRigidArea(new Dimension(0, 5)));
+
+        // Seed.
+        smallPane = new JPanel();
+        smallPane.setAlignmentX(Component.LEFT_ALIGNMENT);
+        smallPane.setLayout(new BoxLayout(smallPane, BoxLayout.X_AXIS));
+        label = new JLabel("Seed");
+        label.setPreferredSize(new Dimension(LABEL_WIDTH, LABEL_HEIGHT));
+        smallPane.add(label);
+        smallPane.add(Box.createHorizontalStrut(10));
+        smallPane.add(Box.createHorizontalGlue());
+        smallPane.add(new JLabel(String.valueOf(sim.getRandomSeed())));
+        mainPane.add(smallPane);
+        mainPane.add(Box.createRigidArea(new Dimension(0, 5)));
+
+        // Number of motes.
+        smallPane = new JPanel();
+        smallPane.setAlignmentX(Component.LEFT_ALIGNMENT);
+        smallPane.setLayout(new BoxLayout(smallPane, BoxLayout.X_AXIS));
+        label = new JLabel("Number of motes");
+        label.setPreferredSize(new Dimension(LABEL_WIDTH, LABEL_HEIGHT));
+        smallPane.add(label);
+        smallPane.add(Box.createHorizontalStrut(10));
+        smallPane.add(Box.createHorizontalGlue());
+        smallPane.add(new JLabel(String.valueOf(sim.getMotesCount())));
+        mainPane.add(smallPane);
+        mainPane.add(Box.createRigidArea(new Dimension(0, 5)));
+
+        // Number of mote types.
+        smallPane = new JPanel();
+        smallPane.setAlignmentX(Component.LEFT_ALIGNMENT);
+        smallPane.setLayout(new BoxLayout(smallPane, BoxLayout.X_AXIS));
+        label = new JLabel("Number of mote types");
+        label.setPreferredSize(new Dimension(LABEL_WIDTH, LABEL_HEIGHT));
+        smallPane.add(label);
+        smallPane.add(Box.createHorizontalStrut(10));
+        smallPane.add(Box.createHorizontalGlue());
+        smallPane.add(new JLabel(String.valueOf(sim.getMoteTypes().length)));
+
+        mainPane.add(smallPane);
+        JOptionPane.showMessageDialog(Cooja.getTopParentContainer(), mainPane,
+                "Simulation Information", JOptionPane.INFORMATION_MESSAGE);
+      }
+
+      @Override
+      public boolean shouldBeEnabled() {
+        return cooja.getSimulation() != null;
+      }
+    };
+    var menuItem = new JMenuItem(infoAction);
+    guiActions.add(infoAction);
     menuItem.setMnemonic(KeyEvent.VK_I);
-    menuItem.putClientProperty("class", SimInformation.class);
     simulationMenu.add(menuItem);
 
     // Mote type menu
@@ -537,10 +607,9 @@ public class GUI {
           // Check if abstraction description already exists.
           JSeparator abstractionLevelSeparator = null;
           for (Component component: menuMoteTypeClasses.getMenuComponents()) {
-            if (!(component instanceof JSeparator)) {
+            if (!(component instanceof JSeparator existing)) {
               continue;
             }
-            JSeparator existing = (JSeparator) component;
             if (abstractionLevelDescription.equals(existing.getToolTipText())) {
               abstractionLevelSeparator = existing;
               break;
@@ -618,11 +687,40 @@ public class GUI {
     });
     motesMenu.add(menuMoteTypes);
 
-    guiAction = new StartPluginGUIAction("Mote types...");
-    menuItem = new JMenuItem(guiAction);
-    guiActions.add(guiAction);
-    menuItem.putClientProperty("class", MoteTypeInformation.class);
+    var moteTypeInformation = new GUIAction("Mote types...") {
+      @Override
+      public void actionPerformed(ActionEvent actionEvent) {
+        var box = Box.createVerticalBox();
+        box.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        for (var moteType : cooja.getSimulation().getMoteTypes()) {
+          var visualizer = moteType.getTypeVisualizer();
+          if (visualizer == null) {
+            visualizer = new JLabel("[no information available]");
+          }
+          visualizer.setAlignmentX(Box.LEFT_ALIGNMENT);
+          var moteTypeString = Cooja.getDescriptionOf(moteType) + ": \"" + moteType.getDescription() + "\"";
+          visualizer.setBorder(BorderFactory.createTitledBorder(moteTypeString));
+          box.add(visualizer);
+          box.add(Box.createVerticalStrut(15));
+        }
+        var pane = new JScrollPane(box, JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        // Create a dialog manually to be able to call setSize.
+        var optionPane = new JOptionPane(pane, JOptionPane.INFORMATION_MESSAGE, JOptionPane.DEFAULT_OPTION);
+        var dialog = optionPane.createDialog(Cooja.getTopParentContainer(), "Mote Type Information");
+        dialog.setModal(false);
+        dialog.pack();
+        dialog.setSize(Math.min(dialog.getWidth(), 800), Math.min(dialog.getHeight(), 800));
+        dialog.setLocationRelativeTo(Cooja.getTopParentContainer());
+        dialog.setVisible(true);
+      }
 
+      @Override
+      public boolean shouldBeEnabled() {
+        return cooja.getSimulation() != null;
+      }
+    };
+    menuItem = new JMenuItem(moteTypeInformation);
+    guiActions.add(moteTypeInformation);
     motesMenu.add(menuItem);
 
     motesMenu.add(new JMenuItem(removeAllMotesAction));
@@ -663,10 +761,6 @@ public class GUI {
         // Simulation plugins.
         boolean hasSimPlugins = false;
         for (Class<? extends Plugin> pluginClass : cooja.getRegisteredPlugins()) {
-          if (pluginClass.equals(SimInformation.class) || pluginClass.equals(MoteTypeInformation.class)) {
-            continue; // Ignore.
-          }
-
           var pluginType = pluginClass.getAnnotation(PluginType.class).value();
           if (pluginType != PluginType.PType.SIM_PLUGIN 
                   && pluginType != PluginType.PType.SIM_STANDARD_PLUGIN
@@ -861,9 +955,11 @@ public class GUI {
     } catch (Cooja.ParseProjectsException e) {
       logger.fatal("Error when loading extensions: " + e.getMessage(), e);
       JOptionPane.showMessageDialog(frame,
-              "All Cooja extensions could not load.\n\n" +
-                      "To manage Cooja extensions:\n" +
-                      "Menu->Settings->Cooja extensions",
+              """
+                      All Cooja extensions could not load.
+
+                      To manage Cooja extensions:
+                      Menu->Settings->Cooja extensions""",
               "Reconfigure Cooja extensions", JOptionPane.INFORMATION_MESSAGE);
       showErrorDialog("Cooja extensions load error", e, false);
     }
@@ -983,8 +1079,8 @@ public class GUI {
       return;
     }
 
-    var cfg = new Simulation.SimConfig(file.getAbsolutePath(), false, false,
-            cooja.configuration.logDir(), new HashMap<>());
+    var cfg = new Simulation.SimConfig(file.getAbsolutePath(), null, false, false,
+            Cooja.configuration.logDir(), new HashMap<>());
     var worker = createLoadSimWorker(cfg, quick, null);
     if (worker == null) return;
     worker.execute();
@@ -993,15 +1089,14 @@ public class GUI {
   /**
    * Load a simulation configuration file from disk and return the simulation.
    *
-   * @param cfg Configuration to load, reloads current sim if null
-   * @param manualRandomSeed The random seed to use for the simulation
+   * @param cfg Configuration to load
    * @return The simulation
    */
-  Simulation doLoadConfig(Simulation.SimConfig cfg, Long manualRandomSeed) {
-    final var worker = new Cooja.RunnableInEDT<SwingWorker<Simulation, Cooja.SimulationCreationException>>() {
+  Simulation doLoadConfig(Simulation.SimConfig cfg) {
+    final var worker = new Cooja.RunnableInEDT<SwingWorker<Simulation, Object>>() {
       @Override
-      public SwingWorker<Simulation, Cooja.SimulationCreationException> work() {
-        return createLoadSimWorker(cfg, true, manualRandomSeed);
+      public SwingWorker<Simulation, Object> work() {
+        return createLoadSimWorker(cfg, true, cfg.randomSeed());
       }
     }.invokeAndWait();
     worker.execute();
@@ -1070,8 +1165,8 @@ public class GUI {
    * @param manualRandomSeed The random seed to use for the simulation
    * @return The worker that will load the simulation.
    */
-  public SwingWorker<Simulation, Cooja.SimulationCreationException> createLoadSimWorker(Simulation.SimConfig cfg, final boolean quick,
-                                                                                         Long manualRandomSeed) {
+  public SwingWorker<Simulation, Object> createLoadSimWorker(Simulation.SimConfig cfg, final boolean quick,
+                                                             Long manualRandomSeed) {
     assert java.awt.EventQueue.isDispatchThread() : "Call from AWT thread";
     final var configFile = cfg == null ? null : new File(cfg.file());
     final var autoStart = configFile == null && cooja.getSimulation().isRunning();
@@ -1080,7 +1175,7 @@ public class GUI {
       return null;
     }
 
-    if (configFile != null) {
+    if (configFile != null && !cfg.updateSim()) {
       addToFileHistory(configFile);
     }
 
@@ -1116,27 +1211,60 @@ public class GUI {
 
     // SwingWorker can pass information from worker to process() through publish().
     // Communicate information the other way through this shared queue.
-    final var channel = new SynchronousQueue<Integer>(true);
-    var worker = new SwingWorker<Simulation, Cooja.SimulationCreationException>() {
+    final var channel = new SynchronousQueue<>(true);
+    var worker = new SwingWorker<Simulation, Object>() {
       @Override
       public Simulation doInBackground() {
-        Element root = configFile == null ? cooja.extractSimulationConfig() : null;
+        Element root;
+        try {
+          root = configFile == null ? cooja.extractSimulationConfig() : cooja.readSimulationConfig(cfg);
+        } catch (Exception e) {
+          Cooja.showErrorDialog("Config file read error", e, false);
+          return null;
+        }
+        if (!quick) { // Allow user to change simulation configuration.
+          publish(root);
+          Object rv;
+          try {
+            rv = channel.take();
+          } catch (InterruptedException ex) {
+            return null;
+          }
+          if (!(rv instanceof CreateSimDialog.SimConfig cfg)) return null;
+          // Modify XML config to reflect the new values from the user.
+          var simCfg = root.getChild("simulation");
+          simCfg.getChild("title").setText(cfg.title());
+          simCfg.getChild("randomseed").setText(cfg.generatedSeed() ? "generated" : String.valueOf(cfg.randomSeed()));
+          var radioMedium = simCfg.getChild("radiomedium");
+          // Avoid overwriting radio medium config unless changing radio medium.
+          if (!radioMedium.getText().trim().equals(cfg.radioMedium())) {
+            radioMedium.setText(cfg.radioMedium());
+          }
+          var cfgDelay = simCfg.getChild("motedelay");
+          if (cfgDelay == null) {
+            cfgDelay = simCfg.getChild("motedelay_us");
+          } else {
+            cfgDelay.setName("motedelay_us");
+          }
+          cfgDelay.setText(String.valueOf(cfg.moteStartDelay()));
+        }
         boolean shouldRetry;
         Simulation newSim = null;
+        var config = configFile == null ? cooja.getSimulation().getCfg() : cfg;
         do {
           try {
             shouldRetry = false;
             PROGRESS_WARNINGS.clear();
-            newSim = configFile == null
-                    ? cooja.createSimulation(cooja.getSimulation().getCfg(), root, quick, manualRandomSeed)
-                    : cooja.loadSimulationConfig(cfg, quick, manualRandomSeed);
+            newSim = cooja.createSimulation(config, root, quick, manualRandomSeed);
             if (newSim != null && autoStart) {
               newSim.startSimulation();
             }
           } catch (Cooja.SimulationCreationException e) {
             publish(e);
             try {
-              shouldRetry = channel.take() == 1;
+              var rv = channel.take();
+              if (!(rv instanceof Integer i)) return null;
+              shouldRetry = i == 1;
             } catch (InterruptedException ex) {
               cooja.doRemoveSimulation();
               return null;
@@ -1147,12 +1275,53 @@ public class GUI {
       }
 
       @Override
-      protected void process(List<Cooja.SimulationCreationException> exs) {
-        for (var e : exs) {
-          var retry = showErrorDialog("Simulation load error", e, true);
+      protected void process(List<Object> exs) {
+        for (var ex : exs) {
+          Object rv = null;
+          if (ex instanceof Element root) { // Change simulation configuration.
+            var simCfg = root.getChild("simulation");
+            var title = simCfg.getChild("title").getText();
+            var cfgSeed = simCfg.getChild("randomseed").getText();
+            boolean generatedSeed = "generated".equals(cfgSeed);
+            long seed = manualRandomSeed != null ? manualRandomSeed
+                    : generatedSeed ? new Random().nextLong() : Long.parseLong(cfgSeed);
+            var medium = simCfg.getChild("radiomedium").getText().trim();
+            var cfgDelay = simCfg.getChild("motedelay");
+            long delay = cfgDelay == null
+                    ? Integer.parseInt(simCfg.getChild("motedelay_us").getText())
+                    : Integer.parseInt(cfgDelay.getText()) * Simulation.MILLISECOND;
+            var config = CreateSimDialog.showDialog(cooja, new CreateSimDialog.SimConfig(title, medium,
+                    generatedSeed, seed, delay));
+            rv = Objects.requireNonNullElse(config, false);
+            // Try to recreate simulation using a different mote type.
+            var availableMoteTypesObjs = cooja.getRegisteredMoteTypes();
+            var availableMoteTypes = new String[availableMoteTypesObjs.size()];
+            for (int i = 0; i < availableMoteTypes.length; i++) {
+              availableMoteTypes[i] = availableMoteTypesObjs.get(i).getName();
+            }
+            for (var elem : simCfg.getChildren("motetype")) {
+              var moteTypeClassName = elem.getText().trim();
+              var newClass = (String) JOptionPane.showInputDialog(Cooja.getTopParentContainer(),
+                      "The simulation is about to load '" + moteTypeClassName + "'\n" +
+                              "You may try to load the simulation using a different mote type.\n",
+                      "Loading mote type", JOptionPane.QUESTION_MESSAGE, null, availableMoteTypes,
+                      moteTypeClassName);
+              if (newClass == null) {
+                rv = false;
+              } else if (!newClass.equals(moteTypeClassName)) {
+                logger.warn("Changing mote type class: " + moteTypeClassName + " -> " + newClass);
+                // Remove the previous mote-interfaces to load the default interfaces.
+                elem.removeChildren("moteinterface");
+                elem.setContent(0, new Text(newClass));
+              }
+            }
+          } else if (ex instanceof Cooja.SimulationCreationException e) { // Display failure + reload button.
+            var retry = showErrorDialog("Simulation load error", e, true);
+            rv = retry ? 1 : 0;
+          }
           try {
-            channel.put(retry ? 1 : 0);
-          } catch (InterruptedException ex) {
+            channel.put(rv);
+          } catch (InterruptedException e) {
             cancel(true);
             return;
           }

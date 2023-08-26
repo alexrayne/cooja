@@ -28,16 +28,7 @@
 
 package org.contikios.cooja.motes;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.Observer;
-
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
-import org.jdom2.Element;
-import org.contikios.cooja.Mote;
-import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.MoteInterfaceHandler;
 import org.contikios.cooja.MoteType;
 import org.contikios.cooja.RadioPacket;
@@ -47,7 +38,6 @@ import org.contikios.cooja.interfaces.ApplicationRadio;
 import org.contikios.cooja.interfaces.ApplicationSerialPort;
 import org.contikios.cooja.interfaces.ApplicationLogPort;
 import org.contikios.cooja.interfaces.Radio;
-import org.contikios.cooja.mote.memory.MemoryInterface;
 
 /**
  * Abstract application mote.
@@ -56,37 +46,25 @@ import org.contikios.cooja.mote.memory.MemoryInterface;
  *
  * @author Fredrik Osterlind
  */
-public abstract class AbstractApplicationMote extends AbstractWakeupMote implements Mote {
-  private static final Logger logger = LogManager.getLogger(AbstractApplicationMote.class);
-
-  private final MoteType moteType;
-
-  private final SectionMoteMemory memory;
-
-  protected MoteInterfaceHandler moteInterfaces;
-
-  /* Observe our own radio for incoming radio packets */
-  private final Observer radioDataObserver = (obs, obj) -> {
-    ApplicationRadio radio = (ApplicationRadio) obs;
-    if (radio.getLastEvent() == Radio.RadioEvent.RECEPTION_FINISHED) {
-      /* only send in packets when they exist */
-      if (radio.getLastPacketReceived() != null)
-          receivedPacket(radio.getLastPacketReceived());
-    } else if (radio.getLastEvent() == Radio.RadioEvent.TRANSMISSION_FINISHED) {
-      if (radio.getLastPacketTransmitted() != null)
-          sentPacket(radio.getLastPacketTransmitted());
-    }
-  };
-
+public abstract class AbstractApplicationMote extends AbstractWakeupMote<MoteType, SectionMoteMemory> {
   public abstract void receivedPacket(RadioPacket p);
   public abstract void sentPacket(RadioPacket p);
   
   public AbstractApplicationMote(MoteType moteType, Simulation sim) throws MoteType.MoteTypeCreationException {
-    super(sim);
-    this.moteType = moteType;
-    this.memory = new SectionMoteMemory(new HashMap<>());
+    super(moteType, sim);
+    moteMemory = new SectionMoteMemory(new HashMap<>());
     this.moteInterfaces = new MoteInterfaceHandler(this, moteType.getMoteInterfaceClasses());
-    this.moteInterfaces.getRadio().addObserver(radioDataObserver);
+    // Observe our own radio for incoming radio packets.
+    moteInterfaces.getRadio().addObserver((obs, obj) -> {
+      var radio = (ApplicationRadio) obs;
+      if (radio.getLastEvent() == Radio.RadioEvent.RECEPTION_FINISHED) {
+        if (radio.getLastPacketReceived() != null) // Only send in packets when they exist.
+          receivedPacket(radio.getLastPacketReceived());
+      } else if (radio.getLastEvent() == Radio.RadioEvent.TRANSMISSION_FINISHED) {
+        if (radio.getLastPacketTransmitted() != null)
+          sentPacket(radio.getLastPacketTransmitted());
+      }
+    });
     requestImmediateWakeup();
   }
 
@@ -95,74 +73,12 @@ public abstract class AbstractApplicationMote extends AbstractWakeupMote impleme
   }
   
   @Override
-  public MoteInterfaceHandler getInterfaces() {
-    return moteInterfaces;
-  }
-
-  @Override
-  public MemoryInterface getMemory() {
-    return memory;
-  }
-
-  @Override
-  public MoteType getType() {
-    return moteType;
-  }
 
   /*
   public void setType(MoteType type) {
     moteType = type;
   }
   */
-
-  @Override
-  public Collection<Element> getConfigXML() {
-    ArrayList<Element> config = new ArrayList<>();
-    Element element;
-
-    for (MoteInterface moteInterface: moteInterfaces.getInterfaces()) {
-      element = new Element("interface_config");
-      element.setText(moteInterface.getClass().getName());
-
-      Collection<Element> interfaceXML = moteInterface.getConfigXML();
-      if (interfaceXML != null) {
-        element.addContent(interfaceXML);
-        config.add(element);
-      }
-    }
-
-    return config;
-  }
-
-  @Override
-  public boolean setConfigXML(Simulation simulation,
-      Collection<Element> configXML, boolean visAvailable) {
-    moteInterfaces.getRadio().addObserver(radioDataObserver);
-
-    for (Element element : configXML) {
-      String name = element.getName();
-      if (name.equals("interface_config")) {
-        String intfClass = element.getText().trim();
-        var moteInterfaceClass = MoteInterfaceHandler.getInterfaceClass(simulation.getCooja(), this, intfClass);
-        if (moteInterfaceClass == null) {
-          logger.warn("Can't find mote interface class: " + intfClass);
-          return false;
-        }
-
-        MoteInterface moteInterface = moteInterfaces.getInterfaceOfType(moteInterfaceClass);
-        moteInterface.setConfigXML(element.getChildren(), visAvailable);
-      }
-    }
-    requestImmediateWakeup();
-    return true;
-  }
-
-  @Override
-  public int getID() {
-    return moteInterfaces.getMoteID().getMoteID();
-  }
-  
-  @Override
   public String toString() {
     return "AppMote " + getID();
   }

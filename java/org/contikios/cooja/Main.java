@@ -30,8 +30,8 @@ package org.contikios.cooja;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.Filter;
 import org.apache.logging.log4j.core.appender.ConsoleAppender;
@@ -42,7 +42,6 @@ import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFact
 import org.apache.logging.log4j.core.config.builder.impl.BuiltConfiguration;
 import org.contikios.cooja.Cooja.Config;
 import picocli.CommandLine;
-import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -59,13 +58,20 @@ import java.nio.file.Path;
 @Command(version = {
         "Cooja " + Cooja.VERSION + ", Contiki-NG build interface version " + Cooja.CONTIKI_NG_BUILD_VERSION,
         "JVM: ${java.version} (${java.vendor} ${java.vm.name} ${java.vm.version})",
-        "OS: ${os.name} ${os.version} ${os.arch}"})
+        "OS: ${os.name} ${os.version} ${os.arch}"}, sortOptions = false, sortSynopsis = false)
 class Main {
   /**
    * Option for specifying if a GUI should be used.
    */
   @Option(names = "--gui", description = "use graphical mode", negatable = true)
   Boolean gui;
+
+  /**
+   * Option for specifying if the console log should be in color.
+   */
+  @Option(names = "--log-color", description = "use color in console log",
+          defaultValue = "true", fallbackValue = "true", negatable = true)
+  boolean logColor;
 
   /**
    * Option for specifying log4j2 config file.
@@ -76,7 +82,7 @@ class Main {
   /**
    * Option for specifying log directory.
    */
-  @Option(names = {"-logdir", "--logdir"}, paramLabel = "DIR", description = "the log directory use")
+  @Option(names = "--logdir", paramLabel = "DIR", description = "the log directory use")
   String logDir = ".";
 
   /**
@@ -88,7 +94,7 @@ class Main {
   /**
    * Option for specifying Contiki-NG path.
    */
-  @Option(names = {"-contiki", "--contiki"}, paramLabel = "DIR", description = "the Contiki-NG directory")
+  @Option(names = "--contiki", paramLabel = "DIR", description = "the Contiki-NG directory")
   String contikiPath;
 
   /**
@@ -112,43 +118,20 @@ class Main {
   /**
    * Option for specifying seed used for simulation.
    */
-  @Option(names = {"-random-seed", "--random-seed"}, paramLabel = "SEED", description = "the random seed")
+  @Option(names = "--random-seed", paramLabel = "SEED", description = "the random seed")
   Long randomSeed;
 
   /**
    * Automatically start simulations.
    */
-  @Option(names = "--autostart", description = "automatically start -nogui/-quickstart simulations")
+  @Option(names = "--autostart", description = "automatically start simulations")
   boolean autoStart;
-
-  /**
-   * The action to take after starting. No action means start GUI.
-   */
-  @ArgGroup(exclusive = true)
-  ExclusiveAction action;
-
-  /**
-   * Helper class to encode mutual exclusion between -nogui and -quickstart.
-   */
-  static class ExclusiveAction {
-    /**
-     * Option for specifying file to start the simulation with.
-     */
-    @Option(names = {"-quickstart", "--quickstart"}, paramLabel = "FILE", description = "start simulation with file [DEPRECATED]")
-    String[] quickstart;
-
-    /**
-     * Option for specifying file to start the simulation with.
-     */
-    @Option(names = {"-nogui", "--nogui"}, paramLabel = "FILE", description = "start simulation with file [DEPRECATED]")
-    String[] nogui;
-  }
 
   /**
    * Option for specifying simulation files to load.
    */
   @Parameters(paramLabel = "FILE", description = "one or more simulation files")
-  String[] simulationFiles;
+  List<String> simulationFiles = new ArrayList<>();
 
   /**
    * Option for instructing Cooja to update the simulation file (.csc).
@@ -156,11 +139,23 @@ class Main {
   @Option(names = "--update-simulation", description = "write an updated simulation file (.csc) and exit")
   boolean updateSimulation;
 
+  /**
+   * Option for instructing Cooja to print the expected Contiki-NG build version.
+   */
+  @Option(names = "--print-contiki-ng-build-version", description = "print Contiki-NG build version")
+  boolean contikiNgBuildVersion;
+
+  /**
+   * Option for instructing Cooja to print the simulation config version.
+   */
+  @Option(names = "--print-simulation-config-version", description = "print simulation config version")
+  boolean simulationConfigVersion;
+
   @Option(names = "--version", versionHelp = true,
           description = "print version information and exit")
   boolean versionRequested;
 
-  @Option(names = {"-h", "--help"}, usageHelp = true, description = "display a help message")
+  @Option(names = "--help", usageHelp = true, description = "display a help message")
   boolean helpRequested;
 
   public static void main(String[] args) {
@@ -181,8 +176,19 @@ class Main {
       commandLine.printVersionHelp(System.out);
       return;
     }
-    // Let gui control GUI mode, otherwise use -nogui as indicator for headless mode.
-    options.gui = options.gui == null ? options.action == null || options.action.nogui == null : options.gui;
+    boolean quitEarly = false;
+    if (options.contikiNgBuildVersion) {
+      System.out.println(Cooja.CONTIKI_NG_BUILD_VERSION);
+      quitEarly = true;
+    }
+    if (options.simulationConfigVersion) {
+      System.out.println(Cooja.SIMULATION_CONFIG_VERSION);
+      quitEarly = true;
+    }
+    if (quitEarly) {
+      return;
+    }
+    options.gui = options.gui == null || options.gui;
 
     if (options.gui && GraphicsEnvironment.isHeadless()) {
       System.err.println("Trying to start GUI in headless environment, aborting");
@@ -208,16 +214,9 @@ class Main {
       }
     }
 
-    ArrayList<String> simulationFiles = new ArrayList<>();
-    if (options.action != null) {
-      Collections.addAll(simulationFiles, options.action.nogui == null ? options.action.quickstart : options.action.nogui);
-    }
-    if (options.simulationFiles != null) {
-      Collections.addAll(simulationFiles, options.simulationFiles);
-    }
-    // Parse and verify soundness of -nogui/-quickstart/files argument.
+    // Parse and verify soundness of simulation files argument.
     ArrayList<Simulation.SimConfig> simConfigs = new ArrayList<>();
-    for (String arg : simulationFiles) {
+    for (var arg : options.simulationFiles) {
       // Argument on the form "file.csc[,key1=value1,key2=value2, ..]"
       var map = new HashMap<String, String>();
       String file = null;
@@ -245,11 +244,12 @@ class Main {
         System.err.println("File '" + file + "' does not exist");
         System.exit(1);
       }
+      var randomSeed = map.get("random-seed");
       var autoStart = map.getOrDefault("autostart", Boolean.toString(options.autoStart || !options.gui));
       var updateSim = map.getOrDefault("update-simulation", Boolean.toString(options.updateSimulation));
       var logDir = map.getOrDefault("logdir", options.logDir);
-      simConfigs.add(new Simulation.SimConfig(file, Boolean.parseBoolean(autoStart), Boolean.parseBoolean(updateSim),
-                                              logDir, map));
+      simConfigs.add(new Simulation.SimConfig(file, randomSeed == null ? options.randomSeed : Long.decode(randomSeed),
+              Boolean.parseBoolean(autoStart), Boolean.parseBoolean(updateSim), logDir, map));
     }
 
     if (options.logConfigFile != null && !Files.exists(Path.of(options.logConfigFile))) {
@@ -294,10 +294,12 @@ class Main {
       options.logName += ".log";
     }
 
-    var cfg = new Config(options.gui, options.randomSeed, options.externalUserConfig,
+    var cfg = new Config(options.gui, options.externalUserConfig,
             options.logDir, options.contikiPath, options.coojaPath, options.javac);
     // Configure logger
     if (options.logConfigFile == null) {
+      var startColor = options.logColor ? "%highlight{" : "";
+      var endColor = options.logColor ? "}" : "";
       ConfigurationBuilder<BuiltConfiguration> builder = ConfigurationBuilderFactory.newConfigurationBuilder();
       builder.setStatusLevel(Level.INFO);
       builder.setConfigurationName("DefaultConfig");
@@ -307,7 +309,7 @@ class Main {
       AppenderComponentBuilder appenderBuilder = builder.newAppender("Stdout", "CONSOLE")
               .addAttribute("target", ConsoleAppender.Target.SYSTEM_OUT);
       appenderBuilder.add(builder.newLayout("PatternLayout")
-              .addAttribute("pattern", "%5p [%t] (%F:%L) - %m%n"));
+              .addAttribute("pattern", startColor + "%5p [%t] (%F:%L) - %m" + endColor + "%n"));
       appenderBuilder.add(builder.newFilter("MarkerFilter", Filter.Result.DENY, Filter.Result.NEUTRAL)
               .addAttribute("marker", "FLOW"));
       builder.add(appenderBuilder);

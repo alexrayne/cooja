@@ -42,8 +42,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Random;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.Action;
@@ -56,27 +54,19 @@ import org.apache.logging.log4j.Logger;
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.MoteInterfaceHandler;
-import org.contikios.cooja.MoteType;
-import org.contikios.cooja.ProjectConfig;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.dialogs.AbstractCompileDialog;
 import org.contikios.cooja.dialogs.MessageContainer;
 import org.contikios.cooja.dialogs.MessageList;
+import org.contikios.cooja.motes.AbstractApplicationMoteType;
 import org.contikios.cooja.util.StringUtils;
 import org.jdom2.Element;
 
 /**
  * The common parts of mote types based on compiled Contiki-NG targets.
  */
-public abstract class BaseContikiMoteType implements MoteType {
+public abstract class BaseContikiMoteType extends AbstractApplicationMoteType {
   private static final Logger logger = LogManager.getLogger(BaseContikiMoteType.class);
-  /** Description of the mote type. */
-  protected String description = null;
-  /** Identifier of the mote type. */
-  protected String identifier;
-
-  /** Project configuration of the mote type. */
-  protected ProjectConfig projectConfig = null;
   // FIXME: combine fileSource and fileFirmware so only one can be active.
   /** Source file of the mote type. */
   protected File fileSource = null;
@@ -88,65 +78,23 @@ public abstract class BaseContikiMoteType implements MoteType {
   /** MoteInterface classes used by the mote type. */
   protected final ArrayList<Class<? extends MoteInterface>> moteInterfaceClasses = new ArrayList<>();
 
-  /** Random generator for generating a unique mote ID. */
-  private static final Random rnd = new Random();
-
   protected BaseContikiMoteType() {
-    // The "mtype" prefix for ContikiMoteType is hardcoded elsewhere, so use that instead of "cooja".
-    var namePrefix = getMoteType();
-    identifier = generateUniqueMoteTypeID("cooja".equals(namePrefix) ? "mtype" : namePrefix, Cooja.usedMoteTypeIDs);
+    super();
   }
 
   /** Returns file name extension for firmware. */
   public abstract String getMoteType();
 
+  /** Returns the mote type identifier prefix. Should not be overridden, special case for ContikiMoteType. */
+  @Override
+  public String getMoteTypeIdentifierPrefix() {
+    return getMoteType();
+  }
+
   /** Returns human-readable name for mote type. */
   public abstract String getMoteName();
 
   protected abstract String getMoteImage();
-
-  @Override
-  public String getDescription() {
-    return description;
-  }
-
-  @Override
-  public void setDescription(String description) {
-    this.description = description;
-  }
-
-  @Override
-  public String getIdentifier() {
-    return identifier;
-  }
-
-  @Override
-  public void setIdentifier(String identifier) {
-    this.identifier = identifier;
-  }
-
-  /**
-   * Generates a unique mote type ID.
-   *
-   * @param prefix Beginning of name
-   * @param reservedIdentifiers Already reserved identifiers
-   * @return Unique mote type ID.
-   */
-  public static String generateUniqueMoteTypeID(String prefix, Set<String> reservedIdentifiers) {
-    String testID = "";
-    boolean available = false;
-    while (!available) {
-      testID = prefix + rnd.nextInt(1000000000);
-      available = !reservedIdentifiers.contains(testID);
-      // FIXME: add check that the library name is not already used.
-    }
-    return testID;
-  }
-
-  @Override
-  public ProjectConfig getConfig() {
-    return projectConfig;
-  }
 
   public File getContikiSourceFile() {
     return fileSource;
@@ -253,7 +201,7 @@ public abstract class BaseContikiMoteType implements MoteType {
     return null;
   }
 
-  protected boolean setBaseConfigXML(Simulation sim, Collection<Element> configXML) throws MoteTypeCreationException {
+  protected boolean setBaseConfigXML(Simulation sim, Collection<Element> configXML) {
     for (Element element : configXML) {
       switch (element.getName()) {
         case "description" -> description = element.getText();
@@ -278,12 +226,15 @@ public abstract class BaseContikiMoteType implements MoteType {
         }
       }
     }
+    if (moteInterfaceClasses.isEmpty()) { // Old MspMote simulation, or reconfigured simulation.
+      moteInterfaceClasses.addAll(Arrays.asList(getDefaultMoteInterfaceClasses()));
+    }
     return true;
   }
 
   @Override
   public boolean configureAndInit(Container top, Simulation sim, boolean vis) throws MoteTypeCreationException {
-    if (vis && !sim.isQuickSetup()) {
+    if (Cooja.isVisualized() && !sim.isQuickSetup()) {
       var currDesc = getDescription();
       var desc = currDesc == null ? getMoteName() + " Mote Type #" + (sim.getMoteTypes().length + 1) : currDesc;
       final var source = getContikiSourceFile();

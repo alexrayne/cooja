@@ -32,6 +32,7 @@ package org.contikios.cooja.plugins;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.EventQueue;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -41,7 +42,6 @@ import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
-import javax.swing.SwingUtilities;
 import javax.swing.plaf.basic.BasicInternalFrameUI;
 
 import org.jdom2.Element;
@@ -94,8 +94,8 @@ public class Notes extends VisPlugin {
 
 
     /* XXX HACK: here we set the position and size of the window when it appears on a blank simulation screen. */
-    this.setLocation(680, 0);
-    this.setSize(Cooja.getDesktopPane().getWidth() - 680, 160);
+    this.setLocation(400, 0);
+    this.setSize(Cooja.getDesktopPane().getWidth() - 400, 160);
   }
 
   public String getNotes() {
@@ -107,25 +107,13 @@ public class Notes extends VisPlugin {
   }
 
   private void setDecorationsVisible(boolean visible) {
-    if (!(Notes.this.getUI() instanceof BasicInternalFrameUI)) {
-      return;
+    // Some look and feels can make the north pane null.
+    if (getUI() instanceof BasicInternalFrameUI frameUI && frameUI.getNorthPane() != null) {
+      frameUI.getNorthPane().setPreferredSize(visible ? null : new Dimension(0, 0));
+      revalidate();
+      EventQueue.invokeLater(Notes.this::repaint);
+      decorationsVisible = visible;
     }
-    BasicInternalFrameUI ui = (BasicInternalFrameUI) Notes.this.getUI();
-
-    try {
-    if (visible) {
-      ui.getNorthPane().setPreferredSize(null);
-    } else {
-      ui.getNorthPane().setPreferredSize(new Dimension(0,0));
-    }
-    } catch (NullPointerException e) {
-      // This catches an error where the defined look and feel makes north pane null.
-    }
-
-    Notes.this.revalidate();
-    SwingUtilities.invokeLater(Notes.this::repaint);
-
-    decorationsVisible = visible;
   }
 
   @Override

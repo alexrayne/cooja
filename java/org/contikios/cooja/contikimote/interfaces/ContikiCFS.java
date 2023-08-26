@@ -32,10 +32,11 @@ package org.contikios.cooja.contikimote.interfaces;
 
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.EventQueue;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.util.Observer;
+import java.util.LinkedHashMap;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
@@ -44,6 +45,7 @@ import javax.swing.JPanel;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
 import org.contikios.cooja.ClassDescription;
+import org.contikios.cooja.Cooja;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteInterface;
 
@@ -66,7 +68,7 @@ import org.contikios.cooja.mote.memory.VarMemory;
  * @author Fredrik Osterlind
  */
 @ClassDescription("Filesystem (CFS)")
-public class ContikiCFS extends MoteInterface implements PolledAfterActiveTicks {
+public class ContikiCFS implements MoteInterface, PolledAfterActiveTicks {
   private static final Logger logger = LogManager.getLogger(ContikiCFS.class);
 
   public static final int FILESYSTEM_SIZE = 4000; /* Configure CFS size here and in cfs-cooja.c */
@@ -75,6 +77,7 @@ public class ContikiCFS extends MoteInterface implements PolledAfterActiveTicks 
 
   private int lastRead = 0;
   private int lastWritten = 0;
+  private final LinkedHashMap<JPanel, Updates> labels = new LinkedHashMap<>();
 
   /**
    * Creates an interface to the filesystem at mote.
@@ -97,9 +100,16 @@ public class ContikiCFS extends MoteInterface implements PolledAfterActiveTicks 
       moteMem.setIntValueOf("simCFSRead", 0);
       moteMem.setIntValueOf("simCFSWritten", 0);
       moteMem.setByteValueOf("simCFSChanged", (byte) 0);
-
-      this.setChanged();
-      this.notifyObservers(mote);
+      if (Cooja.isVisualized()) {
+        final var now = mote.getSimulation().getSimulationTime();
+        EventQueue.invokeLater(() -> {
+          for (var update : labels.values()) {
+            update.timeLabel.setText("Last change at time: " + now);
+            update.readLabel.setText("Last change read bytes: " + getLastReadCount());
+            update.writtenLabel.setText("Last change wrote bytes: " + getLastWrittenCount());
+          }
+        });
+      }
     }
   }
 
@@ -169,32 +179,15 @@ public class ContikiCFS extends MoteInterface implements PolledAfterActiveTicks 
       }
     });
 
-    Observer observer;
-    this.addObserver(observer = (obs, obj) -> {
-      long currentTime = mote.getSimulation().getSimulationTime();
-      lastTimeLabel.setText("Last change at time: " + currentTime);
-      lastReadLabel.setText("Last change read bytes: " + getLastReadCount());
-      lastWrittenLabel.setText("Last change wrote bytes: " + getLastWrittenCount());
-    });
-
-    // Saving observer reference for releaseInterfaceVisualizer
-    panel.putClientProperty("intf_obs", observer);
-
     panel.setMinimumSize(new Dimension(140, 60));
     panel.setPreferredSize(new Dimension(140, 60));
-
+    labels.put(panel, new Updates(lastTimeLabel, lastReadLabel, lastWrittenLabel));
     return panel;
   }
 
   @Override
   public void releaseInterfaceVisualizer(JPanel panel) {
-    Observer observer = (Observer) panel.getClientProperty("intf_obs");
-    if (observer == null) {
-      logger.fatal("Error when releasing panel, observer is null");
-      return;
-    }
-
-    this.deleteObserver(observer);
+    labels.remove(panel);
   }
 
   /**
@@ -236,11 +229,12 @@ public class ContikiCFS extends MoteInterface implements PolledAfterActiveTicks 
       dataIn.close();
       fileIn.close();
     } catch (Exception ex) {
-      logger.debug("Exception ex: " + ex);
+      logger.warn("Exception ex: " + ex);
       return null;
     }
 
     return fileData;
   }
 
+  private record Updates(JLabel timeLabel, JLabel readLabel, JLabel writtenLabel) {}
 }

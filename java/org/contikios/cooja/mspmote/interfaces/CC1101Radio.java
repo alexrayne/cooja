@@ -43,8 +43,6 @@ import org.contikios.cooja.interfaces.Radio;
 import org.contikios.cooja.mspmote.MspMote;
 import org.contikios.cooja.mspmote.MspMoteTimeEvent;
 import se.sics.mspsim.chip.CC1101;
-import se.sics.mspsim.chip.CC1101.ReceiverListener;
-import se.sics.mspsim.chip.ChannelListener;
 import se.sics.mspsim.chip.RFListener;
 import se.sics.mspsim.chip.Radio802154;
 
@@ -98,7 +96,6 @@ public class CC1101Radio extends Radio implements CustomDataRadio {
 					isTransmitting = true;
 					len = 0;
 					gotSynchbyte = false;
-					/*logger.debug("----- CC1101 TRANSMISSION STARTED -----");*/
 					setChanged();
 					notifyObservers();
 				}
@@ -130,23 +127,13 @@ public class CC1101Radio extends Radio implements CustomDataRadio {
 				buffer[len++] = data;
 
 				if (len == expLen) {
-					/*logger.debug("----- CC1101 CUSTOM DATA TRANSMITTED -----");*/
-
 					final byte[] buf = new byte[expLen];
 					System.arraycopy(buffer, 0, buf, 0, expLen);
-					lastOutgoingPacket = new RadioPacket() {
-						@Override
-						public byte[] getPacketData() {
-							return buf;
-						}
-					};
-
+          lastOutgoingPacket = () -> buf;
 					lastEvent = RadioEvent.PACKET_TRANSMITTED;
-					/*logger.debug("----- CC1101 PACKET TRANSMITTED -----");*/
 					setChanged();
 					notifyObservers();
 
-					/*logger.debug("----- CC1101 TRANSMISSION FINISHED -----");*/
 					isTransmitting = false;
 					lastEvent = RadioEvent.TRANSMISSION_FINISHED;
 					setChanged();
@@ -156,28 +143,22 @@ public class CC1101Radio extends Radio implements CustomDataRadio {
 			}
 		});
 
-    cc1101.setReceiverListener(new ReceiverListener() {
-      @Override
-      public void newState(boolean on) {
-        if (cc1101.isReadyToReceive()) {
-          lastEvent = RadioEvent.HW_ON;
-          setChanged();
-          notifyObservers();
-        } else {
-          radioOff();
-        }
+    cc1101.setReceiverListener(on -> {
+      if (cc1101.isReadyToReceive()) {
+        lastEvent = RadioEvent.HW_ON;
+        setChanged();
+        notifyObservers();
+      } else {
+        radioOff();
       }
     });
 
-		cc1101.addChannelListener(new ChannelListener() {
-			@Override
-			public void channelChanged(int channel) {
-				/* XXX Currently assumes zero channel switch time */
-				lastEvent = RadioEvent.UNKNOWN;
-				setChanged();
-				notifyObservers();
-			}
-		});
+    cc1101.addChannelListener(channel -> {
+      /* XXX Currently assumes zero channel switch time */
+      lastEvent = RadioEvent.UNKNOWN;
+      setChanged();
+      notifyObservers();
+    });
 	}
 
 	private void radioOff() {
@@ -187,20 +168,13 @@ public class CC1101Radio extends Radio implements CustomDataRadio {
 			logger.warn("Turning off radio while transmitting, ending packet prematurely");
 
 			/* Simulate end of packet */
-			lastOutgoingPacket = new RadioPacket() {
-				@Override
-				public byte[] getPacketData() {
-					return new byte[0];
-				}
-			};
+      lastOutgoingPacket = () -> new byte[0];
 
 			lastEvent = RadioEvent.PACKET_TRANSMITTED;
-			/*logger.debug("----- CC1101 PACKET TRANSMITTED -----");*/
 			setChanged();
 			notifyObservers();
 
 			/* Register that transmission ended in radio medium */
-			/*logger.debug("----- CC1101 TRANSMISSION FINISHED -----");*/
 			isTransmitting = false;
 			lastEvent = RadioEvent.TRANSMISSION_FINISHED;
 			setChanged();
@@ -320,7 +294,6 @@ public class CC1101Radio extends Radio implements CustomDataRadio {
 		isReceiving = true;
 
 		lastEvent = RadioEvent.RECEPTION_STARTED;
-		/*logger.debug("----- CC1101 RECEPTION STARTED -----");*/
 		setChanged();
 		notifyObservers();
 	}
@@ -332,7 +305,6 @@ public class CC1101Radio extends Radio implements CustomDataRadio {
 		isInterfered = false;
 
 		lastEvent = RadioEvent.RECEPTION_FINISHED;
-		/*logger.debug("----- CC1101 RECEPTION FINISHED -----");*/
 		setChanged();
 		notifyObservers();
 	}
@@ -349,7 +321,6 @@ public class CC1101Radio extends Radio implements CustomDataRadio {
 		lastIncomingPacket = null;
 
 		lastEvent = RadioEvent.RECEPTION_INTERFERED;
-		/*logger.debug("----- CC1101 RECEPTION INTERFERED -----");*/
 		setChanged();
 		notifyObservers();
 	}

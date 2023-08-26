@@ -31,12 +31,9 @@
 package org.contikios.cooja;
 
 import java.util.Collection;
-import java.util.Observable;
-import javax.swing.JPanel;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 import org.jdom2.Element;
 import java.lang.Double;
+import javax.swing.JPanel;
 
 import org.contikios.cooja.interfaces.PolledAfterActiveTicks;
 import org.contikios.cooja.interfaces.PolledAfterAllTicks;
@@ -63,8 +60,8 @@ import org.contikios.cooja.interfaces.PolledBeforeAllTicks;
  *
  * @author Fredrik Osterlind
  */
-public abstract class MoteInterface extends Observable {
-  private static final Logger logger = LogManager.getLogger(MoteInterface.class);
+public interface MoteInterface {
+  //private static final Logger logger = LogManager.getLogger(MoteInterface.class);
 
   /**
    * This method creates an instance of the given class with the given mote as
@@ -82,7 +79,7 @@ public abstract class MoteInterface extends Observable {
     try {
       return interfaceClass.getConstructor(Mote.class).newInstance(mote);
     } catch (Exception e) {
-      logger.fatal("Exception when calling constructor of " + interfaceClass, e);
+      //logger.fatal("Exception when calling constructor of " + interfaceClass, e);
       throw new MoteType.MoteTypeCreationException("Exception when calling constructor of " + interfaceClass, e);
     }
   }
@@ -100,7 +97,7 @@ public abstract class MoteInterface extends Observable {
    * @see #releaseInterfaceVisualizer(JPanel)
    * @return Interface visualizer or null
    */
-  public abstract JPanel getInterfaceVisualizer();
+  JPanel getInterfaceVisualizer();
 
   /**
    * This method should be called when a visualizer panel is no longer in use.
@@ -112,7 +109,7 @@ public abstract class MoteInterface extends Observable {
    *          An interface visualizer panel fetched earlier for this mote
    *          interface.
    */
-  public abstract void releaseInterfaceVisualizer(JPanel panel);
+  void releaseInterfaceVisualizer(JPanel panel);
 
   /**
    * Returns XML elements representing the current config of this mote
@@ -125,19 +122,19 @@ public abstract class MoteInterface extends Observable {
    * @see #setConfigXML(Collection, boolean)
    * @return XML elements representing the current interface config
    */
-  public Collection<Element> getConfigXML() {
+  default Collection<Element> getConfigXML() {
     return null;
   }
 
 
-  public static
+  public default
   boolean assignXMLValue(Collection<Element> configXML
                     , final String name, final boolean value) 
   {
       return assignXMLValue(configXML, name, ""+value);
   }
 
-  public static
+  public default
   void setXMLValue(Collection<Element> configXML
                     , final String name, final String value) 
   {
@@ -150,7 +147,7 @@ public abstract class MoteInterface extends Observable {
         configXML.add(element);
   }
 
-  public static
+  public default
   void setXMLValue(Collection<Element> configXML
                     , final String name, final boolean value) 
   {
@@ -166,10 +163,9 @@ public abstract class MoteInterface extends Observable {
    * @param visAvailable
    *          Is this object allowed to show a visualizer?
    */
-  public void setConfigXML(Collection<Element> configXML, boolean visAvailable) {
-  }
+  default void setConfigXML(Collection<Element> configXML, boolean visAvailable) {}
 
-  public static
+  public default
   Element getXMLElement(final Collection<Element> configXML, final String name) {
         for (Element element : configXML) {
             if (element.getName().equals(name)) {
@@ -180,7 +176,7 @@ public abstract class MoteInterface extends Observable {
   }
   
   
-  public static
+  public default
   String getXMLText(final Collection<Element> configXML, final String name) {
       Element e = getXMLElement(configXML, name);
       if (e != null)
@@ -188,7 +184,7 @@ public abstract class MoteInterface extends Observable {
       return null;
   }
 
-  public static
+  public default
   boolean assignXMLValue(Collection<Element> configXML
 		  			, final String name, final String value) 
   {
@@ -201,7 +197,7 @@ public abstract class MoteInterface extends Observable {
         return false;
   }
 
-  public static
+  public default
   double getXMLDouble(final Collection<Element> configXML, final String name) {
 	    for (Element element : configXML) {
             if (element.getName().equals(name)) {
@@ -211,7 +207,7 @@ public abstract class MoteInterface extends Observable {
         return Double.NaN;
   }
 
-  public static
+  public default
   boolean assignXMLValue(Collection<Element> configXML
 		  			, final String name, final double value) 
   {
@@ -219,7 +215,7 @@ public abstract class MoteInterface extends Observable {
   }
 
 
-  public static
+  public default
   void setXMLValue(Collection<Element> configXML
 		  			, final String name, final double value) 
   {
@@ -230,13 +226,10 @@ public abstract class MoteInterface extends Observable {
    * Called to free resources used by the mote interface.
    * This method is called when the mote is removed from the simulation.
    */
-  public void removed() {
-  }
+  default void removed() {}
   
   /**
    * Called when all mote interfaces have been added to mote.
    */
-  public void added() {
-  }
-
+  default void added() {}
 }

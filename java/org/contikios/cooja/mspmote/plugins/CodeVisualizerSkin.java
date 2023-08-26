@@ -34,10 +34,7 @@ import java.awt.Color;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Point;
-import java.util.Observer;
-
 import javax.swing.Timer;
-
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.Simulation;
@@ -47,7 +44,6 @@ import org.contikios.cooja.mspmote.MspMoteType;
 import org.contikios.cooja.plugins.Visualizer;
 import org.contikios.cooja.plugins.VisualizerSkin;
 import se.sics.mspsim.core.MSP430;
-import se.sics.mspsim.util.DebugInfo;
 
 /**
  * Code visualizer skin for MSPSim motes.
@@ -67,19 +63,17 @@ public class CodeVisualizerSkin implements VisualizerSkin {
     }
   });
 
-  private final Observer simulationObserver = (obs, obj) -> visualizer.repaint();
-
   @Override
   public void setActive(Simulation simulation, Visualizer vis) {
     this.simulation = simulation;
     this.visualizer = vis;
-    simulation.addObserver(simulationObserver);
+    simulation.getSimulationStateTriggers().addTrigger(this, (obs, obj) -> visualizer.repaint());
     repaintTimer.start();
   }
 
   @Override
   public void setInactive() {
-    simulation.deleteObserver(simulationObserver);
+    simulation.getSimulationStateTriggers().deleteTriggers(this);
     repaintTimer.stop();
   }
 
@@ -93,12 +87,11 @@ public class CodeVisualizerSkin implements VisualizerSkin {
   }
 
   private static String getMoteString(Mote mote) {
-    if (!(mote instanceof MspMote)) {
+    if (!(mote instanceof MspMote mspMote)) {
       return null;
     }
     try {
-      DebugInfo debugInfo = 
-        ((MspMoteType)mote.getType()).getELF().getDebugInfo(((MspMote)mote).getCPU().reg[MSP430.PC]);
+      var debugInfo = ((MspMoteType)mote.getType()).getELF().getDebugInfo(mspMote.getCPU().reg[MSP430.PC]);
       if (debugInfo == null) {
         return null;
       }

@@ -34,60 +34,55 @@
 
 package org.contikios.cooja.interfaces;
 
-import org.contikios.cooja.*;
+import org.contikios.cooja.ClassDescription;
+import org.contikios.cooja.Simulation;
+import org.contikios.cooja.Plugin;
+import org.contikios.cooja.Cooja;
 
-@ClassDescription("Timeline selectable plugin")
+@ClassDescription("Timeline selection")
 public interface TimeSelect {
 
     // action on select time request
     public void trySelectTime(final long toTime);
 
-    default
+    default //static
     public void performTimePlugins( Simulation sim, Long time ) {
         performTimePluginsExcept(sim, time, this);
     }
 
-    default
+    default //static
     public <N extends Plugin & TimeSelect> 
     void performTimePlugins( Simulation sim, Long time, Class<N> pluginClass) 
     {
         performTimePluginsExcept(sim, time, this, pluginClass);
     }
 
-    static
+    static 
     public void performTimePluginsExcept( Simulation sim, Long time, TimeSelect exception ) 
     {
-        Plugin[] plugins = sim.getCooja().getStartedPlugins();
-        for (Plugin p: plugins) {
-          if (p == exception)
-              continue;
-          if (!(p instanceof TimeSelect)) {
-            continue;
-          }
-
-          /* Select simulation time */
-          TimeSelect plugin = (TimeSelect) p;
-          plugin.trySelectTime(time);
+        var list =  sim.startedPlugins;
+        for ( var item: list) {
+            if (item != exception)
+            if (item instanceof TimeSelect)
+            {
+                ((TimeSelect)item).trySelectTime(time);
+            }
         }
     }
 
     static
-    public <N extends Plugin & TimeSelect> 
+    public <N extends /*Plugin &*/ TimeSelect> 
     void performTimePluginsExcept( Simulation sim, Long time, TimeSelect exception
               , Class<N> pluginClass
               ) 
     {
-        Plugin[] plugins = sim.getCooja().getStartedPlugins();
-        for (Plugin p: plugins) {
-          if (p == exception)
-              continue;
-          if (!(pluginClass.isInstance(p))) {
-            continue;
-          }
-
-          /* Select simulation time */
-          TimeSelect plugin = (TimeSelect) p;
-          plugin.trySelectTime(time);
+        var list =  sim.startedPlugins;
+        for ( var item: list) {
+            if (item != exception)
+            if (pluginClass.isInstance(item))
+            {
+                ((TimeSelect)item).trySelectTime(time);
+            }
         }
     }
 }

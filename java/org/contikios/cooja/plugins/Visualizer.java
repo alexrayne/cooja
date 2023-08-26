@@ -34,6 +34,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
+import java.awt.EventQueue;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
@@ -49,14 +50,11 @@ import java.awt.dnd.DropTargetDropEvent;
 import java.awt.dnd.DropTargetEvent;
 import java.awt.dnd.DropTargetListener;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
-import java.awt.event.MouseWheelEvent;
-import java.awt.event.MouseWheelListener;
 import java.awt.geom.AffineTransform;
 import java.io.File;
 import java.io.IOException;
@@ -69,10 +67,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Observable;
 import java.util.Observer;
 import java.util.Set;
-
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.JCheckBoxMenuItem;
@@ -209,7 +205,6 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
   private final ArrayList<Mote> highlightedMotes = new ArrayList<>();
   private final static Color HIGHLIGHT_COLOR = Color.CYAN;
   private final static Color MOVE_COLOR = Color.WHITE;
-  private final Observer moteRelationsObserver;
 
   /* Popup menu */
   public interface SimulationMenuAction {
@@ -436,12 +431,9 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
         Position pos = mote.getInterfaces().getPosition();
         if (pos != null) {
           pos.addObserver(posObserver);
-          SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-              resetViewport = 1;
-              repaint();
-            }
+          EventQueue.invokeLater(() -> {
+            resetViewport = 1;
+            repaint();
           });
         }
       }
@@ -463,43 +455,35 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     }
 
     /* Observe mote highlights */
-    Cooja.addMoteHighlightObserver(moteHighligtObserver = new Observer() {
-      @Override
-      public void update(Observable obs, Object obj) {
-        if (!(obj instanceof Mote)) {
+    Cooja.addMoteHighlightObserver(moteHighligtObserver = (obs, obj) -> {
+      if (!(obj instanceof final Mote mote)) {
+        return;
+      }
+
+      final Timer timer = new Timer(100, null);
+      timer.addActionListener(e -> {
+        // Count down.
+        if (timer.getDelay() < 90) {
+          timer.stop();
+          highlightedMotes.remove(mote);
+          repaint();
           return;
         }
 
-        final Timer timer = new Timer(100, null);
-        final Mote mote = (Mote) obj;
-        timer.addActionListener(new ActionListener() {
-          @Override
-          public void actionPerformed(ActionEvent e) {
-            /* Count down */
-            if (timer.getDelay() < 90) {
-              timer.stop();
-              highlightedMotes.remove(mote);
-              repaint();
-              return;
-            }
-
-            /* Toggle highlight state */
-            if (highlightedMotes.contains(mote)) {
-              highlightedMotes.remove(mote);
-            }
-            else {
-              highlightedMotes.add(mote);
-            }
-            timer.setDelay(timer.getDelay() - 1);
-            repaint();
-          }
-        });
-        timer.start();
-      }
+        // Toggle highlight state.
+        if (highlightedMotes.contains(mote)) {
+          highlightedMotes.remove(mote);
+        } else {
+          highlightedMotes.add(mote);
+        }
+        timer.setDelay(timer.getDelay() - 1);
+        repaint();
+      });
+      timer.start();
     });
 
     /* Observe mote relations */
-    Cooja.addMoteRelationsObserver(moteRelationsObserver = (obs, obj) -> repaint());
+    simulation.getMoteRelationsTriggers().addTrigger(this, (k, v) -> repaint());
 
     canvas.getInputMap().put(KeyStroke.getKeyStroke("ESCAPE"), "abort_action");
     canvas.getInputMap().put(KeyStroke.getKeyStroke("DELETE"), "delete_motes");
@@ -727,20 +711,15 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
         }
       }
     });
-    canvas.addMouseWheelListener(new MouseWheelListener() {
-      @Override
-      public void mouseWheelMoved(MouseWheelEvent mwe) {
-        int x = mwe.getX();
-        int y = mwe.getY();
-        int rot = mwe.getWheelRotation();
+    canvas.addMouseWheelListener(mwe -> {
+      int x = mwe.getX();
+      int y = mwe.getY();
+      int rot = mwe.getWheelRotation();
 
-        if (rot > 0) {
-          zoomToFactor(zoomFactor() / 1.2, new Point(x, y));
-        }
-        else {
-          zoomToFactor(zoomFactor() * 1.2, new Point(x, y));
-        }
-
+      if (rot > 0) {
+        zoomToFactor(zoomFactor() / 1.2, new Point(x, y));
+      } else {
+        zoomToFactor(zoomFactor() * 1.2, new Point(x, y));
       }
     });
 
@@ -802,13 +781,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
         dtde.acceptDrop(DnDConstants.ACTION_COPY_OR_MOVE);
 
         try {
-          List<Object> transferList = List.of(
-                  transferable.getTransferData(DataFlavor.javaFileListFlavor)
-          );
-          if (transferList.size() != 1) {
-            return;
-          }
-          List<File> list = (List<File>) transferList.get(0);
+          List<File> list = (List<File>) transferable.getTransferData(DataFlavor.javaFileListFlavor);
           if (list.size() != 1) {
             return;
           }
@@ -836,22 +809,15 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
         }
 
         /* Only accept single files */
-        File file;
         if (!transferable.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
           return false;
         }
         try {
-          List<Object> transferList = List.of(
-                  transferable.getTransferData(DataFlavor.javaFileListFlavor)
-          );
-          if (transferList.size() != 1) {
-            return false;
-          }
-          List<File> list = (List<File>) transferList.get(0);
+          List<File> list = (List<File>) transferable.getTransferData(DataFlavor.javaFileListFlavor);
           if (list.size() != 1) {
             return false;
           }
-          file = list.get(0);
+          var file = list.get(0);
         }
         catch (UnsupportedFlavorException | IOException e) {
           return false;
@@ -1322,19 +1288,12 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
 
     /* Center visible motes */
     final double smallXfinal = smallX, bigXfinal = bigX, smallYfinal = smallY, bigYfinal = bigY;
-    SwingUtilities.invokeLater(new Runnable() {
-      @Override
-      public void run() {
-        Position viewMid
-                = transformPixelToPosition(canvas.getWidth() / 2, canvas.getHeight() / 2);
-        double motesMidX = (smallXfinal + bigXfinal) / 2.0;
-        double motesMidY = (smallYfinal + bigYfinal) / 2.0;
-
-        viewportTransform.translate(
-                viewMid.getXCoordinate() - motesMidX,
-                viewMid.getYCoordinate() - motesMidY);
-        canvas.repaint();
-      }
+    EventQueue.invokeLater(() -> {
+      var viewMid = transformPixelToPosition(canvas.getWidth() / 2, canvas.getHeight() / 2);
+      double motesMidX = (smallXfinal + bigXfinal) / 2.0;
+      double motesMidY = (smallYfinal + bigYfinal) / 2.0;
+      viewportTransform.translate(viewMid.getXCoordinate() - motesMidX, viewMid.getYCoordinate() - motesMidY);
+      canvas.repaint();
     });
   }
 
@@ -1420,9 +1379,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     if (moteHighligtObserver != null) {
       Cooja.deleteMoteHighlightObserver(moteHighligtObserver);
     }
-    if (moteRelationsObserver != null) {
-      Cooja.deleteMoteRelationsObserver(moteRelationsObserver);
-    }
+    simulation.getMoteRelationsTriggers().deleteTriggers(this);
 
     simulation.getEventCentral().removeMoteCountListener(newMotesListener);
     for (Mote mote : simulation.getMotes()) {

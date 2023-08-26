@@ -49,7 +49,7 @@ import org.contikios.cooja.mote.memory.VarMemory;
  *
  * @author Fredrik Osterlind
  */
-public class ContikiButton extends Button {
+public class ContikiButton extends Button.AbstractButton {
   private final VarMemory moteMem;
   private final ContikiMote mote;
 
@@ -75,9 +75,6 @@ public class ContikiButton extends Button {
 
       /* If mote is inactive, wake it up */
       mote.requestImmediateWakeup();
-
-      setChanged();
-      notifyObservers();
     }
   }
 
@@ -90,9 +87,6 @@ public class ContikiButton extends Button {
 
       /* If mote is inactive, wake it up */
       mote.requestImmediateWakeup();
-
-      setChanged();
-      notifyObservers();
     }
   }
 

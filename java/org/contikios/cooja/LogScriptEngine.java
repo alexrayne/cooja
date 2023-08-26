@@ -40,7 +40,7 @@ import java.lang.reflect.UndeclaredThrowableException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.Observer;
+import java.util.Objects;
 import java.util.concurrent.Semaphore;
 import javax.script.CompiledScript;
 import javax.script.ScriptException;
@@ -74,15 +74,8 @@ public class LogScriptEngine {
 
   private final LogOutputListener logOutputListener = new LogOutputListener() {
     @Override
-    public void moteWasAdded(Mote mote) {
-    }
-    @Override
-    public void moteWasRemoved(Mote mote) {
-    }
-    @Override
     public void newLogOutput(LogOutputEvent ev) {
       if (scriptThread == null || !scriptThread.isAlive()) {
-        logger.warn("No script thread, deactivate script.");
         return;
       }
 
@@ -113,16 +106,17 @@ public class LogScriptEngine {
   private Semaphore semaphoreScript = null; /* Semaphores blocking script/simulation */
   private Semaphore semaphoreSim = null;
   private Thread scriptThread = null; /* Script thread */
-  private final Observer scriptLogObserver;
-
   private final Simulation simulation;
 
   private long timeout;
   private long startTime;
   private long startRealTime;
+  private final JTextArea textArea;
 
   protected LogScriptEngine(Simulation simulation, int logNumber, JTextArea logTextArea) {
     this.simulation = simulation;
+    textArea = logTextArea;
+    simulation.getEventCentral().addLogOutputListener(logOutputListener);
     if (!Cooja.isVisualized()) {
       var logName = logNumber == 0 ? "COOJA.testlog" : String.format("COOJA-%02d.testlog", logNumber);
       var logFile = Path.of(simulation.getCfg().logDir(), logName);
@@ -134,21 +128,9 @@ public class LogScriptEngine {
         logger.fatal("Could not create {}: {}", logFile, e.toString());
         throw new RuntimeException(e);
       }
-      scriptLogObserver = (obs, obj) -> {
-        try {
-          logWriter.write((String) obj);
-          logWriter.flush();
-        } catch (IOException e) {
-          logger.fatal("Error when writing to test log file: " + obj, e);
-        }
-      };
       return;
     }
     logWriter = null;
-    scriptLogObserver = (obs, obj) -> java.awt.EventQueue.invokeLater(() -> {
-      logTextArea.append((String) obj);
-      logTextArea.setCaretPosition(logTextArea.getText().length());
-    });
   }
 
   /* Only called from the simulation loop */
@@ -173,7 +155,24 @@ public class LogScriptEngine {
     /* ... script is now again waiting for script semaphore ... */
   }
 
+  public void scriptLog(String msg) {
+    if (Cooja.isVisualized()) {
+      java.awt.EventQueue.invokeLater(() -> {
+        textArea.append(msg);
+        textArea.setCaretPosition(textArea.getText().length());
+      });
+      return;
+    }
+    try {
+      logWriter.write(msg);
+      logWriter.flush();
+    } catch (IOException e) {
+      logger.fatal("Error when writing to test log file: " + msg, e);
+    }
+  }
+
   protected void closeLog() {
+    simulation.getEventCentral().removeLogOutputListener(logOutputListener);
     if (Cooja.isVisualized()) {
       return;
     }
@@ -191,8 +190,6 @@ public class LogScriptEngine {
   public void deactivateScript() {
     timeoutEvent.remove();
     timeoutProgressEvent.remove();
-
-    simulation.getEventCentral().removeLogOutputListener(logOutputListener);
 
     engine.put("SHUTDOWN", true);
 
@@ -247,8 +244,6 @@ public class LogScriptEngine {
       logger.fatal("Error when creating engine: " + e.getMessage(), e);
       return false;
     }
-    // Setup simulation observers.
-    simulation.getEventCentral().addLogOutputListener(logOutputListener);
     // Setup script variables.
     engine.put("TIMEOUT", false);
     engine.put("SHUTDOWN", false);
@@ -261,34 +256,22 @@ public class LogScriptEngine {
     engine.put("mote", null);
     engine.put("msg", "");
     engine.put("node", new ScriptMote());
-    scriptThread = new Thread(new Runnable() {
-      @Override
-      public void run() {
-        int rv;
-        try {
-          var obj = script.eval();
-          rv = obj == null ? 1 : (int) obj;
-          switch (rv) {
-            case -1:
-              // Something else is shutting down Cooja, for example the SerialSocket commands in 17-tun-rpl-br.
-              break;
-            case 0:
-              scriptLogObserver.update(null, "TEST OK\n");
-              break;
-            default:
-              scriptLogObserver.update(null, "TEST FAILED\n");
-              break;
-          }
-        } catch (Exception e) {
-          rv = 1;
-          logger.fatal("Script error:", e);
-          if (Cooja.isVisualized()) {
-            Cooja.showErrorDialog("Script error", e, false);
-          }
+    scriptThread = new Thread(() -> {
+      int rv = 1;
+      try {
+        rv = (int) Objects.requireNonNullElse(script.eval(), 1);
+      } catch (Exception e) {
+        logger.fatal("Script error:", e);
+        if (Cooja.isVisualized()) {
+          Cooja.showErrorDialog("Script error", e, false);
         }
-        deactivateScript();
-        simulation.stopSimulation(rv > 0 ? rv : null);
       }
+      // rv == -1 means something else is shutting down Cooja, for example the SerialSocket commands in 17-tun-rpl-br.
+      if (rv != -1) {
+        scriptLog(rv == 0 ? "TEST OK\n" : "TEST FAILED\n");
+      }
+      deactivateScript();
+      simulation.stopSimulation(rv > 0 ? rv : null);
     }, "script");
     scriptThread.start();
     try {
@@ -333,7 +316,7 @@ public class LogScriptEngine {
   private final ScriptLog scriptLog = new ScriptLog() {
     @Override
     public void log(String msg) {
-      scriptLogObserver.update(null, msg);
+      scriptLog(msg);
     }
     @Override
     public void append(String filename, String msg) {

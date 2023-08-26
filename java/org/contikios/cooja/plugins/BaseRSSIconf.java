@@ -44,7 +44,9 @@ import javax.swing.table.TableCellEditor;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
+import org.contikios.cooja.Mote;
 import org.contikios.cooja.PluginType;
+import org.contikios.cooja.SimEventCentral.MoteCountListener;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.SupportedArguments;
 import org.contikios.cooja.VisPlugin;
@@ -72,6 +74,7 @@ public class BaseRSSIconf extends VisPlugin {
 
 	private final AbstractRadioMedium radioMedium;
 	private final Observer changeObserver;
+  private final MoteCountListener moteCountListener;
 	private final Simulation sim;
 	
 	
@@ -163,7 +166,17 @@ public class BaseRSSIconf extends VisPlugin {
     };
     changeObserver = (obs, obj) -> model.fireTableDataChanged();
 		radioMedium.addRadioMediumObserver(changeObserver);
-		sim.addObserver(changeObserver);
+    sim.getEventCentral().addMoteCountListener(moteCountListener = new MoteCountListener() {
+      @Override
+      public void moteWasAdded(Mote mote) {
+        model.fireTableDataChanged();
+      }
+
+      @Override
+      public void moteWasRemoved(Mote mote) {
+        model.fireTableDataChanged();
+      }
+    });
 
 		/* Represent motes and RSSI by table */
     final var combo = new JComboBox<Number>();
@@ -228,7 +241,6 @@ public class BaseRSSIconf extends VisPlugin {
 	@Override
 	public void closePlugin() {
 		radioMedium.deleteRadioMediumObserver(changeObserver);
-		sim.deleteObserver(changeObserver);
-	}
-
+    sim.getEventCentral().removeMoteCountListener(moteCountListener);
+  }
 }

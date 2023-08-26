@@ -76,6 +76,7 @@ import org.contikios.cooja.radiomediums.SilentRadioMedium;
 import org.contikios.cooja.radiomediums.UDGM;
 import org.contikios.cooja.radiomediums.UDGMConstantLoss;
 import org.contikios.mrm.MRM;
+import org.jdom2.Element;
 
 /**
  * The mote interface handler holds all interfaces for a specific mote.
@@ -133,10 +134,33 @@ public class MoteInterfaceHandler {
    */
   public MoteInterfaceHandler(Mote mote, Class<? extends MoteInterface>[] interfaceClasses) throws MoteType.MoteTypeCreationException {
     for (Class<? extends MoteInterface> interfaceClass : interfaceClasses) {
-      addInterface(MoteInterface.generateInterface(interfaceClass, mote));
+      addInterface(generateInterface(interfaceClass, mote));
     }
   }
 
+  /**
+   * This method creates an instance of the given class with the given mote as
+   * constructor argument. Instead of calling the interface constructors
+   * directly this method may be used.
+   *
+   * @param interfaceClass
+   *          Mote interface class
+   * @param mote
+   *          Mote that will hold the interface
+   * @return Mote interface instance
+   */
+  public static 
+  MoteInterface generateInterface( Class<? extends MoteInterface> interfaceClass, Mote mote) 
+                  throws MoteType.MoteTypeCreationException 
+  {
+    try {
+      return interfaceClass.getConstructor(Mote.class).newInstance(mote);
+    } catch (Exception e) {
+      logger.fatal("Exception when calling constructor of " + interfaceClass, e);
+      throw new MoteType.MoteTypeCreationException("Exception when calling constructor of " + interfaceClass, e);
+    }
+  }
+  
   /** Fast translation from class name to object for builtin mote types.
    * @param cooja Cooja
    * @param name Name of mote type to create
@@ -427,8 +451,59 @@ public class MoteInterfaceHandler {
     moteInterfaces.add(intf);
   }
 
+  public Collection<Element> getConfigXML() {
+    var config = new ArrayList<Element>();
+    for (var moteInterface: moteInterfaces) {
+      var element = new Element("interface_config");
+      element.setText(moteInterface.getClass().getName());
+      var interfaceXML = moteInterface.getConfigXML();
+      if (interfaceXML != null) {
+        element.addContent(interfaceXML);
+        config.add(element);
+      }
+    }
+    return config;
+  }
+
+  public boolean setConfigXML(Simulation sim, Element element, Object caller) {
+    var clazz = element.getText().trim();
+    var moteInterfaceClass = getInterfaceClass(sim.getCooja(), caller, clazz);
+    if (moteInterfaceClass == null) {
+      logger.warn("Cannot find mote interface class: " + clazz);
+      return false;
+    }
+    var moteInterface = getInterfaceOfType(moteInterfaceClass);
+    if (moteInterface == null) {
+      // Check for compatible interfaces, for example, when reconfiguring mote types.
+      if (MoteID.class.isAssignableFrom(moteInterfaceClass)) {
+        moteInterface = getMoteID();
+      }
+      if (moteInterface == null) {
+        logger.fatal("Cannot find mote interface of class: " + moteInterfaceClass);
+        return false;
+      }
+    }
+    moteInterface.setConfigXML(element.getChildren(), Cooja.isVisualized());
+    return true;
+  }
+
+
   @Override
   public String toString() {
     return "Mote interfaces handler (" + moteInterfaces.size() + " mote interfaces)";
+  }
+
+  /** Called when the mote is added to the simulation. */
+  public void added() {
+    for (var i : moteInterfaces) {
+      i.added();
+    }
+  }
+
+  /** Called when the mote is removed from the simulation. */
+  public void removed() {
+    for (var i : moteInterfaces) {
+      i.removed();
+    }
   }
 }

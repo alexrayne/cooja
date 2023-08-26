@@ -32,25 +32,19 @@ package org.contikios.cooja.mspmote;
 
 import java.awt.Component;
 import java.io.File;
-import java.io.IOException;
 import java.io.PrintStream;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
-
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
+import org.contikios.cooja.Simulation.SimulationStop;
+import org.contikios.cooja.WatchpointMote;
 import org.jdom2.Element;
 import org.contikios.cooja.ContikiError;
 import org.contikios.cooja.Cooja;
-import org.contikios.cooja.Mote;
-import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.MoteInterfaceHandler;
 import org.contikios.cooja.MoteType;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.Watchpoint;
-import org.contikios.cooja.WatchpointMote;
-import org.contikios.cooja.mote.memory.MemoryInterface;
 import org.contikios.cooja.motes.AbstractEmulatedMote;
 import org.contikios.cooja.mspmote.plugins.CodeVisualizerSkin;
 import org.contikios.cooja.mspmote.plugins.MspBreakpoint;
@@ -80,7 +74,7 @@ import org.contikios.cooja.mspmote.interfaces.MspClock;
 /**
  * @author Fredrik Osterlind
  */
-public abstract class MspMote extends AbstractEmulatedMote implements Mote, WatchpointMote {
+public abstract class MspMote extends AbstractEmulatedMote<MspMoteType, MspMoteMemory> implements WatchpointMote {
   private static final Logger logger = LogManager.getLogger(MspMote.class);
 
   private final static int EXECUTE_DURATION_US = 1; /* We always execute in 1 us steps */
@@ -93,20 +87,13 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
 
   private final CommandHandler commandHandler = new CommandHandler(System.out, System.err);
   private final MSP430 myCpu;
-  private final MspMoteType myMoteType;
-  private final MspMoteMemory myMemory;
-  private final MoteInterfaceHandler myMoteInterfaceHandler;
   public final ComponentRegistry registry;
 
   /* Stack monitoring variables */
   private boolean stopNextInstruction = false;
-  private boolean loadedDebugInfo = false;
-  // FIXME: move to MspMoteType instead.
-  private HashMap<File, HashMap<Integer, Integer>> debuggingInfo = null;
 
   public MspMote(MspMoteType moteType, Simulation sim, GenericNode node) throws MoteType.MoteTypeCreationException {
-    super(sim);
-    myMoteType = moteType;
+    super(moteType, sim);
     registry = node.getRegistry();
     node.setCommandHandler(commandHandler);
     node.setup(new ConfigManager());
@@ -125,7 +112,7 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
         mlogger.warn(getID() + ": " + "# " + source.getID() + "[" + type + "]: " + message);
       }
     });
-    Cooja.setProgressMessage("Loading " + myMoteType.getContikiFirmwareFile().getName());
+    Cooja.setProgressMessage("Loading " + moteType.getContikiFirmwareFile().getName());
     ELF elf;
     try {
       elf = moteType.getELF();
@@ -138,9 +125,9 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
     //myCpu.setThrowIfWarning(true);
 
     // Create mote address memory.
-    myMemory = new MspMoteMemory(elf.getMap().getAllEntries(), myCpu);
+    moteMemory = new MspMoteMemory(elf.getMap().getAllEntries(), myCpu);
     myCpu.reset();
-    myMoteInterfaceHandler = new MoteInterfaceHandler(this, moteType.getMoteInterfaceClasses());
+    moteInterfaces = new MoteInterfaceHandler(this, moteType.getMoteInterfaceClasses());
     registry.removeComponent("windowManager");
     registry.registerComponent("windowManager", new WindowManager() {
       @Override
@@ -215,27 +202,12 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
     return myCpu;
   }
 
-  @Override
-  public MemoryInterface getMemory() {
-    return myMemory;
-  }
-
   public CommandHandler getCLICommandHandler() {
     return commandHandler;
   }
 
   /* called when moteID is updated */
   public void idUpdated(int newID) {
-  }
-
-  @Override
-  public MoteType getType() {
-    return myMoteType;
-  }
-
-  @Override
-  public MoteInterfaceHandler getInterfaces() {
-    return myMoteInterfaceHandler;
   }
 
   private boolean booted = false;
@@ -250,7 +222,7 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
   }
 
   public void execute(long t, int duration) {
-    MspClock clock = ((MspClock) (myMoteInterfaceHandler.getClock()));
+    MspClock clock = ((MspClock) (moteInterfaces.getClock()));
     // Wait until mote boots.
     if (!booted && clock.getTime() < 0) {
       scheduleNextWakeup(t - clock.getTime());
@@ -261,7 +233,7 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
     if (stopNextInstruction) {
       stopNextInstruction = false;
       scheduleNextWakeup(t);
-      throw new MSPSimStop();
+      throw new SimulationStop("MSPSim", "breakpoint");
     }
 
     if (lastExecute < 0) {
@@ -282,7 +254,7 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
 
     if (stopNextInstruction) {
       stopNextInstruction = false;
-      throw new MSPSimStop();
+      throw new SimulationStop("MSPSim", "breakpoint");
     }
 
     // TODO: Reimplement stack monitoring using MSPSim internals.
@@ -347,11 +319,6 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
   }
 
   @Override
-  public int getID() {
-    return getInterfaces().getMoteID().getMoteID();
-  }
-
-  @Override
   public boolean setConfigXML(Simulation simulation, Collection<Element> configXML, boolean visAvailable) throws MoteType.MoteTypeCreationException {
     for (Element element: configXML) {
       String name = element.getName();
@@ -359,7 +326,7 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
         for (Element elem : element.getChildren()) {
           if (elem.getName().equals("breakpoint")) {
             MspBreakpoint breakpoint = new MspBreakpoint(this);
-            if (!breakpoint.setConfigXML(elem.getChildren(), visAvailable)) {
+            if (!breakpoint.setConfigXML(elem.getChildren())) {
               logger.warn("Could not restore breakpoint: " + breakpoint);
             } else {
               watchpoints.add(breakpoint);
@@ -367,52 +334,14 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
           }
         }
       } else if (name.equals("interface_config")) {
-        String intfClass = element.getText().trim();
-        var moteInterfaceClass = MoteInterfaceHandler.getInterfaceClass(simulation.getCooja(), this, intfClass);
-        if (moteInterfaceClass == null) {
-          logger.fatal("Could not load mote interface class: " + intfClass);
+        if (!getInterfaces().setConfigXML(simulation, element, this)) {
           return false;
         }
-
-        MoteInterface moteInterface = getInterfaces().getInterfaceOfType(moteInterfaceClass);
-        if (moteInterface == null) {
-            logger.fatal("Could not find mote interface of class: " + moteInterfaceClass);
-            return false;
-        }
-        moteInterface.setConfigXML(element.getChildren(), visAvailable);
       }
     }
-
     /* Schedule us immediately */
     requestImmediateWakeup();
     return true;
-  }
-
-  @Override
-  public Collection<Element> getConfigXML() {
-    ArrayList<Element> config = new ArrayList<>();
-
-    /* Breakpoints */
-    Collection<Element> breakpoints = getWatchpointConfigXML();
-    if (breakpoints != null && !breakpoints.isEmpty()) {
-      var element = new Element("breakpoints");
-      element.addContent(breakpoints);
-      config.add(element);
-    }
-
-    // Mote interfaces
-    for (MoteInterface moteInterface: getInterfaces().getInterfaces()) {
-      var element = new Element("interface_config");
-      element.setText(moteInterface.getClass().getName());
-
-      Collection<Element> interfaceXML = moteInterface.getConfigXML();
-      if (interfaceXML != null) {
-        element.addContent(interfaceXML);
-        config.add(element);
-      }
-    }
-
-    return config;
   }
 
   @Override
@@ -475,24 +404,8 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
 
 
   /* WatchpointMote */
-  private final ArrayList<WatchpointListener> watchpointListeners = new ArrayList<>();
-  private final ArrayList<MspBreakpoint> watchpoints = new ArrayList<>();
-
   @Override
-  public void addWatchpointListener(WatchpointListener listener) {
-    watchpointListeners.add(listener);
-  }
-  @Override
-  public void removeWatchpointListener(WatchpointListener listener) {
-    watchpointListeners.remove(listener);
-  }
-  @Override
-  public WatchpointListener[] getWatchpointListeners() {
-    return watchpointListeners.toArray(new WatchpointListener[0]);
-  }
-
-  @Override
-  public Watchpoint addBreakpoint(File codeFile, int lineNr, int address) {
+  public Watchpoint addBreakpoint(File codeFile, int lineNr, long address) {
     MspBreakpoint bp = new MspBreakpoint(this, address, codeFile, lineNr);
     watchpoints.add(bp);
 
@@ -501,94 +414,10 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
     }
     return bp;
   }
-  @Override
-  public void removeBreakpoint(Watchpoint watchpoint) {
-    ((MspBreakpoint)watchpoint).unregisterBreakpoint();
-    watchpoints.remove(watchpoint);
-
-    for (WatchpointListener listener: watchpointListeners) {
-      listener.watchpointsChanged();
-    }
-  }
-  @Override
-  public Watchpoint[] getBreakpoints() {
-    return watchpoints.toArray(new Watchpoint[0]);
-  }
 
   @Override
-  public boolean breakpointExists(int address) {
-    if (address < 0) {
-      return false;
-    }
-    for (Watchpoint watchpoint: watchpoints) {
-      if (watchpoint.getExecutableAddress() == address) {
-        return true;
-      }
-    }
-    return false;
-  }
-  @Override
-  public boolean breakpointExists(File file, int lineNr) {
-    for (Watchpoint watchpoint: watchpoints) {
-      if (watchpoint.getCodeFile() == null) {
-        continue;
-      }
-      if (watchpoint.getCodeFile().compareTo(file) != 0) {
-        continue;
-      }
-      if (watchpoint.getLineNumber() != lineNr) {
-        continue;
-      }
-      return true;
-    }
-    return false;
-  }
-
-  @Override
-  public int getExecutableAddressOf(File file, int lineNr) {
-    if (file == null || lineNr < 0) {
-      return -1;
-    }
-    if (!loadedDebugInfo) {
-      loadedDebugInfo = true;
-      try {
-        debuggingInfo = myMoteType.getFirmwareDebugInfo();
-      } catch (IOException e) {
-        logger.error("Failed reading debug info: {}", e.getMessage(), e);
-      }
-    }
-    if (debuggingInfo == null) {
-      return -1;
-    }
-
-    /* Match file */
-    HashMap<Integer, Integer> lineTable = debuggingInfo.get(file);
-    if (lineTable == null) {
-      for (var entry : debuggingInfo.entrySet()) {
-        File f = entry.getKey();
-        if (f != null && f.getName().equals(file.getName())) {
-          lineTable = entry.getValue();
-          break;
-        }
-      }
-    }
-    if (lineTable == null) {
-      return -1;
-    }
-
-    /* Match line number */
-    Integer address = lineTable.get(lineNr);
-    if (address != null) {
-      for (var entry : lineTable.entrySet()) {
-        Integer l = entry.getKey();
-        if (l != null && l == lineNr) {
-          /* Found line address */
-          return entry.getValue();
-        }
-      }
-    }
-
-    return -1;
+  public long getExecutableAddressOf(File file, int lineNr) {
+    return moteType.getExecutableAddressOf(file, lineNr);
   }
 
   private long lastBreakpointCycles = -1;
@@ -607,25 +436,6 @@ public abstract class MspMote extends AbstractEmulatedMote implements Mote, Watc
     WatchpointListener[] listeners = getWatchpointListeners();
     for (WatchpointListener listener: listeners) {
       listener.watchpointTriggered(b);
-    }
-  }
-
-  public Collection<Element> getWatchpointConfigXML() {
-    ArrayList<Element> config = new ArrayList<>();
-
-    for (MspBreakpoint breakpoint: watchpoints) {
-      Element element = new Element("breakpoint");
-      element.addContent(breakpoint.getConfigXML());
-      config.add(element);
-    }
-
-    return config;
-  }
-
-  /** Exception for signaling the simulation that MSPSim has stopped. */
-  public static class MSPSimStop extends RuntimeException {
-    public MSPSimStop() {
-      super("MSPSim requested simulation stop");
     }
   }
 }

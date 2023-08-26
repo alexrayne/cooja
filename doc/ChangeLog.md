@@ -2,10 +2,10 @@
 
 ## Cooja User Interface Changes
 
-### Deprecated `-nogui` and `-quickstart` parameters
+### Removed `-nogui` and `-quickstart` parameters
 
 Graphical/headless mode is now controlled by separate parameter (`--[no-]gui`),
-so `-nogui` and `-quickstart` have been deprecated. The old behavior for
+so `-nogui` and `-quickstart` have been removed. The old behavior for
 `-nogui=file.csc` is now accomplished with `--no-gui file.csc`, and
 `-quickstart=file.csc` is now accomplished with `file.csc`.
 
@@ -22,6 +22,62 @@ a double dash, so the other command line options have been converted to also
 use a double dash for consistency.
 
 ## Cooja API changes for plugins outside the main tree
+
+### Add added/removed methods to Mote interface
+
+Cooja calls these methods when motes are added and removed from the simulation.
+
+### Added MoteInterfaceHandler, MemoryInterface, and MoteType to AbstractWakeupMote
+
+AbstractWakeupMote now provides implementations of `getID`.
+`getInterfaces`, `getMemory`, and `getType`. Motes still need to allocate
+the MoteInterfaceHandler and MemoryInterface in their constructor.
+
+### Move handling of mote startup delay to the Clock interface
+
+The Clock interface now expects to be created with a Mote as argument
+and is now responsible to set the mote startup delay. This enables
+a subclass to override this behaviour if desired.
+
+### Moved handling of radio register to the Radio interface
+
+The Radio interface will now register the radio to the radio medium
+via its `added()` method instead of the simulation. This is in preparation
+to support multiple radios.
+
+### Removed addMoteRelationsObserver/deleteMoteRelationsObserver from Cooja
+
+Use `simulation.getMoteRelationsTriggers()` to get the object where triggers
+can be managed. The available methods are similar to the previous Observable
+interface, except an explicit owner is passed in (usually `this` in the caller):
+`addTrigger`/`removeTrigger`/`deleteTriggers`.
+
+### Removed simulationFinishedLoading from RadioMedium interface
+
+Cooja now calls setConfigXML on the radio medium last, so the hook is
+no longer required. Update by moving the body of simulationFinishedLoading
+into setConfigXML.
+
+### LogOutputListener interface no longer extends MoteCountListener
+
+Plugins that need to observe both logs and motes added/removed should
+install separate listeners for the two.
+
+### RadioMedium converted to interface
+
+RadioMediums should now implement the interface instead of extending the class.
+
+### Removed setIdentifier/setMoteInterfaceClasses in MoteType
+
+These methods are not required by Cooja itself, so make it a mote-internal
+question of how to implement the support.
+
+### Converted MoteInterface/Beeper/Button/MoteID into interfaces
+
+To reduce the scope of the deprecated Observable, MoteInterface was converted
+from a class to an interface. This also forced Beeper, Button and MoteID
+to be made into interfaces. The abstract class Button was renamed to
+AbstractButton and resides inside the Button interface.
 
 ### Removed registerMote/unregisterMote in RadioMedium
 

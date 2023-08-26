@@ -42,6 +42,7 @@ import javax.swing.JPanel;
 import javax.swing.JTextField;
 
 import org.contikios.cooja.ClassDescription;
+import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.Simulation;
 import org.jdom2.Element;
@@ -56,7 +57,14 @@ import org.jdom2.Element;
  *         Andreas Löscher
  */
 @ClassDescription("Clock")
-public abstract class Clock extends MoteInterface {
+public abstract class Clock implements MoteInterface {
+
+  protected final Simulation simulation;
+
+  protected Clock(Mote mote) {
+    this.simulation = mote.getSimulation();
+  }
+
   /**
    * Set mote's time to given time.
    *
@@ -178,5 +186,12 @@ public abstract class Clock extends MoteInterface {
         break;
       }
     }
+  }
+
+  @Override
+  public void added() {
+    var maxMoteStartupDelay = simulation.getMaxMoteStartupDelay();
+    var delay = maxMoteStartupDelay > 0 ? simulation.getRandomGenerator().nextInt((int)maxMoteStartupDelay) : 0;
+    setDrift(-simulation.getSimulationTime() - delay);
   }
 }

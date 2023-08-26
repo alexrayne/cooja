@@ -69,7 +69,7 @@ import org.jdom2.Element;
  *
  * @author Fredrik Osterlind
  */
-public abstract class AbstractRadioMedium extends RadioMedium {
+public abstract class AbstractRadioMedium implements RadioMedium {
 	private static final Logger logger = LogManager.getLogger(AbstractRadioMedium.class);
 	
 	/* Signal strengths in dBm.
@@ -200,12 +200,6 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 	 * @param radio Radio
 	 */
 	protected void removeFromActiveConnections(Radio radio) {
-		/* This radio must not be a connection source */
-		RadioConnection connection = getActiveConnectionFrom(radio);
-		if (connection != null) {
-			logger.fatal("Connection source turned off radio: " + radio);
-		}
-		
 		/* Set interfered if currently a connection destination */
 		if (!activeConnections.isEmpty())
 		for (int i = 0; i < activeConnections.size(); ++i) {
@@ -262,12 +256,10 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 	private final Observer radioEventsObserver = new Observer() {
 		@Override
 		public void update(Observable obs, Object obj) {
-			if (!(obs instanceof Radio)) {
+      if (!(obs instanceof Radio radio)) {
 				logger.fatal("Radio event dispatched by non-radio object");
 				return;
 			}
-			Radio radio = (Radio) obs;
-			
 			final Radio.RadioEvent event = radio.getLastEvent();
 			
 			switch (event) {
@@ -283,6 +275,11 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 				}
 				break;
 				case HW_OFF: {
+          // This radio must not be a connection source.
+          if (getActiveConnectionFrom(radio) != null) {
+            logger.fatal("Connection source turned off radio: " + radio);
+          }
+
 					/* Remove any radio connections from this radio */
 					removeFromActiveConnections(radio);
 					/* Update signal strengths */
@@ -556,14 +553,7 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 	public void addRadioMediumObserver(Observer observer) {
 		radioMediumObservable.addObserver(observer);
 	}
-	
-	/**
-	 * @return the radioMediumObservable
-	 */
-	public Observable getRadioMediumObservable() {
-		return radioMediumObservable;
-	}
-	
+
 	public void deleteRadioMediumObserver(Observer observer) {
 		radioMediumObservable.deleteObserver(observer);
 	}
@@ -591,30 +581,18 @@ public abstract class AbstractRadioMedium extends RadioMedium {
 
 		return config;
 	}
-	
-	private Collection<Element> delayedConfiguration = null;
-	
-	@Override
-	public boolean setConfigXML(final Collection<Element> configXML, boolean visAvailable) {
-		delayedConfiguration = configXML;
-		return true;
-	}
-	
-	@Override
-	public void simulationFinishedLoading() {
-		if (delayedConfiguration == null) {
-			return;
-		}
 
-		for (Element element : delayedConfiguration) {
-			if (element.getName().equals("BaseRSSIConfig")) {
-				Radio r = simulation.getMoteWithID(Integer.parseInt(element.getAttribute("Mote").getValue())).getInterfaces().getRadio();				
-				setBaseRssi(r, Double.parseDouble(element.getText()));
-			} else 	if (element.getName().equals("SendRSSIConfig")) {
-				Radio r = simulation.getMoteWithID(Integer.parseInt(element.getAttribute("Mote").getValue())).getInterfaces().getRadio();				
-				setSendRssi(r, Double.parseDouble(element.getText()));
-			} 
-		}
-	}
-
+  @Override
+  public boolean setConfigXML(final Collection<Element> configXML, boolean visAvailable) {
+    for (var element : configXML) {
+      if (element.getName().equals("BaseRSSIConfig")) {
+        Radio r = simulation.getMoteWithID(Integer.parseInt(element.getAttribute("Mote").getValue())).getInterfaces().getRadio();
+        setBaseRssi(r, Double.parseDouble(element.getText()));
+      } else if (element.getName().equals("SendRSSIConfig")) {
+        Radio r = simulation.getMoteWithID(Integer.parseInt(element.getAttribute("Mote").getValue())).getInterfaces().getRadio();
+        setSendRssi(r, Double.parseDouble(element.getText()));
+      }
+    }
+    return true;
+  }
 }

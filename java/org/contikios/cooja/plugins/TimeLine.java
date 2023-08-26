@@ -34,6 +34,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
@@ -73,7 +74,6 @@ import javax.swing.JToolTip;
 import javax.swing.KeyStroke;
 import javax.swing.Popup;
 import javax.swing.PopupFactory;
-import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.ButtonGroup;
 import javax.swing.JRadioButtonMenuItem;
@@ -84,10 +84,10 @@ import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.HasQuickHelp;
 import org.contikios.cooja.Mote;
-import org.contikios.cooja.Plugin;
 import org.contikios.cooja.PluginType;
 import org.contikios.cooja.SimEventCentral.LogOutputEvent;
 import org.contikios.cooja.SimEventCentral.LogOutputListener;
+import org.contikios.cooja.SimEventCentral.MoteCountListener;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.VisPlugin;
 import org.contikios.cooja.Watchpoint;
@@ -138,8 +138,9 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
 
   private final Simulation simulation;
   private final LogOutputListener newMotesListener;
+  private final MoteCountListener moteCountListener;
   
-  /* Expermental features: Use currently active plugin to filter Timeline Log outputs */
+  /* Experimental features: Use currently active plugin to filter Timeline Log outputs */
   private LogListener logEventFilterPlugin = null;
   private String      logEventFilterLast = "";
   private boolean     logEventFilterChanged = true;
@@ -379,19 +380,14 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
     showLogsCheckBox.addActionListener(e -> {
       showLogOutputs = ((JCheckBox) e.getSource()).isSelected();
       // Check whether there is an active log listener that is used to filter logs.
-      for (var p : simulation.getCooja().getStartedPlugins()) {
-        if (p instanceof LogListener plugin) {
-          logEventFilterPlugin = plugin;
-          break;
-        }
-      }
+      logEventFilterPlugin = simulation.getCooja().getPlugin(LogListener.class);
       // Invalidate filter stamp.
       logEventFilterLast = "";
       logEventFilterChanged = true;
 
       if (showLogOutputs) {
         if (logEventFilterPlugin != null) {
-          logger.info("Filtering shown log outputs by use of " + Cooja.getDescriptionOf(LogListener.class) + " plugin");
+          logger.info("Filtering shown log outputs by use of " + Cooja.getDescriptionOf(logEventFilterPlugin) + " plugin");
         } else {
           logger.info("No active " + Cooja.getDescriptionOf(LogListener.class) + " plugin, not filtering log outputs");
         }
@@ -437,14 +433,6 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
     // Automatically add/delete motes. This listener also observes mote log outputs.
     simulation.getEventCentral().addLogOutputListener(newMotesListener = new LogOutputListener() {
       @Override
-      public void moteWasAdded(Mote mote) {
-        addMote(mote);
-      }
-      @Override
-      public void moteWasRemoved(Mote mote) {
-        removeMote(mote);
-      }
-      @Override
       public void removedLogOutput(LogOutputEvent ev) {
       }
       @Override
@@ -462,6 +450,16 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
         }
       }
     });
+    simulation.getEventCentral().addMoteCountListener(moteCountListener = new MoteCountListener() {
+      @Override
+      public void moteWasAdded(Mote mote) {
+        addMote(mote);
+      }
+      @Override
+      public void moteWasRemoved(Mote mote) {
+        removeMote(mote);
+      }
+    });
     for (Mote m: simulation.getMotes()) {
       addMote(m);
     }
@@ -469,38 +467,31 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
     /* Update timeline for the duration of the plugin */
     repaintTimelineTimer.start();
 
-    Cooja.addMoteHighlightObserver(moteHighlightObserver = new Observer() {
-      @Override
-      public void update(Observable obs, Object obj) {
-        if (!(obj instanceof Mote)) {
+    Cooja.addMoteHighlightObserver(moteHighlightObserver = (obs, obj) -> {
+      if (!(obj instanceof final Mote mote)) {
+        return;
+      }
+
+      final Timer timer = new Timer(100, null);
+      timer.addActionListener(e -> {
+        // Count down.
+        if (timer.getDelay() < 90) {
+          timer.stop();
+          highlightedMotes.remove(mote);
+          repaint();
           return;
         }
 
-        final Timer timer = new Timer(100, null);
-        final Mote mote = (Mote) obj;
-        timer.addActionListener(new ActionListener() {
-          @Override
-          public void actionPerformed(ActionEvent e) {
-            /* Count down */
-            if (timer.getDelay() < 90) {
-              timer.stop();
-              highlightedMotes.remove(mote);
-              repaint();
-              return;
-            }
-
-            /* Toggle highlight state */
-            if (highlightedMotes.contains(mote)) {
-              highlightedMotes.remove(mote);
-            } else {
-              highlightedMotes.add(mote);
-            }
-            timer.setDelay(timer.getDelay()-1);
-            repaint();
-          }
-        });
-        timer.start();
-      }
+        // Toggle highlight state.
+        if (highlightedMotes.contains(mote)) {
+          highlightedMotes.remove(mote);
+        } else {
+          highlightedMotes.add(mote);
+        }
+        timer.setDelay(timer.getDelay()-1);
+        repaint();
+      });
+      timer.start();
     });
 
     /* XXX HACK: here we set the position and size of the window when it appears on a blank simulation screen. */
@@ -527,28 +518,18 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
   private void forceRepaintAndFocus(final long focusTime, final double focusCenter, final boolean mark) {
     lastRepaintSimulationTime = -1; /* Force repaint */
     repaintTimelineTimer.getActionListeners()[0].actionPerformed(null); /* Force size update*/
-    SwingUtilities.invokeLater(new Runnable() {
-      @Override
-      public void run() {
-        int w = timeline.getVisibleRect().width;
+    EventQueue.invokeLater(() -> {
+      int w = timeline.getVisibleRect().width;
+      /* centerPixel-leftPixel <=> focusCenter*w; */
+      int centerPixel = (int) (focusTime/currentPixelDivisor);
+      int leftPixel = (int) (focusTime/currentPixelDivisor - focusCenter*w);
+      timeline.scrollRectToVisible(new Rectangle(leftPixel, 0, w, 1));
 
-        /* centerPixel-leftPixel <=> focusCenter*w; */
-        int centerPixel = (int) (focusTime/currentPixelDivisor);
-        int leftPixel = (int) (focusTime/currentPixelDivisor - focusCenter*w);
-
-        Rectangle r = new Rectangle(
-            leftPixel, 0,
-            w, 1
-        );
-
-        timeline.scrollRectToVisible(r);
-
-        /* Time ruler */
-        if (mark) {
-          mousePixelPositionX = centerPixel;
-          mouseDownPixelPositionX = centerPixel;
-          mousePixelPositionY = timeline.getHeight();
-        }
+      // Time ruler.
+      if (mark) {
+        mousePixelPositionX = centerPixel;
+        mouseDownPixelPositionX = centerPixel;
+        mousePixelPositionY = timeline.getHeight();
       }
     });
   }
@@ -761,8 +742,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
 
       if (leds) {
         for (MoteEvent ev: moteEvents.ledEvents) {
-          if (!(ev instanceof LEDEvent)) continue;
-          LEDEvent ledEvent = (LEDEvent) ev;
+          if (!(ev instanceof LEDEvent ledEvent)) continue;
 
           /* Red */
           if (ledEvent.red) {
@@ -805,8 +785,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
 
       if (radioHW) {
         for (MoteEvent ev: moteEvents.radioHWEvents) {
-          if (!(ev instanceof RadioHWEvent)) continue;
-          RadioHWEvent hwEvent = (RadioHWEvent) ev;
+          if (!(ev instanceof RadioHWEvent hwEvent)) continue;
           if (hwEvent.on) {
             /* HW is on */
             if (hwEvent.next == null) {
@@ -820,8 +799,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
 
       if (radioRXTX) {
         for (MoteEvent ev: moteEvents.radioRXTXEvents) {
-          if (!(ev instanceof RadioRXTXEvent)) continue;
-          RadioRXTXEvent rxtxEvent = (RadioRXTXEvent) ev;
+          if (!(ev instanceof RadioRXTXEvent rxtxEvent)) continue;
           if (rxtxEvent.state == RXTXRadioEvent.IDLE) {
             continue;
           }
@@ -879,27 +857,48 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
 
   // TimeSelect
   public void trySelectTime(final long toTime) {
-    java.awt.EventQueue.invokeLater(new Runnable() {
-      @Override
-      public void run() {
-        /* Mark selected time in time ruler */
-        final int toPixel = (int) (toTime / currentPixelDivisor);
-        mousePixelPositionX = toPixel;
-        mouseDownPixelPositionX = toPixel;
-        mousePixelPositionY = timeline.getHeight();
-
-        /* Check if time is already visible */
-        Rectangle vis = timeline.getVisibleRect();
-        if (toPixel >= vis.x && toPixel < vis.x + vis.width) {
-          repaint();
-          return;
-        }
-
-        forceRepaintAndFocus(toTime, 0.5, false);
+    EventQueue.invokeLater(() -> {
+      // Mark selected time in time ruler.
+      final int toPixel = (int) (toTime / currentPixelDivisor);
+      mousePixelPositionX = toPixel;
+      mouseDownPixelPositionX = toPixel;
+      mousePixelPositionY = timeline.getHeight();
+      // Check if time is already visible.
+      Rectangle vis = timeline.getVisibleRect();
+      if (toPixel >= vis.x && toPixel < vis.x + vis.width) {
+        repaint();
+        return;
       }
+      forceRepaintAndFocus(toTime, 0.5, false);
     });
   }
 
+  private final Action radioLoggerAction = new AbstractAction(
+              "Show in " + Cooja.getDescriptionOf(RadioLogger.class)) 
+  {
+      @Override
+      public void actionPerformed(ActionEvent e) {
+        if (popupLocation == null) {
+          return;
+        }
+        long time = (long) (popupLocation.x*currentPixelDivisor);
+        performTimePlugins(simulation, time, RadioLogger.class);
+      }
+  };
+  
+  private final Action logListenerAction = new AbstractAction(
+                  "Show in " + Cooja.getDescriptionOf(LogListener.class)) 
+  {
+      @Override
+      public void actionPerformed(ActionEvent e) {
+        if (popupLocation == null) {
+          return;
+        }
+        long time = (long) (popupLocation.x*currentPixelDivisor);
+        performTimePlugins(simulation, time, LogListener.class);
+      }
+  };
+  
   private final Action showInAllAction = new AbstractAction(
           "Show in " + Cooja.getDescriptionOf(LogListener.class) 
           + " and " + Cooja.getDescriptionOf(RadioLogger.class)) 
@@ -1000,20 +999,8 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
           moteLEDs.isYellowOn()
       );
       moteEvents.addLED(startupEv);
-      Observer observer = new Observer() {
-        @Override
-        public void update(Observable o, Object arg) {
-          LEDEvent ev = new LEDEvent(
-              simulation.getSimulationTime(),
-              moteLEDs.isRedOn(),
-              moteLEDs.isGreenOn(),
-              moteLEDs.isYellowOn()
-          );
-
-          moteEvents.addLED(ev);
-        }
-      };
-
+      Observer observer = (o, arg) -> moteEvents.addLED(new LEDEvent(simulation.getSimulationTime(),
+              moteLEDs.isRedOn(),moteLEDs.isGreenOn(), moteLEDs.isYellowOn()));
       moteLEDs.addObserver(observer);
       activeMoteObservers.add(new MoteObservation(mote, moteLEDs, observer));
     }
@@ -1037,8 +1024,8 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
           RadioEvent radioEv = moteRadio.getLastEvent();
 
           String details = null;
-          if (executionDetails && mote instanceof AbstractEmulatedMote) {
-            details = ((AbstractEmulatedMote) mote).getExecutionDetails();
+          if (executionDetails && mote instanceof AbstractEmulatedMote<?, ?> emulatedMote) {
+            details = emulatedMote.getExecutionDetails();
             if (details != null) {
               details = "<br>" + details.replace("\n", "<br>");
             }
@@ -1124,8 +1111,8 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
         public void watchpointTriggered(Watchpoint watchpoint) {
           WatchpointEvent ev = new WatchpointEvent(simulation.getSimulationTime(), watchpoint);
 
-          if (executionDetails && mote instanceof AbstractEmulatedMote) {
-            String details = ((AbstractEmulatedMote) mote).getExecutionDetails();
+          if (executionDetails && mote instanceof AbstractEmulatedMote<?, ?> emulatedMote) {
+            String details = emulatedMote.getExecutionDetails();
             if (details != null) {
               details = "<br>" + details.replace("\n", "<br>");
               ev.details = details;
@@ -1223,8 +1210,8 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
     if (moteHighlightObserver != null) {
       Cooja.deleteMoteHighlightObserver(moteHighlightObserver);
     }
-
-    simulation.getEventCentral().removeMoteCountListener(newMotesListener);
+    simulation.getEventCentral().removeMoteCountListener(moteCountListener);
+    simulation.getEventCentral().removeLogOutputListener(newMotesListener);
 
     /* Remove active mote interface observers */
     for (MoteObservation o: activeMoteObservers) {
@@ -1334,7 +1321,119 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
       setLayout(null);
       setToolTipText(null);
       setBackground(COLOR_BACKGROUND);
+      var mouseAdapter = new MouseAdapter() {
+        private Popup popUpToolTip = null;
+        private double zoomInitialPixelDivisor;
+        private int zoomInitialMouseY;
+        private long zoomCenterTime = -1;
+        private double zoomCenter = -1;
 
+        @Override
+        public void mouseDragged(MouseEvent e) {
+          super.mouseDragged(e);
+          if (e.isControlDown()) { // Zoom with mouse.
+            if (zoomCenterTime < 0) {
+              return;
+            }
+            var factor = Math.exp(0.01 * (e.getY() - zoomInitialMouseY));
+            zoomFinish(zoomInitialPixelDivisor * factor, zoomCenterTime, zoomCenter);
+            return;
+          }
+          if (e.isAltDown()) { // Pan with mouse.
+            if (zoomCenterTime < 0) {
+              return;
+            }
+            zoomCenter = (double) (e.getX() - timeline.getVisibleRect().x) / timeline.getVisibleRect().width;
+            forceRepaintAndFocus(zoomCenterTime, zoomCenter);
+            return;
+          }
+          if (mousePixelPositionX >= 0) {
+            mousePixelPositionX = e.getX();
+            mousePixelPositionY = e.getY();
+            repaint();
+          }
+        }
+
+        @Override
+        public void mousePressed(MouseEvent e) {
+          if (e.isControlDown()) { // Zoom with mouse.
+            zoomInitialMouseY = e.getY();
+            zoomInitialPixelDivisor = currentPixelDivisor;
+            zoomCenterTime = (long) (e.getX() * currentPixelDivisor);
+            zoomCenter = (double) (e.getX() - timeline.getVisibleRect().x) / timeline.getVisibleRect().width;
+            return;
+          }
+          if (e.isAltDown()) { // Pan with mouse.
+            zoomCenterTime = (long) (e.getX() * currentPixelDivisor);
+            return;
+          }
+          if (popUpToolTip != null) {
+            popUpToolTip.hide();
+            popUpToolTip = null;
+          }
+          if (e.getPoint().getY() < FIRST_MOTE_PIXEL_OFFSET) {
+            mousePixelPositionX = e.getX();
+            mouseDownPixelPositionX = e.getX();
+            mousePixelPositionY = e.getY();
+            repaint();
+          } else { // Trigger tooltip.
+            JToolTip t = timeline.createToolTip();
+            t.setTipText(Timeline.this.getMouseToolTipText(e));
+            if (t.getTipText() == null || t.getTipText().equals("")) {
+              return;
+            }
+            t.validate();
+
+            // Check tooltip width.
+            var screenBounds = timeline.getGraphicsConfiguration().getBounds();
+            int x;
+            {
+              int tooltip = e.getLocationOnScreen().x + t.getPreferredSize().width;
+              int screen = screenBounds.x + screenBounds.width;
+              if (tooltip > screen) {
+                x = e.getLocationOnScreen().x - (tooltip - screen);
+              } else {
+                x = e.getLocationOnScreen().x;
+              }
+            }
+
+            // Check tooltip height.
+            int y;
+            {
+              int tooltip = e.getLocationOnScreen().y + t.getPreferredSize().height;
+              int screen = screenBounds.y + screenBounds.height;
+              if (tooltip > screen) {
+                y = e.getLocationOnScreen().y - (tooltip - screen);
+              } else {
+                y = e.getLocationOnScreen().y;
+              }
+            }
+            popUpToolTip = PopupFactory.getSharedInstance().getPopup(null, t, x, y);
+            popUpToolTip.show();
+          }
+        }
+
+        @Override
+        public void mouseReleased(MouseEvent e) {
+          zoomCenterTime = -1;
+          if (popUpToolTip != null) {
+            popUpToolTip.hide();
+            popUpToolTip = null;
+          }
+          super.mouseReleased(e);
+          mousePixelPositionX = -1;
+          repaint();
+        }
+
+        @Override
+        public void mouseWheelMoved(MouseWheelEvent e) {
+          if (e.isControlDown()) {
+            final long zct = (long) (e.getX() * currentPixelDivisor);
+            final double zc = (double) (e.getX() - timeline.getVisibleRect().x) / timeline.getVisibleRect().width;
+            zoomFinishLevel(e.getWheelRotation(), zct, zc);
+          }
+        }
+      };
       addMouseListener(mouseAdapter);
       addMouseMotionListener(mouseAdapter);
       addMouseWheelListener(mouseAdapter);
@@ -1343,6 +1442,8 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
       final JPopupMenu popupMenu = new JPopupMenu();
 
       popupMenu.add(new JMenuItem(showInAllAction));
+      popupMenu.add(new JMenuItem(logListenerAction));
+      popupMenu.add(new JMenuItem(radioLoggerAction));
 
       JMenu advancedMenu = new JMenu("Advanced");
       advancedMenu.add(new JCheckBoxMenuItem(executionDetailsAction) {
@@ -1384,125 +1485,6 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
         }
       });
     }
-
-    private final MouseAdapter mouseAdapter = new MouseAdapter() {
-      private Popup popUpToolTip = null;
-      private double zoomInitialPixelDivisor;
-      private int zoomInitialMouseY;
-      private long zoomCenterTime = -1;
-      private double zoomCenter = -1;
-      @Override
-      public void mouseDragged(MouseEvent e) {
-        super.mouseDragged(e);
-        if (e.isControlDown()) {
-          /* Zoom with mouse */
-          if (zoomCenterTime < 0) {
-            return;
-          }
-          var factor = Math.exp(0.01 * (e.getY() - zoomInitialMouseY));
-          zoomFinish(zoomInitialPixelDivisor * factor, zoomCenterTime, zoomCenter);
-          return;
-        }
-        if (e.isAltDown()) {
-          /* Pan with mouse */
-          if (zoomCenterTime < 0) {
-            return;
-          }
-
-          zoomCenter = (double) (e.getX() - timeline.getVisibleRect().x) / timeline.getVisibleRect().width;
-          forceRepaintAndFocus(zoomCenterTime, zoomCenter);
-          return;
-        }
-
-        if (mousePixelPositionX >= 0) {
-          mousePixelPositionX = e.getX();
-          mousePixelPositionY = e.getY();
-          repaint();
-        }
-      }
-      @Override
-      public void mousePressed(MouseEvent e) {
-        if (e.isControlDown()) {
-          /* Zoom with mouse */
-          zoomInitialMouseY = e.getY();
-          zoomInitialPixelDivisor = currentPixelDivisor;
-          zoomCenterTime = (long) (e.getX()*currentPixelDivisor);
-          zoomCenter = (double) (e.getX() - timeline.getVisibleRect().x) / timeline.getVisibleRect().width;
-          return;
-        }
-        if (e.isAltDown()) {
-          /* Pan with mouse */
-          zoomCenterTime = (long) (e.getX()*currentPixelDivisor);
-          return;
-        }
-
-        if (popUpToolTip != null) {
-          popUpToolTip.hide();
-          popUpToolTip = null;
-        }
-        if (e.getPoint().getY() < FIRST_MOTE_PIXEL_OFFSET) {
-          mousePixelPositionX = e.getX();
-          mouseDownPixelPositionX = e.getX();
-          mousePixelPositionY = e.getY();
-          repaint();
-        } else {
-          /* Trigger tooltip */
-          JToolTip t = timeline.createToolTip();
-          t.setTipText(Timeline.this.getMouseToolTipText(e));
-          if (t.getTipText() == null || t.getTipText().equals("")) {
-            return;
-          }
-          t.validate();
-
-          /* Check tooltip width */
-          Rectangle screenBounds = timeline.getGraphicsConfiguration().getBounds();
-          int x;
-          {
-            int tooltip = e.getLocationOnScreen().x + t.getPreferredSize().width;
-            int screen = screenBounds.x + screenBounds.width;
-            if (tooltip > screen) {
-              x = e.getLocationOnScreen().x - (tooltip-screen);
-            } else {
-              x = e.getLocationOnScreen().x;
-            }
-          }
-
-          /* Check tooltip height */
-          int y;
-          {
-            int tooltip = e.getLocationOnScreen().y + t.getPreferredSize().height;
-            int screen = screenBounds.y + screenBounds.height;
-            if (tooltip > screen) {
-              y = e.getLocationOnScreen().y - (tooltip-screen);
-            } else {
-              y = e.getLocationOnScreen().y;
-            }
-          }
-
-          popUpToolTip = PopupFactory.getSharedInstance().getPopup(null, t, x, y);
-          popUpToolTip.show();
-        }
-      }
-      @Override
-      public void mouseReleased(MouseEvent e) {
-        zoomCenterTime = -1;
-        if (popUpToolTip != null) {
-          popUpToolTip.hide();
-          popUpToolTip = null;
-        }
-        super.mouseReleased(e);
-        mousePixelPositionX = -1;
-        repaint();
-      }
-      @Override
-      public void mouseWheelMoved(MouseWheelEvent e) {
-        if (e.isControlDown()) {
-          final long zct = (long) (e.getX()*currentPixelDivisor);
-          final double zc = (double) (e.getX() - timeline.getVisibleRect().x) / timeline.getVisibleRect().width;
-          zoomFinishLevel(e.getWheelRotation(), zct, zc);
-        }
-      }
-    };
 
     private final Color SEPARATOR_COLOR = new Color(220, 220, 220);
     @Override
@@ -2327,7 +2309,7 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
       
       while (ev != null && ev.time < end) {
           if (ev.time < time_start ){
-              /* Skip painting event over alredy painted one*/
+              /* Skip painting event over already painted one*/
               ev = (LogEvent) ev.next;
               continue;
           }

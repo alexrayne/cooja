@@ -100,70 +100,49 @@ public class SimEventCentral {
   }
   /** Mote count notifications. */
   private MoteCountListener[] moteCountListeners = new MoteCountListener[0];
-  private final Observer moteCountObserver = new Observer() {
-    @Override
-    public void update(Observable obs, Object obj) {
-      if (!(obj instanceof Mote)) {
-        return;
-      }
-      Mote evMote = (Mote) obj;
 
-      /* Check whether mote was added or removed */
-      Mote[] allMotes = simulation.getMotes();
-      boolean exists = false;
-      for (Mote m: allMotes) {
-        if (m == evMote) {
-          exists = true;
-          break;
-        }
-      }
-
-      if (exists) {
-        /* Mote was added */
-        if (logOutputListeners.length > 0) {
-          // Add another log output observation (supports multiple log interfaces per mote).
-          for (MoteInterface mi: evMote.getInterfaces().getInterfaces()) {
-            if (mi instanceof Log) {
-              moteObservations.add(new MoteObservation(evMote, mi, logOutputObserver));
-            }
-          }
-        }
-        /* Notify external listeners */
-        for (MoteCountListener l: moteCountListeners) {
-          l.moteWasAdded(evMote);
-        }
-      } else {
-        /* Mote was removed */
-        // Disconnect and remove mote observations.
-        MoteObservation[] observations = moteObservations.toArray(new MoteObservation[0]);
-        for (MoteObservation o: observations) {
-          if (o.mote() == evMote) {
-            o.disconnect();
-            moteObservations.remove(o);
-          }
-        }
-        /* Notify external listeners */
-        for (MoteCountListener l: moteCountListeners) {
-          l.moteWasRemoved(evMote);
+  void addMote(Mote mote) {
+    if (logOutputListeners.length > 0) {
+      // Add another log output observation (supports multiple log interfaces per mote).
+      for (var mi : mote.getInterfaces().getInterfaces()) {
+        if (mi instanceof Log log) {
+          moteObservations.add(new MoteObservation(mote, log, logOutputObserver));
         }
       }
     }
-  };
+    // Notify external listeners.
+    for (var l : moteCountListeners) {
+      l.moteWasAdded(mote);
+    }
+
+    /* Notify mote interfaces that node was added */
+    //for (MoteInterface i: mote.getInterfaces().getInterfaces()) {
+    ArrayList<MoteInterface> ifs = mote.getInterfaces().getInterfacesList();
+    for (int i =0; i < ifs.size(); ++i) {
+        ifs.get(i).added();
+    }
+    
+  }
+
+  void removeMote(Mote mote) {
+    // Disconnect and remove mote observations.
+    for (var o : moteObservations.toArray(new MoteObservation[0])) {
+      if (o.mote() == mote) {
+        o.disconnect();
+        moteObservations.remove(o);
+      }
+    }
+    // Notify external listeners.
+    for (var l : moteCountListeners) {
+      l.moteWasRemoved(mote);
+    }
+  }
+
   public void addMoteCountListener(MoteCountListener listener) {
-    if (moteCountListeners.length == 0) {
-      /* Observe simulation for added/removed motes */
-      simulation.addObserver(moteCountObserver);
-    }
-
     moteCountListeners = ArrayUtils.add(moteCountListeners, listener);
   }
   public void removeMoteCountListener(MoteCountListener listener) {
     moteCountListeners = ArrayUtils.remove(moteCountListeners, listener);
-
-    if (moteCountListeners.length == 0) {
-      /* Stop observing simulation for added/removed motes */
-      simulation.deleteObserver(moteCountObserver);
-    }
   }
 
 
@@ -181,7 +160,7 @@ public class SimEventCentral {
   /** Default buffer sizes. */
   private int logOutputBufferSize = Integer.parseInt(Cooja.getExternalToolsSetting("BUFFERSIZE_LOGOUTPUT", "" + 40000));
   private final ArrayDeque<LogOutputEvent> logOutputEvents = new ArrayDeque<>();
-  public interface LogOutputListener extends MoteCountListener {
+  public interface LogOutputListener {
     void removedLogOutput(LogOutputEvent ev);
     void newLogOutput(LogOutputEvent ev);
   }
@@ -229,20 +208,17 @@ public class SimEventCentral {
       Mote[] motes = simulation.getMotes();
       for (Mote m: motes) {
         for (MoteInterface mi: m.getInterfaces().getInterfaces()) {
-          if (mi instanceof Log) {
-            moteObservations.add(new MoteObservation(m, mi, logOutputObserver));
+          if (mi instanceof Log log) {
+            moteObservations.add(new MoteObservation(m, log, logOutputObserver));
           }
         }
       }
     }
 
     logOutputListeners = ArrayUtils.add(logOutputListeners, listener);
-    addMoteCountListener(listener);
   }
   public void removeLogOutputListener(LogOutputListener listener) {
     logOutputListeners = ArrayUtils.remove(logOutputListeners, listener);
-    removeMoteCountListener(listener);
-
     if (logOutputListeners.length == 0) {
       /* Stop observing all log interfaces */
       MoteObservation[] observations = moteObservations.toArray(new MoteObservation[0]);

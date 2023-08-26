@@ -42,8 +42,8 @@ import org.contikios.cooja.interfaces.SerialPort;
  * @author Fredrik Osterlind
  */
 @ClassDescription("Serial IO")
-public abstract class SerialIO extends MoteInterface //Log //maybe better extends Log?  
-	implements SerialPort 
+public abstract class SerialIO  //Log //maybe better extends Log?  
+	implements MoteInterface, SerialPort
 {
 	  public abstract void writeByte(byte b);
 	  public abstract void writeArray(byte[] s);

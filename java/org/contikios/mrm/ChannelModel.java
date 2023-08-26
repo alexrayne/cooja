@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.Objects;
 import java.util.Observer;
 import java.util.Random;
 import java.util.Vector;
@@ -229,7 +230,7 @@ public class ChannelModel {
       parameters.put(p, Parameter.getDefaultValue(p));
     }
 
-    parametersDefaults = (HashMap<Parameter,Object>) parameters.clone();
+    parametersDefaults = new HashMap<>(parameters);
 
     // Ray Tracer - Use scattering
     //parameters.put(Parameters.rt_use_scattering, Parameter.getDefaultValue(Parameters.rt_use_scattering)); // TODO Not used yet
@@ -417,7 +418,7 @@ public class ChannelModel {
    * @param rectangle Rectangle which line may intersect
    * @return Intersection line of given line and rectangle (or null)
    */
-  private Line2D getIntersectionLine(double x1, double y1, double x2, double y2, Rectangle2D rectangle) {
+  private static Line2D getIntersectionLine(double x1, double y1, double x2, double y2, Rectangle2D rectangle) {
 
     // Check if entire line is inside rectangle
     if (rectangle.contains(x1, y1) && rectangle.contains(x2, y2)) {
@@ -885,7 +886,6 @@ public class ChannelModel {
     // Destination inside an obstacle? => no reflection factor
     for (int i=0; i < myObstacleWorld.getNrObstacles(); i++) {
       if (myObstacleWorld.getObstacle(i).contains(dest)) {
-        //logger.debug("Destination inside obstacle, aborting fast fading");
         return 0;
       }
     }
@@ -979,11 +979,7 @@ public class ChannelModel {
         unhandledAngles.add(AngleInterval.getAngleIntervalOfLine(source, lookThrough).intersectWith(angleInterval));
       }
     } else {
-      if (angleInterval == null) {
-        unhandledAngles.add(new AngleInterval(0, 2*Math.PI));
-      } else {
-        unhandledAngles.add(angleInterval);
-      }
+      unhandledAngles.add(Objects.requireNonNullElseGet(angleInterval, () -> new AngleInterval(0, 2 * Math.PI)));
     }
 
     // Do forever (will break when no more unhandled angles exist)
@@ -1850,18 +1846,16 @@ public class ChannelModel {
     }
     @Override
     public double getTxGain() {
-      if (!(getFromRadio() instanceof DirectionalAntennaRadio)) {
+      if (!(getFromRadio() instanceof DirectionalAntennaRadio r)) {
         return 0;
       }
-      DirectionalAntennaRadio r = (DirectionalAntennaRadio)getFromRadio();
       return r.getRelativeGain(r.getDirection() + getAngle(), getAngle());
     }
     @Override
     public double getRxGain() {
-      if (!(getToRadio() instanceof DirectionalAntennaRadio)) {
+      if (!(getToRadio() instanceof DirectionalAntennaRadio r)) {
         return 0;
       }
-      DirectionalAntennaRadio r = (DirectionalAntennaRadio)getFromRadio();
       return r.getRelativeGain(r.getDirection() + getAngle() + Math.PI, getDistance());
     }
   }

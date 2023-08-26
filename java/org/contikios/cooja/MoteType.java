@@ -76,16 +76,7 @@ public interface MoteType {
   String getIdentifier();
 
   /**
-   * Sets the mote type identifier.
-   *
-   * @param identifier
-   *          New identifier
-   */
-  void setIdentifier(String identifier);
-
-  /**
    * @return Mote interface classes of mote type.
-   * @see #setMoteInterfaceClasses(Class[])
    */
   Class<? extends MoteInterface>[] getMoteInterfaceClasses();
 
@@ -168,7 +159,7 @@ public interface MoteType {
           return isSubclassOf(clazz, superClass);
       }
   }
-
+  
   /**
    * Returns a panel with mote type specific data.
    * May be null.

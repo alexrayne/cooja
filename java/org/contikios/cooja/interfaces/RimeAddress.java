@@ -30,19 +30,19 @@
 
 package org.contikios.cooja.interfaces;
 
-import java.util.Observer;
+import static org.contikios.cooja.util.EventTriggers.Update;
 
+import java.awt.EventQueue;
+import java.util.LinkedHashMap;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
-
 import org.contikios.cooja.ClassDescription;
+import org.contikios.cooja.Cooja;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.mote.memory.MemoryInterface.SegmentMonitor;
 import org.contikios.cooja.mote.memory.VarMemory;
+import org.contikios.cooja.util.EventTriggers;
 
 /**
  * Read-only interface to Rime address read from Contiki variable: linkaddr_node_addr.
@@ -52,13 +52,15 @@ import org.contikios.cooja.mote.memory.VarMemory;
  * @author Fredrik Osterlind
  */
 @ClassDescription("Rime address")
-public class RimeAddress extends MoteInterface {
-  private static final Logger logger = LogManager.getLogger(RimeAddress.class);
+public class RimeAddress implements MoteInterface {
   private final VarMemory moteMem;
 
   public static final int RIME_ADDR_LENGTH = 2;
 
   private SegmentMonitor memMonitor = null;
+
+  private final LinkedHashMap<JPanel, JLabel> labels = new LinkedHashMap<>();
+  private final EventTriggers<Update, Mote> triggers = new EventTriggers<>();
 
   public RimeAddress(final Mote mote) {
     moteMem = new VarMemory(mote.getMemory());
@@ -67,8 +69,14 @@ public class RimeAddress extends MoteInterface {
         if (type != SegmentMonitor.EventType.WRITE) {
           return;
         }
-        setChanged();
-        notifyObservers();
+        triggers.trigger(Update.UPDATE, mote);
+        if (Cooja.isVisualized()) {
+          EventQueue.invokeLater(() -> {
+            for (var label : labels.values()) {
+              label.setText("Rime address: " + getAddressString());
+            }
+          });
+        }
       };
       /* TODO XXX Timeout? */
       moteMem.addVarMonitor(SegmentMonitor.EventType.WRITE, "linkaddr_node_addr", memMonitor);
@@ -101,32 +109,23 @@ public class RimeAddress extends MoteInterface {
     ipLabel.setText("Rime address: " + getAddressString());
 
     panel.add(ipLabel);
-
-    Observer observer;
-    addObserver(observer = (obs, obj) -> ipLabel.setText("Rime address: " + getAddressString()));
-
-    panel.putClientProperty("intf_obs", observer);
-
+    labels.put(panel, ipLabel);
     return panel;
   }
 
   @Override
   public void releaseInterfaceVisualizer(JPanel panel) {
-    Observer observer = (Observer) panel.getClientProperty("intf_obs");
-    if (observer == null) {
-      logger.fatal("Error when releasing panel, observer is null");
-      return;
-    }
-
-    this.deleteObserver(observer);
+    labels.remove(panel);
   }
 
   @Override
   public void removed() {
-    super.removed();
     if (memMonitor != null) {
       moteMem.removeVarMonitor("linkaddr_node_addr", memMonitor);
     }
   }
 
+  public EventTriggers<Update, Mote> getTriggers() {
+    return triggers;
+  }
 }

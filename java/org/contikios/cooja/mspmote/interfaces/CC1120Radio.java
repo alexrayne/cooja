@@ -43,8 +43,6 @@ import org.contikios.cooja.interfaces.Radio;
 import org.contikios.cooja.mspmote.MspMote;
 import org.contikios.cooja.mspmote.MspMoteTimeEvent;
 import se.sics.mspsim.chip.CC1120;
-import se.sics.mspsim.chip.CC1120.ReceiverListener;
-import se.sics.mspsim.chip.ChannelListener;
 import se.sics.mspsim.chip.RFListener;
 import se.sics.mspsim.chip.Radio802154;
 
@@ -99,7 +97,6 @@ public class CC1120Radio extends Radio implements CustomDataRadio {
 					isTransmitting = true;
 					len = 0;
 					gotSynchbyte = false;
-					/*logger.debug("----- CCC1120 TRANSMISSION STARTED -----");*/
 					setChanged();
 					notifyObservers();
 				}
@@ -131,23 +128,14 @@ public class CC1120Radio extends Radio implements CustomDataRadio {
 				buffer[len++] = data;
 
 				if (len == expLen) {
-					/*logger.debug("----- CCC1120 CUSTOM DATA TRANSMITTED -----");*/
-
 					final byte[] buf = new byte[expLen];
 					System.arraycopy(buffer, 0, buf, 0, expLen);
-					lastOutgoingPacket = new RadioPacket() {
-						@Override
-						public byte[] getPacketData() {
-							return buf;
-						}
-					};
+          lastOutgoingPacket = () -> buf;
 
 					lastEvent = RadioEvent.PACKET_TRANSMITTED;
-					/*logger.debug("----- CCC1120 PACKET TRANSMITTED -----");*/
 					setChanged();
 					notifyObservers();
 
-					/*logger.debug("----- CCC1120 TRANSMISSION FINISHED -----");*/
 					isTransmitting = false;
 					lastEvent = RadioEvent.TRANSMISSION_FINISHED;
 					setChanged();
@@ -157,28 +145,22 @@ public class CC1120Radio extends Radio implements CustomDataRadio {
 			}
 		});
 
-		cc1120.setReceiverListener(new ReceiverListener() {
-		  @Override
-		  public void newState(boolean on) {
-		    if (cc1120.isReadyToReceive()) {
-		      lastEvent = RadioEvent.HW_ON;
-		      setChanged();
-		      notifyObservers();
-		    } else {
-		      radioOff();
-		    }
-		  }
-		});
+    cc1120.setReceiverListener(on -> {
+      if (cc1120.isReadyToReceive()) {
+        lastEvent = RadioEvent.HW_ON;
+        setChanged();
+        notifyObservers();
+      } else {
+        radioOff();
+      }
+    });
 
-		cc1120.addChannelListener(new ChannelListener() {
-			@Override
-			public void channelChanged(int channel) {
-				/* XXX Currently assumes zero channel switch time */
-				lastEvent = RadioEvent.UNKNOWN;
-				setChanged();
-				notifyObservers();
-			}
-		});
+    cc1120.addChannelListener(channel -> {
+      /* XXX Currently assumes zero channel switch time */
+      lastEvent = RadioEvent.UNKNOWN;
+      setChanged();
+      notifyObservers();
+    });
 	}
 
 	private void radioOff() {
@@ -188,20 +170,13 @@ public class CC1120Radio extends Radio implements CustomDataRadio {
 			logger.warn("Turning off radio while transmitting, ending packet prematurely");
 
 			/* Simulate end of packet */
-			lastOutgoingPacket = new RadioPacket() {
-				@Override
-				public byte[] getPacketData() {
-					return new byte[0];
-				}
-			};
+      lastOutgoingPacket = () -> new byte[0];
 
 			lastEvent = RadioEvent.PACKET_TRANSMITTED;
-			/*logger.debug("----- CCC1120 PACKET TRANSMITTED -----");*/
 			setChanged();
 			notifyObservers();
 
 			/* Register that transmission ended in radio medium */
-			/*logger.debug("----- CCC1120 TRANSMISSION FINISHED -----");*/
 			isTransmitting = false;
 			lastEvent = RadioEvent.TRANSMISSION_FINISHED;
 			setChanged();
@@ -321,7 +296,6 @@ public class CC1120Radio extends Radio implements CustomDataRadio {
 		isReceiving = true;
 
 		lastEvent = RadioEvent.RECEPTION_STARTED;
-		/*logger.debug("----- CCC1120 RECEPTION STARTED -----");*/
 		setChanged();
 		notifyObservers();
 	}
@@ -333,7 +307,6 @@ public class CC1120Radio extends Radio implements CustomDataRadio {
 		isInterfered = false;
 
 		lastEvent = RadioEvent.RECEPTION_FINISHED;
-		/*logger.debug("----- CCC1120 RECEPTION FINISHED -----");*/
 		setChanged();
 		notifyObservers();
 	}
@@ -350,7 +323,6 @@ public class CC1120Radio extends Radio implements CustomDataRadio {
 		lastIncomingPacket = null;
 
 		lastEvent = RadioEvent.RECEPTION_INTERFERED;
-		/*logger.debug("----- CCC1120 RECEPTION INTERFERED -----");*/
 		setChanged();
 		notifyObservers();
 	}

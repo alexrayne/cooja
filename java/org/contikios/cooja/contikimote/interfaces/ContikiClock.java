@@ -91,7 +91,6 @@ import org.contikios.cooja.mote.memory.UnknownVariableException;
 public class ContikiClock extends Clock implements PolledBeforeActiveTicks, PolledAfterAllTicks {
   private static final Logger logger = LogManager.getLogger(ContikiClock.class);
 
-  private final Simulation simulation;
   private final ContikiMote mote;
   private final VarMemory moteMem;
 
@@ -140,7 +139,7 @@ public class ContikiClock extends Clock implements PolledBeforeActiveTicks, Poll
    * @see org.contikios.cooja.MoteInterfaceHandler
    */
   public ContikiClock(Mote mote) {
-    this.simulation = mote.getSimulation();
+    super(mote);
     this.mote = (ContikiMote) mote;
     this.moteMem = new VarMemory(mote.getMemory());
     timeDrift = 0;
@@ -574,7 +573,6 @@ public class ContikiClock extends Clock implements PolledBeforeActiveTicks, Poll
                                         );
         }
       };
-      this.addObserver(observer);
 
       // Saving observer reference for releaseInterfaceVisualizer
       panel.putClientProperty("intf_obs", observer);
@@ -591,8 +589,6 @@ public class ContikiClock extends Clock implements PolledBeforeActiveTicks, Poll
         logger.fatal("Error when releasing panel, observer is null");
         return;
       }
-
-      this.deleteObserver(observer);
     }
 
     public abstract

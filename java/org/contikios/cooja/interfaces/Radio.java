@@ -29,6 +29,7 @@
 package org.contikios.cooja.interfaces;
 
 import java.awt.BorderLayout;
+import java.util.Observable;
 import java.util.Observer;
 import java.util.Observable;
 
@@ -72,7 +73,7 @@ import org.contikios.cooja.contikimote.interfaces.ContikiRadio;
  * @author Fredrik Osterlind
  */
 @ClassDescription("Radio")
-public abstract class Radio extends MoteInterface {
+public abstract class Radio extends Observable implements MoteInterface {
   private static final Logger logger = LogManager.getLogger(Radio.class);
 
   /**
@@ -326,6 +327,18 @@ public abstract class Radio extends MoteInterface {
     }
 
     this.deleteObserver(observer);
+  }
+
+  @Override
+  public void added() {
+    var simulation = getMote().getSimulation();
+    simulation.getRadioMedium().registerRadioInterface(this, simulation);
+  }
+
+  @Override
+  public void removed() {
+    var simulation = getMote().getSimulation();
+    simulation.getRadioMedium().unregisterRadioInterface(this, simulation);
   }
 
   protected

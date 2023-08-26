@@ -33,6 +33,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
@@ -52,7 +53,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Observable;
 import java.util.Observer;
 import java.util.Properties;
 import java.util.regex.PatternSyntaxException;
@@ -83,7 +83,6 @@ import org.apache.logging.log4j.Logger;
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.ConvertedRadioPacket;
 import org.contikios.cooja.Cooja;
-import org.contikios.cooja.Plugin;
 import org.contikios.cooja.PluginType;
 import org.contikios.cooja.RadioConnection;
 import org.contikios.cooja.RadioMedium;
@@ -608,7 +607,6 @@ public class RadioLogger extends VisPlugin
                   suite.getDescription(), suiteName, suiteAnalyzers, false));
           group.add(rbMenuItem);
           analyzerMenu.add(rbMenuItem);
-          logger.debug("Loaded radio logger analyzers: " + suite.getDescription());
         } catch (InstantiationException | InvocationTargetException | IllegalAccessException | NoSuchMethodException e1) {
           logger.warn("Failed to load analyzer suite '" + suiteName + "': " + e1.getMessage());
         }
@@ -651,45 +649,39 @@ public class RadioLogger extends VisPlugin
     adjuster.setDynamicAdjustment(true);
     adjuster.packColumns();
 
-    radioMedium.addRadioTransmissionObserver(radioMediumObserver = new Observer() {
-      @Override
-      public void update(Observable obs, Object obj) {
-        RadioConnection conn = radioMedium.getLastConnection();
-        if (conn == null) {
-          return;
-        }
-        final RadioConnectionLog loggedConn = new RadioConnectionLog();
-        loggedConn.packet = conn.getSource().getLastPacketTransmitted();
-        if (loggedConn.packet == null)
-          return;
-        loggedConn.startTime = conn.getStartTime();
-        loggedConn.endTime = simulation.getSimulationTime();
+    radioMedium.addRadioTransmissionObserver(radioMediumObserver = (obs, obj) -> {
+      RadioConnection conn = radioMedium.getLastConnection();
+      if (conn == null) {
+        return;
+      }
+      final RadioConnectionLog loggedConn = new RadioConnectionLog();
+      loggedConn.packet = conn.getSource().getLastPacketTransmitted();
+      if (loggedConn.packet == null)
+        return;
+      loggedConn.startTime = conn.getStartTime();
+      loggedConn.endTime = simulation.getSimulationTime();
         loggedConn.connection   = conn;
         loggedConn.conn_rssi    = conn.getDestinationsStrengths();
         
-        java.awt.EventQueue.invokeLater(new Runnable() {
-          @Override
-          public void run() {
-            int lastSize = connections.size();
-            // Check if the last row is visible
-            boolean isVisible = false;
-            int rowCount = dataTable.getRowCount();
-            if (rowCount > 0) {
-              Rectangle lastRow = dataTable.getCellRect(rowCount - 1, 0, true);
-              Rectangle visible = dataTable.getVisibleRect();
-              isVisible = visible.y <= lastRow.y && visible.y + visible.height >= lastRow.y + lastRow.height;
-            }
-            connections.add(loggedConn);
-            if (connections.size() > lastSize) {
-              model.fireTableRowsInserted(lastSize, connections.size() - 1);
-            }
-            if (isVisible) {
-              dataTable.scrollRectToVisible(dataTable.getCellRect(dataTable.getRowCount() - 1, 0, true));
-            }
-            setTitle("Radio messages: showing " + dataTable.getRowCount() + "/" + connections.size() + " packets");
-          }
-        });
-      }
+      EventQueue.invokeLater(() -> {
+        int lastSize = connections.size();
+        // Check if the last row is visible.
+        boolean isVisible = false;
+        int rowCount = dataTable.getRowCount();
+        if (rowCount > 0) {
+          Rectangle lastRow = dataTable.getCellRect(rowCount - 1, 0, true);
+          Rectangle visible = dataTable.getVisibleRect();
+          isVisible = visible.y <= lastRow.y && visible.y + visible.height >= lastRow.y + lastRow.height;
+        }
+        connections.add(loggedConn);
+        if (connections.size() > lastSize) {
+          model.fireTableRowsInserted(lastSize, connections.size() - 1);
+        }
+        if (isVisible) {
+          dataTable.scrollRectToVisible(dataTable.getCellRect(dataTable.getRowCount() - 1, 0, true));
+        }
+        setTitle("Radio messages: showing " + dataTable.getRowCount() + "/" + connections.size() + " packets");
+      });
     });
 
     setSize(500, 300);
@@ -884,7 +876,7 @@ public class RadioLogger extends VisPlugin
         }
       }
     } catch (Exception e) {
-      logger.debug("Error when analyzing packet: " + e.getMessage(), e);
+      logger.warn("Error when analyzing packet: " + e.getMessage(), e);
       return false;
     }
     return brief.length() > 0;

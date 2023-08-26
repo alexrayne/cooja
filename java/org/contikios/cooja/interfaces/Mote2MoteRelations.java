@@ -30,7 +30,6 @@
 
 package org.contikios.cooja.interfaces;
 
-import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Observable;
 import java.util.Observer;
@@ -43,11 +42,11 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.ClassDescription;
-import org.contikios.cooja.Cooja;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.SimEventCentral.MoteCountListener;
+import org.contikios.cooja.ui.ColorUtils;
 
 /**
  * Mote2Mote Relations is used to show mote relations in simulated
@@ -74,7 +73,7 @@ import org.contikios.cooja.SimEventCentral.MoteCountListener;
  * @author Fredrik Osterlind
  */
 @ClassDescription("Mote2Mote Relations")
-public class Mote2MoteRelations extends MoteInterface {
+public class Mote2MoteRelations extends Observable implements MoteInterface {
   private static final Logger logger = LogManager.getLogger(Mote2MoteRelations.class);
   private final Mote mote;
 
@@ -98,12 +97,10 @@ public class Mote2MoteRelations extends MoteInterface {
 
   @Override
   public void added() {
-    super.added();
-    
     /* Observe log interfaces */
     for (MoteInterface mi: mote.getInterfaces().getInterfaces()) {
-      if (mi instanceof Log) {
-        mi.addObserver(logObserver);
+      if (mi instanceof Log log) {
+        log.addObserver(logObserver);
       }
     }
 
@@ -131,12 +128,10 @@ public class Mote2MoteRelations extends MoteInterface {
   
   @Override
   public void removed() {
-    super.removed();
-
     /* Stop observing log interfaces */
     for (MoteInterface mi: mote.getInterfaces().getInterfaces()) {
-      if (mi instanceof Log) {
-        mi.deleteObserver(logObserver);
+      if (mi instanceof Log log) {
+        log.deleteObserver(logObserver);
       }
     }
     logObserver = null;
@@ -202,7 +197,7 @@ public class Mote2MoteRelations extends MoteInterface {
         return;
       }
       relations.add(destinationMote);
-      sim.addMoteRelation(mote, destinationMote, decodeColor(colorName));
+      sim.addMoteRelation(mote, destinationMote, ColorUtils.decodeColor(colorName));
     } else {
       relations.remove(destinationMote);
       sim.removeMoteRelation(mote, destinationMote);
@@ -210,29 +205,6 @@ public class Mote2MoteRelations extends MoteInterface {
 
     setChanged();
     notifyObservers();
-  }
-
-  private static Color decodeColor(String colorString) {
-    if (colorString == null) {
-      return null;
-    }
-    switch (colorString.toLowerCase()) {
-      case "red": return Color.RED;
-      case "green": return Color.GREEN;
-      case "blue": return Color.BLUE;
-      case "orange": return Color.ORANGE;
-      case "pink": return Color.PINK;
-      case "yellow": return Color.YELLOW;
-      case "gray": return Color.GRAY;
-      case "magenta": return Color.MAGENTA;
-      case "black": return Color.BLACK;
-      default:
-        try {
-          return Color.decode(colorString);
-        } catch (NumberFormatException e) {
-          return null;
-        }
-    }
   }
 
   @Override

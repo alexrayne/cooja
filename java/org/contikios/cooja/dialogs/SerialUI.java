@@ -119,6 +119,10 @@ public abstract class SerialUI extends SerialIO
   }
 
   private controlsInformer controlsInform = new controlsInformer();
+  
+  protected void InvalidatedData() {
+      controlsInform.refresh(null);
+  }
 
   /* Log */
   public String getLastLogMessage() {
@@ -188,8 +192,7 @@ public abstract class SerialUI extends SerialIO
       lastLogMessage = nonPrintable.matcher(newMessage.toString()).replaceAll("");
       newMessage.setLength(0);
       is_recv = true;
-      this.setChanged();
-      this.notifyObservers(getMote());
+      InvalidatedData();
       recvLen = 0;
   }
 
@@ -242,8 +245,7 @@ public abstract class SerialUI extends SerialIO
 
   protected void sendFlush() {
 	  is_recv = false;
-      this.setChanged();
-      this.notifyObservers(getMote());
+      InvalidatedData();
   };
   
   public void writeString(String message) {
@@ -386,7 +388,7 @@ public abstract class SerialUI extends SerialIO
 
     /* Mote interface observer */
     Observer observer;
-    this.addObserver(observer = (obs, obj) -> {
+    observer = (obs, obj) -> {
           if (obs == controlsInform ) {
               EventQueue.invokeLater(() -> logButton.setSelected(isLogged()) );
               return;
@@ -413,7 +415,7 @@ public abstract class SerialUI extends SerialIO
             }
           }
         });
-    });
+    };
     controlsInform.addObserver(observer);
     panel.putClientProperty("intf_obs", observer);
 
@@ -431,7 +433,6 @@ public abstract class SerialUI extends SerialIO
       return;
     }
 
-    this.deleteObserver(observer);
     controlsInform.deleteObserver(observer);
   }
 
