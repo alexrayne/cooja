@@ -31,22 +31,18 @@
 package org.contikios.cooja.interfaces;
 
 import java.util.ArrayList;
-import java.util.Observable;
-import java.util.Observer;
-
+import java.util.function.BiConsumer;
 import javax.swing.BoxLayout;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
-
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteInterface;
-import org.contikios.cooja.SimEventCentral.MoteCountListener;
 import org.contikios.cooja.ui.ColorUtils;
+import org.contikios.cooja.util.EventTriggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Mote2Mote Relations is used to show mote relations in simulated
@@ -73,22 +69,15 @@ import org.contikios.cooja.ui.ColorUtils;
  * @author Fredrik Osterlind
  */
 @ClassDescription("Mote2Mote Relations")
-public class Mote2MoteRelations extends Observable implements MoteInterface {
-  private static final Logger logger = LogManager.getLogger(Mote2MoteRelations.class);
+public class Mote2MoteRelations implements MoteInterface {
+  private static final Logger logger = LoggerFactory.getLogger(Mote2MoteRelations.class);
+  private final EventTriggers<EventTriggers.AddRemove, Integer> relationTriggers = new EventTriggers<>();
   private final Mote mote;
 
   private final ArrayList<Mote> relations = new ArrayList<>();
   private final Simulation sim;
 
-  private Observer logObserver = new Observer() {
-    @Override
-    public void update(Observable o, Object arg) {
-      String msg = ((Log) o).getLastLogMessage();
-      handleNewLog(msg);
-    }
-  };
-  
-  private MoteCountListener moteCountListener;
+  private BiConsumer<EventTriggers.Update, Log.LogDataInfo> logOutputTrigger;
   
   public Mote2MoteRelations(Mote mote) {
     this.mote = mote;
@@ -97,31 +86,76 @@ public class Mote2MoteRelations extends Observable implements MoteInterface {
 
   @Override
   public void added() {
+    logOutputTrigger = (event, data) -> {
+      var msg = data.msg();
+      if (msg == null) {
+        return;
+      }
+
+      if (msg.startsWith("DEBUG: ")) {
+        msg = msg.substring("DEBUG: ".length());
+      }
+
+      if (!msg.startsWith("#L ")) {
+        return;
+      }
+
+      String colorName = null;
+      int colorIndex = msg.indexOf(';');
+      if (colorIndex > 0) {
+        colorName = msg.substring(colorIndex + 1).trim();
+        msg = msg.substring(0, colorIndex).trim();
+      }
+      var args = msg.split(" ");
+      if (args.length != 3) {
+        return;
+      }
+
+      int destID;
+      try {
+        destID = Integer.parseInt(args[1]);
+      } catch (Exception e) {
+        return; // Not a mote id.
+      }
+      String state = args[2];
+
+      // Locate destination mote.
+      // TODO: Use Rime address interface instead of mote ID?
+      var destinationMote = mote.getSimulation().getMoteWithID(destID);
+      if (destinationMote == null) {
+        logger.warn("No destination mote with ID: " + destID);
+        return;
+      }
+      if (destinationMote == mote) {
+        return;
+      }
+
+      // Change line state.
+      var isAdd = state.equals("1");
+      if (isAdd) {
+        if (relations.contains(destinationMote)) {
+          return;
+        }
+        relations.add(destinationMote);
+        mote.getSimulation().addMoteRelation(mote, destinationMote, ColorUtils.decodeColor(colorName));
+      } else {
+        relations.remove(destinationMote);
+        mote.getSimulation().removeMoteRelation(mote, destinationMote);
+      }
+      relationTriggers.trigger(isAdd ? EventTriggers.AddRemove.ADD : EventTriggers.AddRemove.REMOVE, relations.size());
+    };
     /* Observe log interfaces */
     for (MoteInterface mi: mote.getInterfaces().getInterfaces()) {
       if (mi instanceof Log log) {
-        log.addObserver(logObserver);
+        log.getLogDataTriggers().addTrigger(this, logOutputTrigger);
       }
     }
-
-    /* Observe other motes: if removed, remove our relations to them too */
-    sim.getEventCentral().addMoteCountListener(moteCountListener = new MoteCountListener() {
-      @Override
-      public void moteWasAdded(Mote mote) {
-        /* Ignored */
-      }
-      @Override
-      public void moteWasRemoved(Mote mote) {
-        /* This mote was removed - cleanup by removed() */
-        if (Mote2MoteRelations.this.mote == mote) {
-          return;
+    // Trigger to remove relations with motes that are removed.
+    mote.getSimulation().getMoteTriggers().addTrigger(this, (event, m) -> {
+      if (event == EventTriggers.AddRemove.REMOVE && mote != m) {
+        if (relations.remove(m)) {
+          mote.getSimulation().removeMoteRelation(mote, m);
         }
-
-        /* Remove mote from our relations */
-        if (!relations.remove(mote)) {
-          return;
-        }
-        sim.removeMoteRelation(Mote2MoteRelations.this.mote, mote);
       }
     });
   }
@@ -131,80 +165,18 @@ public class Mote2MoteRelations extends Observable implements MoteInterface {
     /* Stop observing log interfaces */
     for (MoteInterface mi: mote.getInterfaces().getInterfaces()) {
       if (mi instanceof Log log) {
-        log.deleteObserver(logObserver);
+        log.getLogDataTriggers().removeTrigger(this, logOutputTrigger);
       }
     }
-    logObserver = null;
+    logOutputTrigger = null;
 
     /* Remove all relations to other motes */
     Mote[] relationsArr = relations.toArray(new Mote[0]);
     for (Mote m: relationsArr) {
-        sim.removeMoteRelation(Mote2MoteRelations.this.mote, m);
+      mote.getSimulation().removeMoteRelation(Mote2MoteRelations.this.mote, m);
     }
     relations.clear();
-
-    mote.getSimulation().getEventCentral().removeMoteCountListener(moteCountListener);
-  }
-
-  private void handleNewLog(String msg) {
-    if (msg == null) {
-      return;
-    }
-
-    if (msg.startsWith("DEBUG: ")) {
-      msg = msg.substring("DEBUG: ".length());
-    }
-    
-    if (!msg.startsWith("#L ")) {
-      return;
-    }
-
-    String colorName = null;
-    int colorIndex = msg.indexOf(';');
-    if (colorIndex > 0) {
-       colorName = msg.substring(colorIndex + 1).trim();
-       msg = msg.substring(0, colorIndex).trim();
-    }
-    String[] args = msg.split(" ");
-    if (args.length != 3) {
-      return;
-    }
-
-    int destID;
-    try {
-      destID = Integer.parseInt(args[1]);
-    } catch (Exception e) {
-      // Not a mote id
-      return;
-    }
-    String state = args[2];
-
-    /* Locate destination mote */
-    /* TODO Use Rime address interface instead of mote ID? */
-    Mote destinationMote = mote.getSimulation().getMoteWithID(destID);
-    if (destinationMote == null) {
-      logger.warn("No destination mote with ID: " + destID);
-      return;
-    }
-    if (destinationMote == mote) {
-      /*logger.warn("Cannot create relation with ourselves");*/
-      return;
-    }
-
-    /* Change line state */
-    if (state.equals("1")) {
-      if (relations.contains(destinationMote)) {
-        return;
-      }
-      relations.add(destinationMote);
-      sim.addMoteRelation(mote, destinationMote, ColorUtils.decodeColor(colorName));
-    } else {
-      relations.remove(destinationMote);
-      sim.removeMoteRelation(mote, destinationMote);
-    }
-
-    setChanged();
-    notifyObservers();
+    mote.getSimulation().getMoteTriggers().deleteTriggers(this);
   }
 
   @Override
@@ -215,24 +187,12 @@ public class Mote2MoteRelations extends Observable implements MoteInterface {
     final JLabel countLabel = new JLabel();
     countLabel.setText("Mote has " + relations.size() + " mote relations");
     panel.add(countLabel);
-
-    Observer observer;
-    this.addObserver(observer = (obs, obj) -> countLabel.setText("Mote has " + relations.size() + " mote relations"));
-
-    // Saving observer reference for releaseInterfaceVisualizer
-    panel.putClientProperty("intf_obs", observer);
-
+    relationTriggers.addTrigger(this, (obs, sz) -> countLabel.setText("Mote has " + sz + " mote relations"));
     return panel;
   }
 
   @Override
   public void releaseInterfaceVisualizer(JPanel panel) {
-    Observer observer = (Observer) panel.getClientProperty("intf_obs");
-    if (observer == null) {
-      logger.fatal("Error when releasing panel, observer is null");
-      return;
-    }
-    this.deleteObserver(observer);
+    relationTriggers.deleteTriggers(this);
   }
-
 }

@@ -2,14 +2,14 @@ package org.contikios.cooja.plugins.analyzers;
 
 import java.io.IOException;
 import java.io.File;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.util.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class IEEE802154Analyzer extends PacketAnalyzer {
 
-  private static final Logger logger = LogManager.getLogger(IEEE802154Analyzer.class);
+  private static final Logger logger = LoggerFactory.getLogger(IEEE802154Analyzer.class);
 
   // Addressing modes
   public static final int NO_ADDRESS = 0;
@@ -71,11 +71,11 @@ public class IEEE802154Analyzer extends PacketAnalyzer {
 
     int pos = packet.pos;
     // FCF field
-    int fcfType = packet.data[pos + 0] & 0x07;
-    boolean fcfSecurity = ((packet.data[pos + 0] >> 3) & 0x01) != 0;
-    boolean fcfPending = ((packet.data[pos + 0] >> 4) & 0x01) != 0;
-    boolean fcfAckRequested = ((packet.data[pos + 0] >> 5) & 0x01) != 0;
-    boolean fcfIntraPAN = ((packet.data[pos + 0] >> 6) & 0x01) != 0;
+    int fcfType = packet.data[pos] & 0x07;
+    boolean fcfSecurity = ((packet.data[pos] >> 3) & 0x01) != 0;
+    boolean fcfPending = ((packet.data[pos] >> 4) & 0x01) != 0;
+    boolean fcfAckRequested = ((packet.data[pos] >> 5) & 0x01) != 0;
+    boolean fcfIntraPAN = ((packet.data[pos] >> 6) & 0x01) != 0;
     int fcfDestAddrMode = (packet.data[pos + 1] >> 2) & 0x03;
     int fcfFrameVersion = (packet.data[pos + 1] >> 4) & 0x03;
     int fcfSrcAddrMode = (packet.data[pos + 1] >> 6) & 0x03;

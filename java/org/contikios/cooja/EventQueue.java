@@ -39,7 +39,7 @@ import java.util.function.Predicate;
  */
 final class EventQueue {
 
-  private long count = 0;
+  private long count;
 
   public static final class Pair implements Comparable<Pair> {
     public final TimeEvent event;
@@ -147,15 +147,18 @@ final class EventQueue {
 
       boolean scheduled = tmp.event.isScheduled();
 
-      // No longer scheduled or queued
-      tmp.event.setScheduled(false);
-
       if (scheduled)
       {
+        // No longer scheduled or queued
+        tmp.event.setScheduled(false);
         break;
       }
 
       // If not scheduled, then find the next scheduled event
+    }
+
+    if (tmp.event.isQueued() || tmp.event.isScheduled() ) {
+          throw new IllegalStateException("Event is already scheduled: " + tmp.event);
     }
 
     return tmp;

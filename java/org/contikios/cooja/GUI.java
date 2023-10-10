@@ -99,8 +99,6 @@ import javax.swing.UnsupportedLookAndFeelException;
 import javax.swing.event.MenuEvent;
 import javax.swing.event.MenuListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.contikios.cooja.dialogs.AddMoteDialog;
 import org.contikios.cooja.dialogs.BufferSettings;
 import org.contikios.cooja.dialogs.CreateSimDialog;
@@ -110,19 +108,21 @@ import org.contikios.cooja.dialogs.MessageListUI;
 import org.contikios.cooja.dialogs.ProjectDirectoriesDialog;
 import org.contikios.cooja.interfaces.MoteID;
 import org.contikios.cooja.interfaces.Position;
-import org.contikios.cooja.util.ScnObservable;
+import org.contikios.cooja.util.Annotations;
 import org.jdom2.Element;
 import org.jdom2.Text;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** The graphical user interface for Cooja. */
 public class GUI {
-  private static final Logger logger = LogManager.getLogger(GUI.class);
+  private static final Logger logger = LoggerFactory.getLogger(GUI.class);
   static final String WINDOW_TITLE = "Cooja: The Contiki Network Simulator";
 
   static JFrame frame;
   final JDesktopPane myDesktopPane;
-  private static JProgressBar PROGRESS_BAR = null;
-  private static final ArrayList<String> PROGRESS_WARNINGS = new ArrayList<>();
+  private static JProgressBar PROGRESS_BAR;
+  private final ArrayList<String> PROGRESS_WARNINGS = new ArrayList<>();
 
   final ArrayList<Class<? extends Plugin>> menuMotePluginClasses = new ArrayList<>();
   private final JTextPane quickHelpTextPane;
@@ -131,14 +131,11 @@ public class GUI {
 
   private final ArrayList<GUIAction> guiActions = new ArrayList<>();
 
-  final ScnObservable moteHighlightObservable;
-
   private final Cooja cooja;
-  boolean hasFileHistoryChanged;
+  private boolean hasFileHistoryChanged;
 
   public GUI(Cooja cooja) {
     this.cooja = cooja;
-    moteHighlightObservable = new ScnObservable();
     myDesktopPane = new JDesktopPane() {
       @Override
       public void setBounds(int x, int y, int w, int h) {
@@ -414,7 +411,7 @@ public class GUI {
           file = new File(file.getParent(), file.getName() + ".csc");
         }
         if (!file.exists() || !file.canRead()) {
-          logger.fatal("No read access to file: " + file);
+          logger.error("No read access to file: " + file);
           return;
         }
         doLoadConfigAsync(quick, file);
@@ -759,6 +756,7 @@ public class GUI {
         }
 
         // Simulation plugins.
+        var radioMedium = cooja.getSimulation() == null ? null : cooja.getSimulation().getRadioMedium();
         boolean hasSimPlugins = false;
         for (Class<? extends Plugin> pluginClass : cooja.getRegisteredPlugins()) {
           var pluginType = pluginClass.getAnnotation(PluginType.class).value();
@@ -766,6 +764,9 @@ public class GUI {
                   && pluginType != PluginType.PType.SIM_STANDARD_PLUGIN
                   && pluginType != PluginType.PType.SIM_CONTROL_PLUGIN) 
           {
+            continue;
+          }
+          if (!Annotations.isCompatible(pluginClass.getAnnotation(SupportedArguments.class), radioMedium)) {
             continue;
           }
 
@@ -951,9 +952,9 @@ public class GUI {
 
   void parseProjectConfig() {
     try {
-      cooja.parseProjectConfig();
+      cooja.parseProjectConfig(true);
     } catch (Cooja.ParseProjectsException e) {
-      logger.fatal("Error when loading extensions: " + e.getMessage(), e);
+      logger.error("Error when loading extensions: " + e.getMessage(), e);
       JOptionPane.showMessageDialog(frame,
               """
                       All Cooja extensions could not load.
@@ -1018,7 +1019,7 @@ public class GUI {
 
     int added = 0;
     for (var mote : cooja.getSimulation().getMotes()) {
-      if (!Cooja.isMotePluginCompatible(pluginClass, mote)) {
+      if (!Annotations.isCompatible(pluginClass.getAnnotation(SupportedArguments.class), mote)) {
         continue;
       }
       JMenuItem menuItem = new JMenuItem(mote.toString() + "...");
@@ -1043,7 +1044,7 @@ public class GUI {
   public JMenu createMotePluginsSubmenu(Mote mote) {
     JMenu menuMotePlugins = new JMenu("Mote tools for " + mote);
     for (var motePluginClass: menuMotePluginClasses) {
-      if (!Cooja.isMotePluginCompatible(motePluginClass, mote)) {
+      if (!Annotations.isCompatible(motePluginClass.getAnnotation(SupportedArguments.class), mote)) {
         continue;
       }
       var menuItem = new JMenuItem(new StartPluginGUIAction(Cooja.getDescriptionOf(motePluginClass) + "..."));
@@ -1128,7 +1129,7 @@ public class GUI {
     }
     if (saveFile.exists() && !saveFile.canWrite()) {
       JOptionPane.showMessageDialog(frame, "No write access to " + saveFile, "Save failed", JOptionPane.ERROR_MESSAGE);
-      logger.fatal("No write access to file: " + saveFile.getAbsolutePath());
+      logger.error("No write access to file: " + saveFile.getAbsolutePath());
       return null;
     }
     cooja.saveSimulationConfig(saveFile);
@@ -1165,8 +1166,8 @@ public class GUI {
    * @param manualRandomSeed The random seed to use for the simulation
    * @return The worker that will load the simulation.
    */
-  public SwingWorker<Simulation, Object> createLoadSimWorker(Simulation.SimConfig cfg, final boolean quick,
-                                                             Long manualRandomSeed) {
+  private SwingWorker<Simulation, Object> createLoadSimWorker(Simulation.SimConfig cfg, final boolean quick,
+                                                              Long manualRandomSeed) {
     assert java.awt.EventQueue.isDispatchThread() : "Call from AWT thread";
     final var configFile = cfg == null ? null : new File(cfg.file());
     final var autoStart = configFile == null && cooja.getSimulation().isRunning();
@@ -1259,7 +1260,8 @@ public class GUI {
             if (newSim != null && autoStart) {
               newSim.startSimulation();
             }
-          } catch (Cooja.SimulationCreationException e) {
+          } catch (Exception e) {
+            if (isCancelled()) return null;
             publish(e);
             try {
               var rv = channel.take();
@@ -1303,19 +1305,23 @@ public class GUI {
               var moteTypeClassName = elem.getText().trim();
               var newClass = (String) JOptionPane.showInputDialog(Cooja.getTopParentContainer(),
                       "The simulation is about to load '" + moteTypeClassName + "'\n" +
+                              "with the description:\n" +
+                              elem.getChild("description").getText() + "\n" +
                               "You may try to load the simulation using a different mote type.\n",
                       "Loading mote type", JOptionPane.QUESTION_MESSAGE, null, availableMoteTypes,
                       moteTypeClassName);
               if (newClass == null) {
                 rv = false;
-              } else if (!newClass.equals(moteTypeClassName)) {
+                break;
+              }
+              if (!newClass.equals(moteTypeClassName)) {
                 logger.warn("Changing mote type class: " + moteTypeClassName + " -> " + newClass);
                 // Remove the previous mote-interfaces to load the default interfaces.
                 elem.removeChildren("moteinterface");
                 elem.setContent(0, new Text(newClass));
               }
             }
-          } else if (ex instanceof Cooja.SimulationCreationException e) { // Display failure + reload button.
+          } else if (ex instanceof Exception e) { // Display failure + reload button.
             var retry = showErrorDialog("Simulation load error", e, true);
             rv = retry ? 1 : 0;
           }
@@ -1357,11 +1363,10 @@ public class GUI {
         // Optionally show compilation warnings.
         var hideWarn = Boolean.parseBoolean(Cooja.getExternalToolsSetting("HIDE_WARNINGS", "false"));
         if (quick && !hideWarn && !PROGRESS_WARNINGS.isEmpty()) {
-          final String[] warnings = PROGRESS_WARNINGS.toArray(new String[0]);
           final JDialog dialog = new JDialog(GUI.frame, "Compilation warnings", false);
           // Warnings message list.
           MessageListUI compilationOutput = new MessageListUI();
-          for (String w : warnings) {
+          for (var w : PROGRESS_WARNINGS) {
             compilationOutput.addMessage(w, MessageList.ERROR);
           }
           compilationOutput.addPopupMenuItem(null, true);
@@ -1442,7 +1447,7 @@ public class GUI {
     myDesktopPane.revalidate();
   }
 
-  public static void setProgressMessage(String msg, int type) {
+  public void setProgressMessage(String msg, int type) {
     if (PROGRESS_BAR != null && PROGRESS_BAR.isShowing()) {
       PROGRESS_BAR.setString(msg);
       PROGRESS_BAR.setStringPainted(true);
@@ -1487,7 +1492,7 @@ public class GUI {
     newHistory.append(newFile);
     for (int i = 0, count = 1; i < history.length && count < 10; i++) {
       String historyFile = history[i];
-      if (!newFile.equals(historyFile) && historyFile.length() != 0) {
+      if (!newFile.equals(historyFile) && !historyFile.isEmpty()) {
         newHistory.append(';').append(historyFile);
         count++;
       }
@@ -1526,15 +1531,15 @@ public class GUI {
       tabbedPane.addTab("Contiki error", new JScrollPane(list));
     }
     // Compilation output.
-    MessageListUI compilationOutput = null;
+    MessageList compilationOutput = null;
     if (e instanceof MoteType.MoteTypeCreationException ex) {
-      compilationOutput = (MessageListUI) ex.getCompilationOutput();
+      compilationOutput = ex.getCompilationOutput();
     } else if (e != null && e.getCause() instanceof MoteType.MoteTypeCreationException ex) {
-      compilationOutput = (MessageListUI) ex.getCompilationOutput();
+      compilationOutput = ex.getCompilationOutput();
     }
-    if (compilationOutput != null) {
-      compilationOutput.addPopupMenuItem(null, true);
-      tabbedPane.addTab("Compilation output", new JScrollPane(compilationOutput));
+    if (compilationOutput instanceof MessageListUI output) {
+      output.addPopupMenuItem(null, true);
+      tabbedPane.addTab("Compilation output", new JScrollPane(output));
     }
     if (e != null) {
       // Stack trace.
@@ -1585,7 +1590,7 @@ public class GUI {
     dialog.getRootPane().setDefaultButton(closeButton);
     dialog.getContentPane().add(BorderLayout.CENTER, tabbedPane);
     dialog.getContentPane().add(BorderLayout.SOUTH, buttonBox);
-    dialog.setSize(700, 500);
+    dialog.setSize(800, 500);
     dialog.setLocationRelativeTo(frame);
     dialog.setVisible(true); // BLOCKS.
     return dialog.getTitle().equals("-RETRY-");
@@ -1609,7 +1614,7 @@ public class GUI {
     return n != JOptionPane.YES_OPTION;
   }
 
-  public static void setLookAndFeel() {
+  static void setLookAndFeel() {
     JFrame.setDefaultLookAndFeelDecorated(true);
     JDialog.setDefaultLookAndFeelDecorated(true);
     ToolTipManager.sharedInstance().setDismissDelay(60000);
@@ -1652,13 +1657,13 @@ public class GUI {
           // Create mote type
           var clazz = (Class<? extends MoteType>) ((JMenuItem) e.getSource()).getClientProperty("class");
           try {
-            newMoteType = MoteInterfaceHandler.createMoteType(cooja, clazz.getName());
+            newMoteType = ExtensionManager.createMoteType(cooja, clazz.getName());
             if (newMoteType == null || !newMoteType.configureAndInit(frame, cooja.getSimulation(), true)) {
               return;
             }
             cooja.getSimulation().addMoteType(newMoteType);
           } catch (Exception e1) {
-            logger.fatal("Exception when creating mote type", e1);
+            logger.error("Exception when creating mote type", e1);
             showErrorDialog("Mote type creation error", e1, false);
             newMoteType = null;
           }
@@ -1681,12 +1686,17 @@ public class GUI {
         default -> logger.warn("Unhandled action: " + cmd);
       }
       if (newMoteType != null) {
-        var newMoteInfo = AddMoteDialog.showDialog(cooja.getSimulation(), newMoteType);
+        var posDescriptions = new ArrayList<String>();
+        for (var positioner : cooja.getRegisteredPositioners()) {
+          posDescriptions.add(Cooja.getDescriptionOf(positioner));
+        }
+        var newMoteInfo = AddMoteDialog.showDialog(newMoteType, posDescriptions.toArray(new String[0]));
         if (newMoteInfo == null) return;
         Class<? extends Positioner> positionerClass = null;
         for (var positioner : cooja.getRegisteredPositioners()) {
           if (Cooja.getDescriptionOf(positioner).equals(newMoteInfo.positioner())) {
             positionerClass = positioner;
+            break;
           }
         }
         if (positionerClass == null) {
@@ -1699,7 +1709,7 @@ public class GUI {
           positioner = constr.newInstance(newMoteInfo.numMotes(), newMoteInfo.startX(), newMoteInfo.endX(),
                    newMoteInfo.startY(), newMoteInfo.endY(), newMoteInfo.startZ(), newMoteInfo.endZ());
         } catch (Exception e1) {
-          logger.fatal("Exception when creating " + positionerClass + ": ", e1);
+          logger.error("Exception when creating " + positionerClass + ": ", e1);
           return;
         }
         // Create new motes.
@@ -1754,25 +1764,25 @@ public class GUI {
 
   /** GUI actions */
   abstract static class GUIAction extends AbstractAction {
-    public GUIAction(String name) {
+    GUIAction(String name) {
       super(name);
     }
-    public GUIAction(String name, int mnemonic) {
+    GUIAction(String name, int mnemonic) {
       this(name);
       putValue(Action.MNEMONIC_KEY, mnemonic);
     }
-    public GUIAction(String name, KeyStroke accelerator) {
+    GUIAction(String name, KeyStroke accelerator) {
       this(name);
       putValue(Action.ACCELERATOR_KEY, accelerator);
     }
-    public GUIAction(String name, int mnemonic, KeyStroke accelerator) {
+    GUIAction(String name, int mnemonic, KeyStroke accelerator) {
       this(name, mnemonic);
       putValue(Action.ACCELERATOR_KEY, accelerator);
     }
     public abstract boolean shouldBeEnabled();
   }
   class StartPluginGUIAction extends GUIAction {
-    public StartPluginGUIAction(String name) {
+    StartPluginGUIAction(String name) {
       super(name);
     }
     @Override

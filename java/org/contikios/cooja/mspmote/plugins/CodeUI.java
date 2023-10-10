@@ -52,14 +52,14 @@ import javax.swing.text.Highlighter.HighlightPainter;
 
 import de.sciss.syntaxpane.DefaultSyntaxKit;
 import de.sciss.syntaxpane.components.Markers;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.Watchpoint;
 import org.contikios.cooja.WatchpointMote;
 import org.contikios.cooja.util.JSyntaxAddBreakpoint;
 import org.contikios.cooja.util.JSyntaxRemoveBreakpoint;
 import org.contikios.cooja.util.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Displays source code and allows a user to add and remove breakpoints.
@@ -67,7 +67,7 @@ import org.contikios.cooja.util.StringUtils;
  * @author Fredrik Osterlind
  */
 public class CodeUI extends JPanel {
-  private static final Logger logger = LogManager.getLogger(CodeUI.class);
+  private static final Logger logger = LoggerFactory.getLogger(CodeUI.class);
 
   static {
     DefaultSyntaxKit.initKit();
@@ -75,7 +75,7 @@ public class CodeUI extends JPanel {
 
   private final JEditorPane codeEditor;
   private final HashMap<Integer, Integer> codeEditorLines = new HashMap<>();
-  protected File displayedFile = null;
+  protected File displayedFile;
 
   private static final HighlightPainter CURRENT_LINE_MARKER = new Markers.SimpleMarker(Color.ORANGE);
   private static final HighlightPainter SELECTED_LINE_MARKER = new Markers.SimpleMarker(Color.GREEN);
@@ -84,8 +84,8 @@ public class CodeUI extends JPanel {
   private final Object selectedLineTag;
   private final ArrayList<Object> breakpointsLineTags = new ArrayList<>();
 
-  private JSyntaxAddBreakpoint actionAddBreakpoint = null;
-  private JSyntaxRemoveBreakpoint actionRemoveBreakpoint = null;
+  private JSyntaxAddBreakpoint actionAddBreakpoint;
+  private JSyntaxRemoveBreakpoint actionRemoveBreakpoint;
 
   private final WatchpointMote mote;
 
@@ -132,7 +132,7 @@ public class CodeUI extends JPanel {
         /* Configure breakpoint menu options */
         /* XXX TODO We should ask for the file specified in the firmware, not
          * the actual file on disk. */
-        var address = CodeUI.this.mote.getExecutableAddressOf(displayedFile, line);
+        var address = CodeUI.this.mote.getType().getExecutableAddressOf(displayedFile, line);
         if (address < 0) {
           return;
         }
@@ -236,7 +236,7 @@ public class CodeUI extends JPanel {
     if (!codeFile.equals(displayedFile)) {
       /* Read from disk */
       final String data = StringUtils.loadFromFile(codeFile);
-      if (data == null || data.length() == 0) {
+      if (data == null || data.isEmpty()) {
         displayNoCode(markCurrent);
         return;
       }

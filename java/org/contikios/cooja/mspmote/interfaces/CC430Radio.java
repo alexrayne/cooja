@@ -30,22 +30,15 @@
 
 package org.contikios.cooja.mspmote.interfaces;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
-
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Mote;
-import org.contikios.cooja.interfaces.CustomDataRadio;
 
 /**
  * @author Fredrik Osterlind
  */
 @ClassDescription("TI CC1101 (CC430)")
-public class CC430Radio extends CC1101Radio implements CustomDataRadio {
-	private static final Logger logger = LogManager.getLogger(CC1101Radio.class);
-
+public class CC430Radio extends CC1101Radio {
 	public CC430Radio(Mote m) {
 	    super(m);
 	}
-
 }

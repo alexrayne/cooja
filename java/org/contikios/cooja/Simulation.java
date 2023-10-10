@@ -28,22 +28,23 @@
 
 package org.contikios.cooja;
 import java.awt.Color;
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Observable;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingDeque;
 import javax.swing.JTextArea;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 import org.contikios.cooja.Cooja.PluginConstructionException;
 import org.contikios.cooja.Cooja.SimulationCreationException;
 import org.contikios.cooja.util.EventTriggers;
 import org.contikios.cooja.util.EventTriggers.AddRemove;
 import org.jdom2.Element;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A simulation consists of a number of motes and mote types.
@@ -54,12 +55,15 @@ import org.jdom2.Element;
  *
  * @author Fredrik Osterlind
  */
-public final class Simulation extends Observable {
+public final class Simulation {
 
   /** Commands sent to the simulation thread to start, stop, or shutdown the simulation */
   private enum Command {
     START, STOP, QUIT
   }
+
+  public static final String PROPERTY_TITLE = "title";
+  public static final String PROPERTY_SPEED_LIMIT = "speedLimit";
 
   public static final long MICROSECOND = 1L;
   public static final long MILLISECOND = 1000*MICROSECOND;
@@ -90,17 +94,17 @@ public final class Simulation extends Observable {
   
   private long lastStartRealTime;
   private long lastStartSimulationTime;
-  private long currentSimulationTime = 0;
+  private long currentSimulationTime;
   private TimeEvent currentSimulationEvent = null;
 
   private String title;
 
   private RadioMedium currentRadioMedium;
 
-  private static final Logger logger = LogManager.getLogger(Simulation.class);
+  private static final Logger logger = LoggerFactory.getLogger(Simulation.class);
 
-  private volatile boolean isRunning = false;
-  private volatile boolean isShutdown = false;
+  private volatile boolean isRunning;
+  private volatile boolean isShutdown;
 
   private final Cooja cooja;
 
@@ -121,13 +125,22 @@ public final class Simulation extends Observable {
   /** Mote type add and remove triggers. */
   private final EventTriggers<EventTriggers.AddRemove, MoteType> moteTypeTriggers = new EventTriggers<>();
 
+  /** Mote add and remove triggers. */
+  private final EventTriggers<EventTriggers.AddRemove, Mote> moteTriggers = new EventTriggers<>();
+
+  /** Mote highlight triggers. */
+  final EventTriggers<EventTriggers.Update, Mote> moteHighlightTriggers = new EventTriggers<>();
+
+  /** Property change support */
+  private final PropertyChangeSupport propertyChangeSupport = new PropertyChangeSupport(this);
+
   /** List of active script engines. */
   private final ArrayList<LogScriptEngine> scriptEngines = new ArrayList<>();
 
   private final SimEventCentral eventCentral = new SimEventCentral(this);
 
   /** The return value from startSimulation. */
-  private volatile Integer returnValue = null;
+  private volatile Integer returnValue;
 
   /** Mote relation (directed). */
   public record MoteRelation(Mote source, Mote dest, Color color) {}
@@ -179,20 +192,18 @@ public final class Simulation extends Observable {
     this.cfg = cfg;
     this.cooja = cooja;
     this.title = title;
+    this.quick = quick;
     randomSeed = seed;
     randomSeedGenerated = generateSeed;
-    randomGenerator = new SafeRandom(this);
-    randomGenerator.setSeed(seed);
-    currentRadioMedium = MoteInterfaceHandler.createRadioMedium(this, radioMediumClass);
-    if (currentRadioMedium == null) {
-      throw new MoteType.MoteTypeCreationException("Could not load " + radioMediumClass);
-    }
+    randomGenerator = new SafeRandom(seed, this);
+    currentRadioMedium = ExtensionManager.createRadioMedium(cooja, this, radioMediumClass);
     maxMoteStartupDelay = Math.max(0, moteStartDelay);
-    this.quick = quick;
     simulationThread = new Thread(() -> {
       boolean isAlive = true;
       do {
         boolean isSimulationRunning = false;
+        boolean sheduled;
+        boolean qued;
         EventQueue.Pair nextEvent = null;
         try {
           while (isAlive) {
@@ -223,7 +234,7 @@ public final class Simulation extends Observable {
         } catch (SimulationStop e) {
           logger.info("Simulation stopped: {}", e.getMessage());
         } catch (RuntimeException e) {
-          logger.fatal("Simulation stopped due to error: " + e.getMessage(), e);
+          logger.error("Simulation stopped due to error: " + e.getMessage(), e);
           if (Cooja.isVisualized()) {
             String errorTitle = "Simulation error";
             if (nextEvent != null && nextEvent.event instanceof MoteTimeEvent moteTimeEvent) {
@@ -283,17 +294,10 @@ public final class Simulation extends Observable {
           case "events" -> eventCentral.setConfigXML(element.getChildren());
           case "motetype" -> {
             String moteTypeClassName = element.getText().trim();
-            // Backwards compatibility: se.sics -> org.contikios.
-            if (moteTypeClassName.startsWith("se.sics")) {
-              moteTypeClassName = moteTypeClassName.replaceFirst("se\\.sics", "org.contikios");
-            }
-            var moteType = MoteInterfaceHandler.createMoteType(cooja, moteTypeClassName);
-            if (moteType == null) {
-              throw new MoteType.MoteTypeCreationException("Could not create: " + moteTypeClassName);
-            }
+            var moteType = ExtensionManager.createMoteType(cooja, moteTypeClassName);
             if (!moteType.setConfigXML(this, element.getChildren(), Cooja.isVisualized())) {
-              logger.fatal("Mote type was not created: " + element.getText().trim());
-              throw new MoteType.MoteTypeCreationException("Mote type was not created: " + element.getText().trim());
+              logger.error("Mote type could not be configured: " + element.getText().trim());
+              throw new MoteType.MoteTypeCreationException("Mote type could not be configured: " + element.getText().trim());
             }
             addMoteType(moteType);
             for (var mote : element.getChildren("mote")) {
@@ -322,9 +326,6 @@ public final class Simulation extends Observable {
 
       // Quick load mode only during loading
       this.quick = false;
-
-      setChanged();
-      notifyObservers(this);
     }
     SimulationCreationException ret = null;
     if (root == null) {
@@ -347,15 +348,68 @@ public final class Simulation extends Observable {
       } catch (InterruptedException e) {
         throw new SimulationCreationException("Simulation creation interrupted", e);
       }
-      if (Cooja.isVisualized()) {
-        ret = new Cooja.RunnableInEDT<SimulationCreationException>() {
-          @Override
-          public SimulationCreationException work() {
-            return startPlugins(root, cooja);
+      boolean hasController = Cooja.isVisualized();
+      
+      // ************************************************************
+      //    Start plugins
+      
+      for (var pluginElement : root.getChildren("plugin")) {
+        var pluginClassName = pluginElement.getText().trim();
+        if (pluginClassName.startsWith("se.sics")) {
+          pluginClassName = pluginClassName.replaceFirst("se\\.sics", "org.contikios");
+        }
+        // Skip plugins that have been removed or merged into other classes.
+        if ("org.contikios.cooja.plugins.SimControl".equals(pluginClassName) ||
+                "org.contikios.cooja.plugins.SimInformation".equals(pluginClassName) ||
+                "org.contikios.cooja.plugins.MoteTypeInformation".equals(pluginClassName)) {
+          continue;
+        }
+        // Backwards compatibility: old visualizers were replaced.
+        if (pluginClassName.equals("org.contikios.cooja.plugins.VisUDGM") ||
+                pluginClassName.equals("org.contikios.cooja.plugins.VisBattery") ||
+                pluginClassName.equals("org.contikios.cooja.plugins.VisTraffic") ||
+                pluginClassName.equals("org.contikios.cooja.plugins.VisState")) {
+          logger.warn("Old simulation config detected: visualizers have been remade");
+          pluginClassName = "org.contikios.cooja.plugins.Visualizer";
+        }
+
+        var pluginClass = ExtensionManager.getPluginClass(cooja, pluginClassName);
+        if (pluginClass == null) {
+          logger.error("Plugin class " + pluginClassName + " not registered as a plugin");
+          ret = new SimulationCreationException("Plugin class " + pluginClassName + " not registered as a plugin", null);
+          break;
+        }
+        // Skip plugins that require visualization in headless mode.
+        if (!Cooja.isVisualized() && VisPlugin.class.isAssignableFrom(pluginClass)) {
+          continue;
+        }
+        if (!hasController && pluginClass.getAnnotation(PluginType.class).value() == PluginType.PType.SIM_CONTROL_PLUGIN) {
+          hasController = true;
+        }
+        // Parse plugin mote argument (if any).
+        Mote mote = null;
+        for (var pluginSubElement : pluginElement.getChildren("mote_arg")) {
+          int moteNr = Integer.parseInt(pluginSubElement.getText());
+          if (moteNr >= 0 && moteNr < getMotesCount()) {
+            mote = getMote(moteNr);
           }
-        }.invokeAndWait();
-      } else {
-        ret = startPlugins(root, cooja);
+        }
+        final var finalMote = mote;
+        if (Cooja.isVisualized()) {
+          ret = new Cooja.RunnableInEDT<SimulationCreationException>() {
+            @Override
+            public SimulationCreationException work() {
+              return startPlugin(pluginClass, pluginElement, cooja, finalMote);
+            }
+          }.invokeAndWait();
+        } else {
+          ret = startPlugin(pluginClass, pluginElement, cooja, finalMote);
+        }
+        if (ret != null) break;
+      }
+      // Non-GUI Cooja requires a simulation controller, ensure one is started.
+      if (ret == null && !Cooja.isVisualized() && !hasController) {
+        ret = new SimulationCreationException("No plugin controlling simulation, aborting", null);
       }
     }
     if (ret != null) {
@@ -367,7 +421,7 @@ public final class Simulation extends Observable {
   private void createMote(MoteType moteType, Element root) throws MoteType.MoteTypeCreationException {
     var mote = moteType.generateMote(this);
     if (!mote.setConfigXML(this, root.getChildren(), Cooja.isVisualized())) {
-      logger.fatal("Mote was not created: " + root.getText().trim());
+      logger.error("Mote was not created: " + root.getText().trim());
       throw new MoteType.MoteTypeCreationException("Could not configure mote " + moteType);
     }
     addMote(mote);
@@ -378,60 +432,14 @@ public final class Simulation extends Observable {
           cooja.removePlugin(plugin);
       }
   }
-  
-  private SimulationCreationException startPlugins(Element root, Cooja cooja) {
-    // Restart plugins from config
-    boolean hasController = false;
-    for (var pluginElement : root.getChildren("plugin")) {
-      String pluginClassName = pluginElement.getText().trim();
-      if (pluginClassName.startsWith("se.sics")) {
-        pluginClassName = pluginClassName.replaceFirst("se\\.sics", "org.contikios");
-      }
-      // Skip plugins that have been removed or merged into other classes.
-      if ("org.contikios.cooja.plugins.SimControl".equals(pluginClassName) ||
-          "org.contikios.cooja.plugins.SimInformation".equals(pluginClassName) ||
-          "org.contikios.cooja.plugins.MoteTypeInformation".equals(pluginClassName)) {
-        continue;
-      }
-      // Backwards compatibility: old visualizers were replaced.
-      if (pluginClassName.equals("org.contikios.cooja.plugins.VisUDGM") ||
-              pluginClassName.equals("org.contikios.cooja.plugins.VisBattery") ||
-              pluginClassName.equals("org.contikios.cooja.plugins.VisTraffic") ||
-              pluginClassName.equals("org.contikios.cooja.plugins.VisState")) {
-        logger.warn("Old simulation config detected: visualizers have been remade");
-        pluginClassName = "org.contikios.cooja.plugins.Visualizer";
-      }
 
-      var pluginClass = cooja.tryLoadClass(this, Plugin.class, pluginClassName);
-      if (pluginClass == null) {
-        logger.fatal("Could not load plugin class: " + pluginClassName);
-        return new SimulationCreationException("Could not load plugin class " + pluginClassName, null);
-      }
-      // Skip plugins that require visualization in headless mode.
-      if (!Cooja.isVisualized() && VisPlugin.class.isAssignableFrom(pluginClass)) {
-        continue;
-      }
-      if (pluginClass.getAnnotation(PluginType.class).value() == PluginType.PType.SIM_CONTROL_PLUGIN) {
-        hasController = true;
-      }
-      // Parse plugin mote argument (if any).
-      Mote mote = null;
-      for (var pluginSubElement : pluginElement.getChildren("mote_arg")) {
-        int moteNr = Integer.parseInt(pluginSubElement.getText());
-        if (moteNr >= 0 && moteNr < getMotesCount()) {
-          mote = getMote(moteNr);
-        }
-      }
-      try {
-        cooja.startPlugin(pluginClass, this, mote, pluginElement);
-      } catch (PluginConstructionException ex) {
-        return new SimulationCreationException("Failed to start plugin: " + ex.getMessage(), ex);
-      }
-    } // for (var pluginElement
-    
-    // Non-GUI Cooja requires a simulation controller, ensure one is started.
-    if (!Cooja.isVisualized() && !hasController) {
-      return new SimulationCreationException("No plugin controlling simulation, aborting", null);
+  private SimulationCreationException startPlugin(Class<? extends Plugin> pluginClass, Element pluginElement,
+                                                  Cooja cooja, Mote mote) {
+    Cooja.setProgressMessage("Starting " + pluginClass.getName());
+    try {
+      cooja.startPlugin(pluginClass, this, mote, pluginElement);
+    } catch (PluginConstructionException ex) {
+      return new SimulationCreationException("Failed to start plugin: " + ex.getMessage(), ex);
     }
     return null;
   }
@@ -464,12 +472,7 @@ public final class Simulation extends Observable {
     }
 
     Cooja.updateProgress(!isRunning);
-
     simulationStateTriggers.trigger(isRunning ? EventTriggers.Operation.START : EventTriggers.Operation.STOP, this);
-
-    // TODO remove observable notification for state changes
-    setChanged();
-    notifyObservers(this);
   }
 
   /**
@@ -734,12 +737,12 @@ public final class Simulation extends Observable {
   }
 
   private void doRemoveMote(Mote mote) {
-    motes.remove(mote);
+    boolean removed = motes.remove(mote);
     mote.removed();
-    eventCentral.removeMote(mote);
-    setChanged();
-    notifyObservers(mote);
-
+    if (removed) {
+      moteTriggers.trigger(AddRemove.REMOVE, mote);
+      eventCentral.removeMote(mote);
+    }
     // Delete all events associated with deleted mote.
     eventQueue.removeIf(ev -> ev instanceof MoteTimeEvent moteTimeEvent && moteTimeEvent.getMote() == mote);
     for (var p : startedPlugins.toArray(new Plugin[0])) {
@@ -760,7 +763,6 @@ public final class Simulation extends Observable {
     for (var startedPlugin : startedPlugins.toArray(new Plugin[0])) {
       Cooja.removePlugin(startedPlugins, startedPlugin);
     }
-    deleteObservers();
     if (!isShutdown) {
       commandQueue.add(Command.QUIT);
     }
@@ -776,9 +778,8 @@ public final class Simulation extends Observable {
     invokeSimulationThread(() -> {
       motes.add(mote);
       mote.added();
+      moteTriggers.trigger(AddRemove.ADD, mote);
       eventCentral.addMote(mote);
-      setChanged();
-      notifyObservers(mote);
       Cooja.updateGUIComponentState();
     });
   }
@@ -851,10 +852,6 @@ public final class Simulation extends Observable {
     Cooja.usedMoteTypeIDs.add(newMoteType.getIdentifier());
     moteTypes.add(newMoteType);
     moteTypeTriggers.trigger(AddRemove.ADD, newMoteType);
-
-    // TODO remove observable notification for mote type changes
-    this.setChanged();
-    this.notifyObservers(this);
   }
 
   /**
@@ -872,10 +869,6 @@ public final class Simulation extends Observable {
     if (moteTypes.remove(type)) {
       moteTypeTriggers.trigger(AddRemove.REMOVE, type);
     }
-
-    // TODO remove observable notifications for mote type changes
-    this.setChanged();
-    this.notifyObservers(this);
   }
 
   /**
@@ -931,8 +924,12 @@ public final class Simulation extends Observable {
    */
   public void setSpeedLimit(final Double newSpeedLimit) {
     invokeSimulationThread(() -> {
+      var oldSpeedLimit = getSpeedLimit();
       speedLimitNone = newSpeedLimit == null;
       if (speedLimitNone) {
+        if (oldSpeedLimit != null) {
+          propertyChangeSupport.firePropertyChange(PROPERTY_SPEED_LIMIT, oldSpeedLimit, null);
+        }
         return;
       }
       speedLimitLastRealtime = System.currentTimeMillis();
@@ -943,8 +940,7 @@ public final class Simulation extends Observable {
         delayEvent.remove();
       }
       scheduleEvent(delayEvent, currentSimulationTime);
-      Simulation.this.setChanged();
-      Simulation.this.notifyObservers(this);
+      propertyChangeSupport.firePropertyChange(PROPERTY_SPEED_LIMIT, oldSpeedLimit, speedLimit);
     });
   }
 
@@ -1027,7 +1023,9 @@ public final class Simulation extends Observable {
    *          New title
    */
   public void setTitle(String title) {
+    var oldTitle = this.title;
     this.title = title;
+    propertyChangeSupport.firePropertyChange(PROPERTY_TITLE, oldTitle, title);
   }
 
   /** Returns the simulation configuration. */
@@ -1049,9 +1047,37 @@ public final class Simulation extends Observable {
     return moteTypeTriggers;
   }
 
+  /*
+   * Returns the mote add and remove triggers.
+   */
+  public EventTriggers<AddRemove, Mote> getMoteTriggers() {
+    return moteTriggers;
+  }
+
   /** Returns the mote relations triggers. */
   public EventTriggers<AddRemove, MoteRelation> getMoteRelationsTriggers() {
     return moteRelationsTriggers;
+  }
+
+  /** Returns the mote highlight triggers. */
+  public EventTriggers<EventTriggers.Update, Mote> getMoteHighlightTriggers() {
+    return moteHighlightTriggers;
+  }
+
+  public void addPropertyChangeListener(PropertyChangeListener listener) {
+    propertyChangeSupport.addPropertyChangeListener(listener);
+  }
+
+  public void removePropertyChangeListener(PropertyChangeListener listener) {
+    propertyChangeSupport.removePropertyChangeListener(listener);
+  }
+
+  public void addPropertyChangeListener(String property, PropertyChangeListener listener) {
+    propertyChangeSupport.addPropertyChangeListener(property, listener);
+  }
+
+  public void removePropertyChangeListener(String property, PropertyChangeListener listener) {
+    propertyChangeSupport.removePropertyChangeListener(property, listener);
   }
 
   /** Exception for signaling the simulation that an emulator has stopped. */

@@ -9,15 +9,15 @@ import java.awt.event.KeyEvent;
 
 import javax.swing.JTextField;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.jdom2.Element;
 import org.jdom2.Text;
 
 // this is a base for messages with RANG/TYPE
 public class HistoryUI {
 
-    private static Logger logger = LogManager.getLogger(HistoryUI.class);
+    private static Logger logger = LoggerFactory.getLogger(HistoryUI.class);
 
     /* Command history */
     private final static int HISTORY_SIZE = 15;

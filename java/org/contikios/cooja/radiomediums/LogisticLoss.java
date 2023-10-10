@@ -32,24 +32,20 @@ package org.contikios.cooja.radiomediums;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.Observer;
+import java.util.List;
 import java.util.Random;
 import java.util.Map;
-
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 import org.contikios.cooja.Cooja;
 import org.jdom2.Element;
-
 import org.contikios.cooja.ClassDescription;
-import org.contikios.cooja.Mote;
 import org.contikios.cooja.RadioConnection;
-import org.contikios.cooja.SimEventCentral.MoteCountListener;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.interfaces.Position;
 import org.contikios.cooja.interfaces.Radio;
 import org.contikios.cooja.plugins.Visualizer;
 import org.contikios.cooja.plugins.skins.LogisticLossVisualizerSkin;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The LogisticLoss radio medium aims to be more realistic as the UDGM radio medium
@@ -104,9 +100,7 @@ import org.contikios.cooja.plugins.skins.LogisticLossVisualizerSkin;
  */
 @ClassDescription("LogisticLoss Medium")
 public class LogisticLoss extends AbstractRadioMedium {
-    private static final Logger logger = LogManager.getLogger(LogisticLoss.class);
-
-    private final Simulation sim;
+    private static final Logger logger = LoggerFactory.getLogger(LogisticLoss.class);
 
     /* Success ratio of TX. If this fails, no radios receive the packet */
     public double SUCCESS_RATIO_TX = 1.0;
@@ -143,7 +137,7 @@ public class LogisticLoss extends AbstractRadioMedium {
     public static final double DEFAULT_TX_POWER_DBM = 0.0;
 
     /* Enable the time-varying component? */
-    public boolean ENABLE_TIME_VARIATION = false;
+    public boolean ENABLE_TIME_VARIATION;
 
     /* Bounds for the time-varying component */
     public double TIME_VARIATION_MIN_PL_DB = -10;
@@ -152,7 +146,7 @@ public class LogisticLoss extends AbstractRadioMedium {
     /* How often to update the time-varying path loss value (in simulation time)? */
     private static final double TIME_VARIATION_STEP_SEC = 10.0;
 
-    private long lastTimeVariationUpdatePeriod = 0;
+    private long lastTimeVariationUpdatePeriod;
 
     private final DirectedGraphMedium dgrm; /* Used only for efficient destination lookup */
 
@@ -163,7 +157,6 @@ public class LogisticLoss extends AbstractRadioMedium {
     public LogisticLoss(Simulation simulation) {
         super(simulation);
         random = simulation.getRandomGenerator();
-        sim = simulation;
         dgrm = new DirectedGraphMedium(simulation) {
                 @Override
                 protected void analyzeEdges() {
@@ -206,28 +199,20 @@ public class LogisticLoss extends AbstractRadioMedium {
 
         /* Register as position observer.
          * If any positions change, re-analyze potential receivers. */
-        final Observer positionObserver = (o, arg) -> dgrm.requestEdgeAnalysis();
+        simulation.getEventCentral().getPositionTriggers().addTrigger(this, (o, m) -> dgrm.requestEdgeAnalysis());
         /* Re-analyze potential receivers if radios are added/removed. */
-        simulation.getEventCentral().addMoteCountListener(new MoteCountListener() {
-                @Override
-                public void moteWasAdded(Mote mote) {
-                    mote.getInterfaces().getPosition().addObserver(positionObserver);
-                    dgrm.requestEdgeAnalysis();
-                }
-                @Override
-                public void moteWasRemoved(Mote mote) {
-                    mote.getInterfaces().getPosition().deleteObserver(positionObserver);
-                    dgrm.requestEdgeAnalysis();
-                }
-            });
-        for (Mote mote: simulation.getMotes()) {
-            mote.getInterfaces().getPosition().addObserver(positionObserver);
-        }
+        simulation.getMoteTriggers().addTrigger(this, (o, m) -> dgrm.requestEdgeAnalysis());
+
         dgrm.requestEdgeAnalysis();
 
         if (Cooja.isVisualized()) {
             Visualizer.registerVisualizerSkin(LogisticLossVisualizerSkin.class);
         }
+    }
+
+    @Override
+    public List<Radio> getNeighbors(Radio radio) {
+        return dgrm.getNeighbors(radio);
     }
 
     @Override
@@ -258,11 +243,10 @@ public class LogisticLoss extends AbstractRadioMedium {
         for (DestinationRadio dest: potentialDestinations) {
             Radio recv = dest.radio;
 
-            /* Fail if radios are on different (but configured) channels */ 
-            if (sender.getChannel() >= 0 &&
-                    recv.getChannel() >= 0 &&
-                    sender.getChannel() != recv.getChannel()) {
-
+            /* Fail if radios are on different (but configured) channels */
+            var srcChannel = sender.getChannel();
+            var dstChannel = recv.getChannel();
+            if (srcChannel >= 0 && dstChannel >= 0 && srcChannel != dstChannel) {
                 /* Add the connection in a dormant state;
                    it will be activated later when the radio will be
                    turned on and switched to the right channel. This behavior
@@ -392,7 +376,7 @@ public class LogisticLoss extends AbstractRadioMedium {
     }
 
     private void updateTimeVariationComponent() {
-        long period = (long)(sim.getSimulationTimeMillis() / (1000.0 * TIME_VARIATION_STEP_SEC));
+        long period = (long)(simulation.getSimulationTimeMillis() / (1000.0 * TIME_VARIATION_STEP_SEC));
 
         if (dgrm.needsEdgeAnalysis()) {
             dgrm.analyzeEdges();
@@ -427,10 +411,9 @@ public class LogisticLoss extends AbstractRadioMedium {
                 conn.getSource().setCurrentSignalStrength(SS_STRONG);
             }
             for (Radio dstRadio : conn.getDestinations()) {
-
-                if (conn.getSource().getChannel() >= 0 &&
-                        dstRadio.getChannel() >= 0 &&
-                        conn.getSource().getChannel() != dstRadio.getChannel()) {
+                var srcChannel = conn.getSource().getChannel();
+                var dstChannel = dstRadio.getChannel();
+                if (srcChannel >= 0 && dstChannel >= 0 && srcChannel != dstChannel) {
                     continue;
                 }
 
@@ -444,9 +427,9 @@ public class LogisticLoss extends AbstractRadioMedium {
         /* Set signal strength to below weak on interfered */
         for (RadioConnection conn : conns) {
             for (Radio intfRadio : conn.getInterfered()) {
-                if (conn.getSource().getChannel() >= 0 &&
-                        intfRadio.getChannel() >= 0 &&
-                        conn.getSource().getChannel() != intfRadio.getChannel()) {
+                var srcChannel = conn.getSource().getChannel();
+                var intfChannel = intfRadio.getChannel();
+                if (srcChannel >= 0 && intfChannel >= 0 && srcChannel != intfChannel) {
                     continue;
                 }
 

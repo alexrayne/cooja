@@ -61,7 +61,7 @@ package org.contikios.cooja;
  *
  * @author Fredrik Osterlind
  */
-public abstract class CoreComm {
+public interface CoreComm {
 
   /**
    * Ticks a mote once.
@@ -71,10 +71,9 @@ public abstract class CoreComm {
   public abstract void kill();
 
   /**
-   * Initializes a mote by running a startup script in the core. (Should only be
-   * run once, at the same time as the library is loaded)
+   * Returns the absolute memory address of the reference variable.
    */
-  protected abstract void init();
+  public abstract long getReferenceAddress();
 
   /**
    * Sets the relative memory address of the reference variable.

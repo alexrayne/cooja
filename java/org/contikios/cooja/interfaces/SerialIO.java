@@ -32,9 +32,8 @@ package org.contikios.cooja.interfaces;
 
 import org.contikios.cooja.*;
 
-import java.util.Observer;
-import java.util.Observable;
 import org.contikios.cooja.interfaces.SerialPort;
+import org.contikios.cooja.interfaces.Log;
 
 /**
  * A Log represents a mote logging output. An implementation should notify all
@@ -43,15 +42,13 @@ import org.contikios.cooja.interfaces.SerialPort;
  * @author Fredrik Osterlind
  */
 @ClassDescription("Serial IO")
-public abstract class SerialIO  extends Observable  //Log //maybe better extends Log?  
+public abstract class SerialIO  extends Log //maybe better extends Log?  
 	implements MoteInterface, SerialPort
 {
+      // SerialPort
 	  public abstract void writeByte(byte b);
 	  public abstract void writeArray(byte[] s);
 	  public abstract void writeString(String s);
-
-	  public abstract void addSerialDataObserver(Observer o);
-	  public abstract void deleteSerialDataObserver(Observer o);
 
 	  public abstract byte getLastSerialData();
 
@@ -65,4 +62,5 @@ public abstract class SerialIO  extends Observable  //Log //maybe better extends
 	  public abstract void flushInput();
 
 	  public abstract void close();
+
 }

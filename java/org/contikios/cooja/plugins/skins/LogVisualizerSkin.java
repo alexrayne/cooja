@@ -38,9 +38,7 @@ import java.awt.Point;
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteInterface;
-import org.contikios.cooja.SimEventCentral.MoteCountListener;
 import org.contikios.cooja.Simulation;
-import org.contikios.cooja.SimEventCentral.LogOutputEvent;
 import org.contikios.cooja.SimEventCentral.LogOutputListener;
 import org.contikios.cooja.interfaces.Log;
 import org.contikios.cooja.interfaces.Position;
@@ -56,41 +54,22 @@ import org.contikios.cooja.plugins.VisualizerSkin;
  */
 @ClassDescription("Log output: printf()'s")
 public class LogVisualizerSkin implements VisualizerSkin {
-  private Simulation simulation = null;
-  private Visualizer visualizer = null;
+  private Simulation simulation;
+  private Visualizer visualizer;
 
-  private final LogOutputListener logOutputListener = new LogOutputListener() {
-    @Override
-    public void newLogOutput(LogOutputEvent ev) {
-      visualizer.repaint();
-    }
-    @Override
-    public void removedLogOutput(LogOutputEvent ev) {
-    }
-  };
-
-  private final MoteCountListener moteCountListener = new MoteCountListener() {
-    @Override
-    public void moteWasAdded(Mote mote) {
-      visualizer.repaint();
-    }
-    @Override
-    public void moteWasRemoved(Mote mote) {
-      visualizer.repaint();
-    }
-  };
+  private final LogOutputListener logOutputListener = ev -> visualizer.repaint();
 
   @Override
   public void setActive(Simulation simulation, Visualizer vis) {
     this.simulation = simulation;
     this.visualizer = vis;
     simulation.getEventCentral().addLogOutputListener(logOutputListener);
-    simulation.getEventCentral().addMoteCountListener(moteCountListener);
+    simulation.getMoteTriggers().addTrigger(this, (event, m) -> visualizer.repaint());
   }
 
   @Override
   public void setInactive() {
-    simulation.getEventCentral().removeMoteCountListener(moteCountListener);
+    simulation.getMoteTriggers().deleteTriggers(this);
     simulation.getEventCentral().removeLogOutputListener(logOutputListener);
   }
 

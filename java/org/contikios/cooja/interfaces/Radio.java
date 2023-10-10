@@ -29,15 +29,12 @@
 package org.contikios.cooja.interfaces;
 
 import java.awt.BorderLayout;
+import java.util.function.BiConsumer;
 import java.util.Observable;
-import java.util.Observer;
-import java.util.Observable;
-
 import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-
 import java.awt.Component;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -54,14 +51,13 @@ import java.util.ArrayList;
 import java.util.Collection;
 import org.jdom2.Element;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
-
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Mote;
+import org.contikios.cooja.MoteType;
 import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.RadioPacket;
 import org.contikios.cooja.contikimote.interfaces.ContikiRadio;
+import org.contikios.cooja.util.EventTriggers;
 
 /**
  * A mote radio transceiver.
@@ -73,8 +69,9 @@ import org.contikios.cooja.contikimote.interfaces.ContikiRadio;
  * @author Fredrik Osterlind
  */
 @ClassDescription("Radio")
-public abstract class Radio extends Observable implements MoteInterface {
-  private static final Logger logger = LogManager.getLogger(Radio.class);
+public abstract class Radio implements MoteInterface {
+  protected final EventTriggers<RadioEvent, Radio> radioEventTriggers = new EventTriggers<>();
+  protected final EventTriggers<EventTriggers.Update, Radio> cfgEventTriggers   = new EventTriggers<>();
 
   /**
    * Events that radios should notify observers about.
@@ -265,7 +262,7 @@ public abstract class Radio extends Observable implements MoteInterface {
     updateButton.addActionListener(e -> ssLabel.setText("Signal strength (not auto-updated): "
             + printStrength(getCurrentSignalStrength()) ));
 
-    final Observer observer = (obs, obj) -> {
+    final BiConsumer<RadioEvent, Radio> observer = (event, radio) -> {
       if (isTransmitting()) {
         statusLabel.setText("Transmitting");
       } else if (isReceiving()) {
@@ -285,10 +282,9 @@ public abstract class Radio extends Observable implements MoteInterface {
 
         
     };
-
-    this.addObserver(observer);
-    observer.update(null, null);
-
+    radioEventTriggers.addTrigger(panel, observer);
+    observer.accept(null, null);
+    
     final String bitrate_ID = "bitrate";
     final String powerup_time_ID = "powerup_time_us";
     final String powerdn_time_ID = "powerdn_time_us";
@@ -300,33 +296,22 @@ public abstract class Radio extends Observable implements MoteInterface {
     enter_panel.setLayout( new BoxLayout(enter_panel, BoxLayout.PAGE_AXIS) );
 
     if ( have_bitrate ) {
-    	enter_panel.add(new DoubleParamField( "bitrate [kBps]:", bitrate_ID));
+        enter_panel.add(new DoubleParamField(panel,  "bitrate [kBps]:", bitrate_ID));
     }
     if ( have_poweron ) {
-    	enter_panel.add(new DoubleParamField( "powerOn time[us]:", powerup_time_ID));
-    	enter_panel.add(new DoubleParamField( "powerDn time[us]:", powerdn_time_ID));
+        enter_panel.add(new DoubleParamField(panel, "powerOn time[us]:", powerup_time_ID));
+        enter_panel.add(new DoubleParamField(panel, "powerDn time[us]:", powerdn_time_ID));
     }
 
     panel.add(BorderLayout.NORTH, box);
     panel.add(BorderLayout.CENTER, enter_panel);
-    panel.putClientProperty("intf_obs", observer);
-
-    //this could need for shure DoubleParamField refresh
-	//this.setChanged();
-    //this.notifyObservers();
-
     return panel;
   }
 
   @Override
   public void releaseInterfaceVisualizer(JPanel panel) {
-    Observer observer = (Observer) panel.getClientProperty("intf_obs");
-    if (observer == null) {
-      logger.fatal("Error when releasing panel, observer is null");
-      return;
-    }
-
-    this.deleteObserver(observer);
+    radioEventTriggers.deleteTriggers(panel);
+    cfgEventTriggers.deleteTriggers(panel);
   }
 
   @Override
@@ -341,41 +326,42 @@ public abstract class Radio extends Observable implements MoteInterface {
     simulation.getRadioMedium().unregisterRadioInterface(this, simulation);
   }
 
+  public EventTriggers<RadioEvent, Radio> getRadioEventTriggers() {
+    return radioEventTriggers;
+  }
+
   protected
   class DoubleParamField extends JPanel {
-	
-	DoubleParamField(final String label_text, final String ID){
-	    //super( new BorderLayout() );
-		setLayout(new BoxLayout(this, BoxLayout.LINE_AXIS) );
-	    setAlignmentX(Component.LEFT_ALIGNMENT);
 
+    DoubleParamField(JPanel panel, final String label_text, final String ID){
+        //super( new BorderLayout() );
+    	setLayout(new BoxLayout(this, BoxLayout.LINE_AXIS) );
+        setAlignmentX(Component.LEFT_ALIGNMENT);
+    
         final Collection<Element> config = getConfigXML();
         String value = getXMLText(config, ID);
-		//logger.info("radio:motes"+getMote().getID() + ": " + ID + " = " + value);
-
-	    final JTextField field = new JTextField(value, 10);
-	    field.addKeyListener( new DoubleConfigKeyAdapter(field, ID) ); //bitrate_field.addKeyListener
-	    final JLabel label = new JLabel(label_text);
-	    setMaximumSize( new Dimension( 
-	    		  //Integer.MAX_VALUE
-	    		  field.getPreferredSize().width + label.getPreferredSize().width
-	    		, field.getPreferredSize().height ));	
-	    add(label);
-	    add(field);
-
-	    final Observer observer = new Observer() {
-            public void update(Observable obs, Object obj) {
-                //logger.info("radio: observed motes"+getMote().getID() + " on " + ID);
-		        Collection<Element> config = getConfigXML();
-		        String value = getXMLText(config, ID);
-		        if (value != null)
-		        	field.setText(value);
-            }
-	      };
-	    addObserver(observer);
-		//logger.info("radio: edit motes"+getMote().getID() + " on " + ID);
-	}
-	
+    	//logger.info("radio:motes"+getMote().getID() + ": " + ID + " = " + value);
+    
+        final JTextField field = new JTextField(value, 10);
+        field.addKeyListener( new DoubleConfigKeyAdapter(field, ID) ); //bitrate_field.addKeyListener
+        final JLabel label = new JLabel(label_text);
+        setMaximumSize( new Dimension(  //Integer.MAX_VALUE
+                  field.getPreferredSize().width + label.getPreferredSize().width
+                , field.getPreferredSize().height ));	
+        add(label);
+        add(field);
+    
+        final BiConsumer<EventTriggers.Update, Radio> observer = (event, radio) -> {
+            //logger.info("radio: observed motes"+getMote().getID() + " on " + ID);
+            Collection<Element> cfg = getConfigXML();
+            String val = getXMLText(cfg, ID);
+            if (val != null)
+                field.setText(val);
+        };
+        cfgEventTriggers.addTrigger(panel, observer);
+        //logger.info("radio: edit motes"+getMote().getID() + " on " + ID);
+    }
+    
   }
 
   public
@@ -418,43 +404,46 @@ public abstract class Radio extends Observable implements MoteInterface {
         switch (e.getKeyCode()) {
 
         case KeyEvent.VK_ENTER: {
-      	    double value = as_double( field.getText() );
-      	    if (!is_positive(value) ) {
-      		    //logger.info("radio: key enter motes"+getMote().getID() + " on " + ID);
-      	    	setChanged();
-      		    notifyObservers();
-        		return;
+            double value = as_double( field.getText() );
+            if (!is_positive(value) ) {
+                //logger.info("radio: key enter motes"+getMote().getID() + " on " + ID);
+                cfgRefresh();
+                return;
             }
-      	    setConfigAllMotes( ID, value );
+            setConfigMotes(getMote().getType(), ID, value );
         }//case KeyEvent.VK_ENTER
 
         }//switch (e.getKeyCode())
       }
   }
 
-  // assign config parameter for all Radio Interface on all Motes
-  public void setConfigAllMotes(final String ID, double value) {
+  /// @brief assign config parameter for all Radio Interface on all Motes of type
+  //  @arg type = NULL - assign all motes of simulation
+  public void setConfigMotes(MoteType type, final String ID, double value) {
 	  //logger.info("radio: set motes "+ID + " -> "+ value);
       ArrayList<Element> config = new ArrayList<Element>();
       setXMLValue(config, ID, value);
 
       Mote[] motes = getMote().getSimulation().getMotes();
-	  for (Mote m: motes) {
-		Radio radio = m.getInterfaces().getRadio();
-		if (radio != null) {
-			radio.setConfigXML(config, true);
-		}
-	  }
+      for (Mote m: motes) {
+          if ((type != null) && (m.getType() != type)) continue;
+          
+          Radio radio = m.getInterfaces().getRadio();
+          if (radio != null) {
+              radio.setConfigXML(config, true);
+          }
+      }
   }
 
   public void setConfigXML(Collection<Element> configXML, boolean visAvailable) 
   {
-	if (visAvailable) {
-		//logger.info("radio: set XML:"+getMote().getID());
-		this.setChanged();
-	    this.notifyObservers();
-	}
+    if (visAvailable) {
+        cfgRefresh();
+    }
   }
 
+  protected void cfgRefresh() {
+      cfgEventTriggers.trigger( EventTriggers.Update.UPDATE, this );
+  }
 
 }

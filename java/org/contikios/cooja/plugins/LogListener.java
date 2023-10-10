@@ -51,9 +51,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Date;
 import java.util.List;
 import java.util.regex.PatternSyntaxException;
 import javax.swing.AbstractAction;
@@ -79,8 +80,6 @@ import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableModel;
 import javax.swing.table.TableRowSorter;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.HasQuickHelp;
@@ -96,6 +95,8 @@ import org.contikios.cooja.dialogs.HistoryUI;
 import org.contikios.cooja.util.ArrayQueue;
 import org.contikios.cooja.interfaces.TimeSelect;
 import org.jdom2.Element;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A simple mote log listener.
@@ -107,9 +108,9 @@ import org.jdom2.Element;
 @PluginType(PluginType.PType.SIM_STANDARD_PLUGIN)
 public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect 
 {
-  private static final Logger logger = LogManager.getLogger(LogListener.class);
+  private static final Logger logger = LoggerFactory.getLogger(LogListener.class);
 
-  private final Color[] BG_COLORS = new Color[] {
+  private final Color[] BG_COLORS = {
       new Color(200, 200, 200),
       new Color(200, 200, 255),
       new Color(200, 255, 200),
@@ -138,7 +139,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
   public static final long TIME_HOUR = 60*TIME_MINUTE;
 
   private boolean formatTimeString = true;
-  private boolean hasHours = false;
+  private boolean hasHours;
 
   private final JTable logTable;
   private final TableRowSorter<TableModel> logFilter;
@@ -159,10 +160,10 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
   private boolean backgroundColors = true;
   private final JCheckBoxMenuItem colorCheckbox;
 
-  private boolean inverseFilter = false;
+  private boolean inverseFilter;
   private final JCheckBoxMenuItem inverseFilterCheckbox;
 
-  private boolean hideDebug = false;
+  private boolean hideDebug;
   private final JCheckBoxMenuItem hideDebugCheckbox;
 
   private final JCheckBoxMenuItem appendCheckBox;
@@ -316,7 +317,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
         Cooja.setExternalToolsSetting("LOG_LISTENER_SAVEFILE", saveFile.getPath());
         if (saveFile.exists() && !saveFile.canWrite()) {
-          logger.fatal("No write access to file: " + saveFile);
+          logger.error("No write access to file: " + saveFile);
           return;
         }
 
@@ -328,7 +329,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
                             data.ev.getMessage());
           }
         } catch (Exception ex) {
-          logger.fatal("Could not write to file: " + saveFile);
+          logger.error("Could not write to file: " + saveFile);
         }
       }
     };
@@ -357,7 +358,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
         File saveFile = fc.getSelectedFile();
         Cooja.setExternalToolsSetting("LOG_LISTENER_APPENDFILE", saveFile.getPath());
         if (saveFile.exists() && !saveFile.canWrite()) {
-          logger.fatal("No write access to file: " + saveFile);
+          logger.error("No write access to file: " + saveFile);
           appendToFile = false;
           cb.setSelected(false);
           return;
@@ -540,7 +541,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
         lastClick = System.currentTimeMillis();
 
         if (columnIndex == COLUMN_FROM) {
-            Cooja.signalMoteHighlight(d.ev.getMote());
+        gui.signalMoteHighlight(d.ev.getMote());
         }
 
     	}
@@ -584,21 +585,15 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
     /* Start observing motes for new log output */
     logUpdateAggregator.start();
-    simulation.getEventCentral().addLogOutputListener(logOutputListener = new LogOutputListener() {
-      @Override
-      public void newLogOutput(LogOutputEvent ev) {
-        if (!hasHours && ev.getTime() > TIME_HOUR) {
-          hasHours = true;
-          repaintTimeColumn();
-        }
-        LogData data = new LogData(ev);
-        logUpdateAggregator.add(data);
-        if (appendToFile) {
-          appendToFile(appendStreamFile, data.getTime() + "\t" + data.getID() + "\t" + data.ev.getMessage() + "\n");
-        }
+    simulation.getEventCentral().addLogOutputListener(logOutputListener = ev -> {
+      if (!hasHours && ev.getTime() > TIME_HOUR) {
+        hasHours = true;
+        repaintTimeColumn();
       }
-      @Override
-      public void removedLogOutput(LogOutputEvent ev) {
+      var data = new LogData(ev);
+      logUpdateAggregator.add(data);
+      if (appendToFile) {
+        appendToFile(appendStreamFile, data.getTime() + "\t" + data.getID() + "\t" + data.ev.getMessage() + "\n");
       }
     });
 
@@ -737,7 +732,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
     try {
     	final RowFilter<Object,Integer> regexp;
-      if (str != null && str.length() > 0) {
+      if (str != null && !str.isEmpty()) {
       	regexp = RowFilter.regexFilter(str, COLUMN_FROM, COLUMN_DATA, COLUMN_CONCAT);
       } else {
       	regexp = null;
@@ -834,10 +829,10 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
       }
   }
 
-  private boolean appendToFile = false;
-  private File appendStreamFile = null;
-  private boolean appendToFileWroteHeader = false;
-  private PrintWriter appendStream = null;
+  private boolean appendToFile;
+  private File appendStreamFile;
+  private boolean appendToFileWroteHeader;
+  private PrintWriter appendStream;
   public boolean appendToFile(File file, String text) {
     /* Close stream */
     if (file == null) {
@@ -859,7 +854,7 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
         appendStreamFile = file;
         appendToFileWroteHeader = false;
       } catch (Exception ex) {
-        logger.fatal("Append file failed: " + ex.getMessage(), ex);
+        logger.error("Append file failed: " + ex.getMessage(), ex);
         simulation.stopSimulation();
         return false;
       }
@@ -867,7 +862,8 @@ public class LogListener extends VisPlugin implements HasQuickHelp, TimeSelect
 
     /* Append to file */
     if (!appendToFileWroteHeader) {
-      appendStream.println("-- Log Listener [" + simulation.getTitle() + "]: Started at " + (new Date()));
+      appendStream.println("-- Log Listener [" + simulation.getTitle() + "]: Started at " +
+              (ZonedDateTime.now().format(DateTimeFormatter.RFC_1123_DATE_TIME)));
       appendToFileWroteHeader = true;
     }
     appendStream.print(text);

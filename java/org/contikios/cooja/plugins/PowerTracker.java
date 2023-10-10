@@ -40,9 +40,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Observable;
-import java.util.Observer;
-
+import java.util.function.BiConsumer;
 import javax.swing.AbstractAction;
 import javax.swing.Box;
 import javax.swing.JButton;
@@ -52,20 +50,18 @@ import javax.swing.JTable;
 import javax.swing.Timer;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
-
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
-import org.jdom2.Element;
-
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.Plugin;
 import org.contikios.cooja.PluginType;
-import org.contikios.cooja.SimEventCentral.MoteCountListener;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.VisPlugin;
 import org.contikios.cooja.interfaces.Radio;
+import org.contikios.cooja.util.EventTriggers;
+import org.jdom2.Element;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Tracks radio events to sum up transmission, reception, and radio on times.
@@ -76,7 +72,7 @@ import org.contikios.cooja.interfaces.Radio;
 @ClassDescription("Mote radio duty cycle")
 @PluginType(PluginType.PType.SIM_PLUGIN)
 public class PowerTracker implements Plugin {
-  private static final Logger logger = LogManager.getLogger(PowerTracker.class);
+  private static final Logger logger = LoggerFactory.getLogger(PowerTracker.class);
 
   private static final int POWERTRACKER_UPDATE_INTERVAL = 100; /* ms */
 
@@ -86,7 +82,6 @@ public class PowerTracker implements Plugin {
   private static final int COLUMN_RADIORX = 3;
 
   private final Simulation simulation;
-  private final MoteCountListener moteCountListener;
   private final ArrayList<MoteTracker> moteTrackers = new ArrayList<>();
 
   private JTable table;
@@ -98,19 +93,14 @@ public class PowerTracker implements Plugin {
     this.simulation = simulation;
 
     /* Automatically add/delete motes */
-    simulation.getEventCentral().addMoteCountListener(moteCountListener = new MoteCountListener() {
-      @Override
-      public void moteWasAdded(Mote mote) {
-        addMote(mote);
-        table.invalidate();
-        table.repaint();
+    simulation.getMoteTriggers().addTrigger(this, (event, m) -> {
+      if (event == EventTriggers.AddRemove.ADD) {
+        addMote(m);
+      } else {
+        removeMote(m);
       }
-      @Override
-      public void moteWasRemoved(Mote mote) {
-        removeMote(mote);
-        table.invalidate();
-        table.repaint();
-      }
+      table.invalidate();
+      table.repaint();
     });
     frame = Cooja.isVisualized() ? new VisPlugin("PowerTracker", gui, this) : null;
     for (Mote m: simulation.getMotes()) {
@@ -263,10 +253,6 @@ public class PowerTracker implements Plugin {
 	  return null;
   }
 
-  public String radioStatistics() {
-    return radioStatistics(true, true, false);
-  }
-
   public String radioStatistics(boolean radioHW, boolean radioRXTX, boolean onlyAverage) {
     StringBuilder sb = new StringBuilder();
 
@@ -303,23 +289,24 @@ public class PowerTracker implements Plugin {
     return sb.toString();
   }
 
-  public static class MoteTracker implements Observer {
+  public static class MoteTracker {
     /* last radio state */
     private boolean radioWasOn;
     private RadioState lastRadioState;
     private long lastUpdateTime;
 
     /* accumulating radio state durations */
-    long duration = 0;
-    long radioOn = 0;
-    long radioTx = 0;
-    long radioRx = 0;
-    long radioInterfered = 0;
+    long duration;
+    long radioOn;
+    long radioTx;
+    long radioRx;
+    long radioInterfered;
 
     private final Simulation simulation;
     private Mote mote;
     private Radio radio;
 
+    private final BiConsumer<Radio.RadioEvent, Radio> trigger = (event, radio) -> update();
     public MoteTracker(Mote mote) {
       this.simulation = mote.getSimulation();
       this.mote = mote;
@@ -336,14 +323,9 @@ public class PowerTracker implements Plugin {
         lastRadioState = RadioState.IDLE;
       }
       lastUpdateTime = simulation.getSimulationTime();
-
-      radio.addObserver(this);
+      radio.getRadioEventTriggers().addTrigger(this, trigger);
     }
 
-    @Override
-    public void update(Observable o, Object arg) {
-      update();
-    }
     public void update() {
       long now = simulation.getSimulationTime();
 
@@ -416,7 +398,7 @@ public class PowerTracker implements Plugin {
     }
 
     public void dispose() {
-      radio.deleteObserver(this);
+      radio.getRadioEventTriggers().removeTrigger(this, trigger);
       radio = null;
       mote = null;
     }
@@ -442,20 +424,8 @@ public class PowerTracker implements Plugin {
     }
   }
 
-  private static MoteTracker createMoteTracker(Mote mote) {
-    final Radio moteRadio = mote.getInterfaces().getRadio();
-    if (moteRadio == null) {
-      return null;
-    }
-
-    /* Radio observer */
-    MoteTracker tracker = new MoteTracker(mote);
-    tracker.update(null, null);
-    return tracker;
-  }
-
   public void reset() {
-    while (moteTrackers.size() > 0) {
+    while (!moteTrackers.isEmpty()) {
       removeMote(moteTrackers.get(0).mote);
     }
     for (Mote m: simulation.getMotes()) {
@@ -468,9 +438,11 @@ public class PowerTracker implements Plugin {
       return;
     }
 
-    MoteTracker t = createMoteTracker(mote);
-    if (t != null) {
-      moteTrackers.add(t);
+    var moteRadio = mote.getInterfaces().getRadio();
+    if (moteRadio != null) {
+      var tracker = new MoteTracker(mote);
+      tracker.update();
+      moteTrackers.add(tracker);
     }
 
     if (!Cooja.isVisualized()) {
@@ -508,15 +480,13 @@ public class PowerTracker implements Plugin {
   public void closePlugin() {
     /* Remove repaint timer */
     repaintTimer.stop();
-
-    simulation.getEventCentral().removeMoteCountListener(moteCountListener);
-
+    simulation.getMoteTriggers().deleteTriggers(this);
     /* Remove mote trackers */
     for (Mote m: simulation.getMotes()) {
       removeMote(m);
     }
     if (!moteTrackers.isEmpty()) {
-      logger.fatal("Mote observers not cleaned up correctly");
+      logger.error("Mote observers not cleaned up correctly");
       for (MoteTracker t: moteTrackers.toArray(new MoteTracker[0])) {
         t.dispose();
       }

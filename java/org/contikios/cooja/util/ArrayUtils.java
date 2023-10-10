@@ -34,6 +34,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 
 /**
  * Some utility methods for managing arrays.
@@ -49,6 +50,19 @@ public class ArrayUtils {
         array.length + 1);
     System.arraycopy(array, 0, tmp, 0, array.length);
     tmp[array.length] = value;
+    return tmp;
+  }
+
+  @SuppressWarnings("unchecked")
+  public static <T> T[] add(List<T> array, T value) {
+    int sz = array.size();
+    T[] tmp = (T[]) java.lang.reflect.Array.newInstance(
+                        array.getClass().getComponentType(), sz + 1);
+    
+    for (int i = 0; i < sz; ++i)
+        tmp[i] = array.get(i);
+
+    tmp[array.size()] = value;
     return tmp;
   }
 

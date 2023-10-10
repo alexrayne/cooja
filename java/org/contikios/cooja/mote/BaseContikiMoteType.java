@@ -31,6 +31,7 @@
 package org.contikios.cooja.mote;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Map.entry;
 
 import java.awt.Container;
 import java.awt.Image;
@@ -41,6 +42,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -49,37 +51,103 @@ import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.MoteInterfaceHandler;
 import org.contikios.cooja.Simulation;
+import org.contikios.cooja.contikimote.interfaces.ContikiBeeper;
+import org.contikios.cooja.contikimote.interfaces.ContikiButton;
+import org.contikios.cooja.contikimote.interfaces.ContikiCFS;
+import org.contikios.cooja.contikimote.interfaces.ContikiClock;
+import org.contikios.cooja.contikimote.interfaces.ContikiEEPROM;
+import org.contikios.cooja.contikimote.interfaces.ContikiLED;
+import org.contikios.cooja.contikimote.interfaces.ContikiMoteID;
+import org.contikios.cooja.contikimote.interfaces.ContikiPIR;
+import org.contikios.cooja.contikimote.interfaces.ContikiLog;
+import org.contikios.cooja.contikimote.interfaces.ContikiRS232;
+import org.contikios.cooja.contikimote.interfaces.ContikiRadio;
+import org.contikios.cooja.contikimote.interfaces.ContikiVib;
 import org.contikios.cooja.dialogs.AbstractCompileDialog;
 import org.contikios.cooja.dialogs.MessageContainer;
 import org.contikios.cooja.dialogs.MessageList;
+import org.contikios.cooja.interfaces.Battery;
+import org.contikios.cooja.interfaces.IPAddress;
+import org.contikios.cooja.interfaces.RimeAddress;
+import org.contikios.cooja.interfaces.Mote2MoteRelations;
+import org.contikios.cooja.interfaces.MoteAttributes;
+import org.contikios.cooja.interfaces.MoteID;
+import org.contikios.cooja.interfaces.Position;
 import org.contikios.cooja.motes.AbstractApplicationMoteType;
+import org.contikios.cooja.mspmote.interfaces.Msp802154Radio;
+import org.contikios.cooja.mspmote.interfaces.MspClock;
+import org.contikios.cooja.mspmote.interfaces.MspDebugOutput;
+import org.contikios.cooja.mspmote.interfaces.MspDefaultSerial;
+import org.contikios.cooja.mspmote.interfaces.MspLED;
+import org.contikios.cooja.mspmote.interfaces.MspMoteID;
+import org.contikios.cooja.mspmote.interfaces.MspSerial;
+import org.contikios.cooja.mspmote.interfaces.SkyButton;
+import org.contikios.cooja.mspmote.interfaces.SkyCoffeeFilesystem;
+import org.contikios.cooja.mspmote.interfaces.SkyFlash;
+import org.contikios.cooja.mspmote.interfaces.SkyTemperature;
 import org.contikios.cooja.util.StringUtils;
 import org.jdom2.Element;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The common parts of mote types based on compiled Contiki-NG targets.
  */
 public abstract class BaseContikiMoteType extends AbstractApplicationMoteType {
-  private static final Logger logger = LogManager.getLogger(BaseContikiMoteType.class);
+  private static final Logger logger = LoggerFactory.getLogger(BaseContikiMoteType.class);
+
+  /** Static translation map from name -> class for builtin interfaces. */
+  protected static final Map<String, Class<? extends MoteInterface>> builtinInterfaces = Map.ofEntries(
+          entry("org.contikios.cooja.interfaces.IPAddress", IPAddress.class),
+          entry("org.contikios.cooja.interfaces.RimeAddress", RimeAddress.class),
+          entry("org.contikios.cooja.interfaces.Position", Position.class),
+          entry("org.contikios.cooja.interfaces.Battery", Battery.class),
+          entry("org.contikios.cooja.contikimote.interfaces.ContikiVib", ContikiVib.class),
+          entry("org.contikios.cooja.contikimote.interfaces.ContikiMoteID", ContikiMoteID.class),
+          entry("org.contikios.cooja.contikimote.interfaces.ContikiLog", ContikiLog.class),
+          entry("org.contikios.cooja.contikimote.interfaces.ContikiRS232", ContikiRS232.class),
+          entry("org.contikios.cooja.contikimote.interfaces.ContikiBeeper", ContikiBeeper.class),
+          entry("org.contikios.cooja.contikimote.interfaces.ContikiIPAddress", IPAddress.class), // Compatibility.
+          entry("org.contikios.cooja.contikimote.interfaces.ContikiRadio", ContikiRadio.class),
+          entry("org.contikios.cooja.contikimote.interfaces.ContikiButton", ContikiButton.class),
+          entry("org.contikios.cooja.contikimote.interfaces.ContikiPIR", ContikiPIR.class),
+          entry("org.contikios.cooja.contikimote.interfaces.ContikiClock", ContikiClock.class),
+          entry("org.contikios.cooja.contikimote.interfaces.ContikiLED", ContikiLED.class),
+          entry("org.contikios.cooja.contikimote.interfaces.ContikiCFS", ContikiCFS.class),
+          entry("org.contikios.cooja.contikimote.interfaces.ContikiEEPROM", ContikiEEPROM.class),
+          entry("org.contikios.cooja.interfaces.Mote2MoteRelations", Mote2MoteRelations.class),
+          entry("org.contikios.cooja.interfaces.MoteAttributes", MoteAttributes.class),
+          entry("org.contikios.cooja.mspmote.interfaces.ESBLog", MspSerial.class), // Compatibility.
+          entry("org.contikios.cooja.mspmote.interfaces.MspClock", MspClock.class),
+          entry("org.contikios.cooja.mspmote.interfaces.MspDebugOutput", MspDebugOutput.class),
+          entry("org.contikios.cooja.mspmote.interfaces.MspDefaultSerial", MspDefaultSerial.class),
+          entry("org.contikios.cooja.mspmote.interfaces.MspIPAddress", IPAddress.class), // Compatibility.
+          entry("org.contikios.cooja.mspmote.interfaces.MspLED", MspLED.class),
+          entry("org.contikios.cooja.mspmote.interfaces.MspMoteID", MspMoteID.class),
+          entry("org.contikios.cooja.mspmote.interfaces.MspSerial", MspSerial.class),
+          entry("org.contikios.cooja.mspmote.interfaces.Msp802154Radio", Msp802154Radio.class),
+          entry("org.contikios.cooja.mspmote.interfaces.SkyButton", SkyButton.class),
+          entry("org.contikios.cooja.mspmote.interfaces.SkyByteRadio", Msp802154Radio.class), // Compatibility.
+          entry("org.contikios.cooja.mspmote.interfaces.SkyCoffeeFilesystem", SkyCoffeeFilesystem.class),
+          entry("org.contikios.cooja.mspmote.interfaces.SkyFlash", SkyFlash.class),
+          entry("org.contikios.cooja.mspmote.interfaces.SkyLED", MspLED.class), // Compatibility
+          entry("org.contikios.cooja.mspmote.interfaces.SkySerial", MspSerial.class), // Compatibility.
+          entry("org.contikios.cooja.mspmote.interfaces.SkyTemperature", SkyTemperature.class));
+
   // FIXME: combine fileSource and fileFirmware so only one can be active.
   /** Source file of the mote type. */
-  protected File fileSource = null;
+  protected File fileSource;
   /** Commands to compile the source into the firmware. */
-  protected String compileCommands = null;
+  protected String compileCommands;
   /** Firmware of the mote type. */
-  protected File fileFirmware = null;
-
-  /** MoteInterface classes used by the mote type. */
-  protected final ArrayList<Class<? extends MoteInterface>> moteInterfaceClasses = new ArrayList<>();
+  protected File fileFirmware;
 
   protected BaseContikiMoteType() {
-    super();
+    super(false);
   }
 
   /** Returns file name extension for firmware. */
@@ -117,20 +185,15 @@ public abstract class BaseContikiMoteType extends AbstractApplicationMoteType {
             "/build/" + getMoteType() + "/" + sourceNoExtension + '.' + getMoteType());
   }
 
-  @Override
-  public Class<? extends MoteInterface>[] getMoteInterfaceClasses() {
-    if (moteInterfaceClasses.isEmpty()) {
-      return null;
-    }
-    Class<? extends MoteInterface>[] arr = new Class[moteInterfaceClasses.size()];
-    moteInterfaceClasses.toArray(arr);
-    return arr;
-  }
 
   @Override
   public void setMoteInterfaceClasses(Class<? extends MoteInterface>[] moteInterfaces) {
+    setMoteInterfaceClasses(Arrays.asList(moteInterfaces));
+  }
+
+  public void setMoteInterfaceClasses(List<Class<? extends MoteInterface>> moteInterfaces) {
     moteInterfaceClasses.clear();
-    moteInterfaceClasses.addAll(Arrays.asList(moteInterfaces));
+    moteInterfaceClasses.addAll(moteInterfaces);
   }
 
   @Override
@@ -139,8 +202,17 @@ public abstract class BaseContikiMoteType extends AbstractApplicationMoteType {
       moteInterfaceClasses.add(interfaceType);
   }
 
-  public abstract Class<? extends MoteInterface>[] getAllMoteInterfaceClasses();
-  public abstract Class<? extends MoteInterface>[] getDefaultMoteInterfaceClasses();
+  public Class<? extends MoteInterface> getInterfaceClass(Cooja gui, String name ) 
+  {
+      var clazz = builtinInterfaces.get(name);
+      if (clazz != null)
+          return clazz;
+      
+      return MoteInterfaceHandler.getInterfaceClass(gui, this, name);
+  }
+
+  public abstract List<Class<? extends MoteInterface>> getAllMoteInterfaceClasses();
+  public abstract List<Class<? extends MoteInterface>> getDefaultMoteInterfaceClasses();
 
   /** Target hook for adding additional information to view. */
   protected abstract void appendVisualizerInfo(StringBuilder sb);
@@ -201,6 +273,46 @@ public abstract class BaseContikiMoteType extends AbstractApplicationMoteType {
     return null;
   }
 
+  protected ArrayList<Element> getBaseConfigXML(Simulation sim, boolean saveFirmware) {
+    var config = new ArrayList<Element>();
+    // Description.
+    var element = new Element("description");
+    element.setText(getDescription());
+    config.add(element);
+
+    // Source file.
+    if (fileSource != null) {
+      element = new Element("source");
+      File file = sim.getCooja().createPortablePath(fileSource);
+      element.setText(file.getPath().replaceAll("\\\\", "/"));
+      config.add(element);
+      element = new Element("commands");
+      element.setText(compileCommands);
+      config.add(element);
+    }
+
+    // Firmware file.
+    if (saveFirmware) {
+      element = new Element("firmware");
+      File file = sim.getCooja().createPortablePath(fileFirmware);
+      element.setText(file.getPath().replaceAll("\\\\", "/"));
+      config.add(element);
+    }
+
+    // Mote interfaces.
+    for (var moteInterface : moteInterfaceClasses) {
+      element = new Element("moteinterface");
+      element.setText(moteInterface.getName());
+      config.add(element);
+    }
+    return config;
+  }
+
+  @Override
+  public Collection<Element> getConfigXML(Simulation sim) {
+    return getBaseConfigXML(sim, true);
+  }
+
   protected boolean setBaseConfigXML(Simulation sim, Collection<Element> configXML) {
     for (Element element : configXML) {
       switch (element.getName()) {
@@ -213,7 +325,13 @@ public abstract class BaseContikiMoteType extends AbstractApplicationMoteType {
         case "command", "commands" -> compileCommands = element.getText();
         case "moteinterface" -> {
           var name = element.getText().trim();
-          var clazz = MoteInterfaceHandler.getInterfaceClass(sim.getCooja(), this, name);
+          if (name.startsWith("se.sics")) {
+            name = name.replaceFirst("se\\.sics", "org.contikios");
+          }
+          var clazz = builtinInterfaces.get(name);
+          if (clazz == null) {
+            clazz = sim.getCooja().tryLoadClass(this, MoteInterface.class, name);
+          }
           if (clazz == null) {
             logger.warn("Can't find mote interface class: " + name);
             return false;
@@ -221,13 +339,13 @@ public abstract class BaseContikiMoteType extends AbstractApplicationMoteType {
           moteInterfaceClasses.add(clazz);
         }
         case "contikibasedir", "contikicoredir", "projectdir", "compilefile", "process", "sensor", "coreinterface" -> {
-          logger.fatal("Old Cooja mote type detected, aborting..");
+          logger.error("Old Cooja mote type detected, aborting..");
           return false;
         }
       }
     }
     if (moteInterfaceClasses.isEmpty()) { // Old MspMote simulation, or reconfigured simulation.
-      moteInterfaceClasses.addAll(Arrays.asList(getDefaultMoteInterfaceClasses()));
+      moteInterfaceClasses.addAll(getDefaultMoteInterfaceClasses());
     }
     return true;
   }
@@ -241,9 +359,10 @@ public abstract class BaseContikiMoteType extends AbstractApplicationMoteType {
       final var firmware = getContikiFirmwareFile();
       String file = source != null ? source.getAbsolutePath() : firmware != null ? firmware.getAbsolutePath() : null;
       var moteClasses = getMoteInterfaceClasses();
-      var interfaces = moteClasses == null ? getDefaultMoteInterfaceClasses() : moteClasses;
+      var defaultClasses = getDefaultMoteInterfaceClasses();
       var cfg = showCompilationDialog(sim.getCooja(), new MoteTypeConfig(desc, getMoteType(), file,
-              getCompileCommands(), interfaces));
+              getCompileCommands(), moteClasses.isEmpty() ? defaultClasses : moteClasses, defaultClasses,
+              getAllMoteInterfaceClasses()));
       if (cfg == null) {
         return false;
       }
@@ -261,11 +380,7 @@ public abstract class BaseContikiMoteType extends AbstractApplicationMoteType {
       final var output = MessageContainer.createMessageList(vis);
       final var env = getCompilationEnvironment();
       for (String cmd : StringUtils.splitOnNewline(getCompileCommands())) {
-        try {
-          compile(cmd, env, fileSource.getParentFile(), null, null, output, true);
-        } catch (MoteTypeCreationException e) {
-          return false;
-        }
+        compile(cmd, env, fileSource.getParentFile(), null, null, output, true);
       }
     }
     return loadMoteFirmware(vis);
@@ -278,16 +393,23 @@ public abstract class BaseContikiMoteType extends AbstractApplicationMoteType {
 
   /** Compilation-relevant parts of mote type configuration. */
   public record MoteTypeConfig(String desc, String targetName, String file, String commands,
-                               Class<? extends MoteInterface>[] interfaces) {}
+                               List<Class<? extends MoteInterface>> interfaces,
+                               List<Class<? extends MoteInterface>> defaultInterfaces,
+                               List<Class<? extends MoteInterface>> allInterfaces) {}
 
   /** Create a compilation dialog for this mote type. */
   protected abstract AbstractCompileDialog createCompilationDialog(Cooja gui, MoteTypeConfig cfg);
 
   /** Show a compilation dialog for this mote type. */
   protected MoteTypeConfig showCompilationDialog(Cooja gui, MoteTypeConfig cfg) {
-    final var dialog = createCompilationDialog(gui, cfg);
-    dialog.setVisible(true); // Blocks.
-    return dialog.results();
+    return new Cooja.RunnableInEDT<MoteTypeConfig>() {
+      @Override
+      public MoteTypeConfig work() {
+        final var dialog = createCompilationDialog(gui, cfg);
+        dialog.setVisible(true); // Blocks.
+        return dialog.results();
+      }
+    }.invokeAndWait();
   }
 
   /** Return a compilation environment. */
@@ -389,9 +511,8 @@ public abstract class BaseContikiMoteType extends AbstractApplicationMoteType {
     };
     if (synchronous) {
       compile.run();
-      // Errors are already printed to messageDialog, so just throw a non-descriptive exception on error.
       if (compileProcess.exitValue() != 0) {
-        throw new MoteTypeCreationException("Compilation failed");
+        throw new MoteTypeCreationException("Compilation failed", messageDialog);
       }
     } else {
       new Thread(compile, "handle compilation results").start();

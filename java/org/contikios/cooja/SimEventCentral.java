@@ -31,11 +31,11 @@ package org.contikios.cooja;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Observable;
-import java.util.Observer;
-
+import java.util.Optional;
+import java.util.function.BiConsumer;
+import org.contikios.cooja.util.AnyMoteEventTriggers;
+import org.contikios.cooja.util.EventTriggers;
 import org.jdom2.Element;
-
 import org.contikios.cooja.interfaces.Log;
 import org.contikios.cooja.util.ArrayUtils;
 
@@ -50,14 +50,48 @@ import org.contikios.cooja.util.ArrayUtils;
  */
 public class SimEventCentral {
   private final Simulation simulation;
+  private final AnyMoteEventTriggers<EventTriggers.Update> positionTriggers;
+  private final BiConsumer<EventTriggers.Update, Log.LogDataInfo> logOutputTrigger;
 
   public SimEventCentral(Simulation simulation) {
     this.simulation = simulation;
+    positionTriggers = new AnyMoteEventTriggers<>(simulation, mote ->
+            Optional.of(mote.getInterfaces().getPosition().getPositionTriggers()));
+    logOutputTrigger = (event, data) -> {
+      var msg = data.msg();
+      if (msg == null) {
+        return;
+      }
+      if (!msg.isEmpty() && msg.charAt(msg.length() - 1) == '\n') {
+        msg = msg.substring(0, msg.length() - 1);
+      }
+
+      // Evict the oldest event if the buffer will get full by the current message.
+      if (logOutputEvents.size() > logOutputBufferSize - 1) {
+        synchronized (logOutputEvents) {
+          // Use pollFirst since it does not throw exceptions like removeFirst when the queue is empty.
+          logOutputEvents.pollFirst();
+        }
+      }
+
+      // Store log output, and notify listeners.
+      var ev = new LogOutputEvent(data.mote(), simulation.getSimulationTime(), msg);
+      synchronized (logOutputEvents) {
+        logOutputEvents.add(ev);
+      }
+      for (var l : logOutputListeners) {
+        l.newLogOutput(ev);
+      }
+    };
+  }
+
+  public EventTriggers<EventTriggers.Update, Mote> getPositionTriggers() {
+    return positionTriggers;
   }
 
   /* GENERIC */
   private static class MoteEvent {
-    public static int _ID_COUNTER = 0; /* Debugging */
+    public static int _ID_COUNTER; /* Debugging */
     public final int ID; /* Debugging */
 
     private final Mote mote;
@@ -82,46 +116,27 @@ public class SimEventCentral {
     }
   }
   /** Help class for maintaining mote-specific observations */
-  private record MoteObservation(Mote mote, Observable observable, Observer observer) {
+  private record MoteObservation(Mote mote, Log log, BiConsumer<EventTriggers.Update, Log.LogDataInfo> trigger) {
     public MoteObservation {
-      observable.addObserver(observer);
+      log.getLogDataTriggers().addTrigger(this, trigger);
     }
     public void disconnect() {
-      observable.deleteObserver(observer);
+      log.getLogDataTriggers().removeTrigger(this, trigger);
     }
   }
   private final ArrayList<MoteObservation> moteObservations = new ArrayList<>();
 
   
   /* ADDED/REMOVED MOTES */
-  public interface MoteCountListener {
-    void moteWasAdded(Mote mote);
-    void moteWasRemoved(Mote mote);
-  }
-  /** Mote count notifications. */
-  private MoteCountListener[] moteCountListeners = new MoteCountListener[0];
-
   void addMote(Mote mote) {
     if (logOutputListeners.length > 0) {
       // Add another log output observation (supports multiple log interfaces per mote).
       for (var mi : mote.getInterfaces().getInterfaces()) {
         if (mi instanceof Log log) {
-          moteObservations.add(new MoteObservation(mote, log, logOutputObserver));
+          moteObservations.add(new MoteObservation(mote, log, logOutputTrigger));
         }
       }
     }
-    // Notify external listeners.
-    for (var l : moteCountListeners) {
-      l.moteWasAdded(mote);
-    }
-
-    /* Notify mote interfaces that node was added */
-    //for (MoteInterface i: mote.getInterfaces().getInterfaces()) {
-    ArrayList<MoteInterface> ifs = mote.getInterfaces().getInterfacesList();
-    for (int i =0; i < ifs.size(); ++i) {
-        ifs.get(i).added();
-    }
-    
   }
 
   void removeMote(Mote mote) {
@@ -132,19 +147,7 @@ public class SimEventCentral {
         moteObservations.remove(o);
       }
     }
-    // Notify external listeners.
-    for (var l : moteCountListeners) {
-      l.moteWasRemoved(mote);
-    }
   }
-
-  public void addMoteCountListener(MoteCountListener listener) {
-    moteCountListeners = ArrayUtils.add(moteCountListeners, listener);
-  }
-  public void removeMoteCountListener(MoteCountListener listener) {
-    moteCountListeners = ArrayUtils.remove(moteCountListeners, listener);
-  }
-
 
   /* LOG OUTPUT */
   public static class LogOutputEvent extends MoteEvent {
@@ -161,47 +164,11 @@ public class SimEventCentral {
   private int logOutputBufferSize = Integer.parseInt(Cooja.getExternalToolsSetting("BUFFERSIZE_LOGOUTPUT", "" + 40000));
   private final ArrayDeque<LogOutputEvent> logOutputEvents = new ArrayDeque<>();
   public interface LogOutputListener {
-    void removedLogOutput(LogOutputEvent ev);
     void newLogOutput(LogOutputEvent ev);
   }
   /** Log output: notifications and history */
   private LogOutputListener[] logOutputListeners = new LogOutputListener[0];
-  private final Observer logOutputObserver = new Observer() {
-    @Override
-    public void update(Observable obs, Object obj) {
-      Mote mote = (Mote) obj;
-      String msg = ((Log) obs).getLastLogMessage();
-      if (msg == null) {
-        return;
-      }
-      if (msg.length() > 0 && msg.charAt(msg.length() - 1) == '\n') {
-        msg = msg.substring(0, msg.length() - 1);
-      }
 
-      /* We may have to remove some events now */
-      while (logOutputEvents.size() > logOutputBufferSize-1) {
-        LogOutputEvent removed;
-        synchronized (logOutputEvents) {
-          removed = logOutputEvents.pollFirst();
-        }
-        if (removed == null) {
-          break;
-        }
-        for (LogOutputListener l: logOutputListeners) {
-          l.removedLogOutput(removed);
-        }
-      }
-
-      /* Store log output, and notify listeners */
-      LogOutputEvent ev = new LogOutputEvent(mote, simulation.getSimulationTime(), msg);
-      synchronized (logOutputEvents) {
-        logOutputEvents.add(ev);
-      }
-      for (LogOutputListener l: logOutputListeners) {
-        l.newLogOutput(ev);
-      }
-    }
-  };
   public void addLogOutputListener(LogOutputListener listener) {
     if (logOutputListeners.length == 0) {
       /* Start observing all log interfaces */
@@ -209,7 +176,7 @@ public class SimEventCentral {
       for (Mote m: motes) {
         for (MoteInterface mi: m.getInterfaces().getInterfaces()) {
           if (mi instanceof Log log) {
-            moteObservations.add(new MoteObservation(m, log, logOutputObserver));
+            moteObservations.add(new MoteObservation(m, log, logOutputTrigger));
           }
         }
       }
@@ -223,7 +190,7 @@ public class SimEventCentral {
       /* Stop observing all log interfaces */
       MoteObservation[] observations = moteObservations.toArray(new MoteObservation[0]);
       for (MoteObservation o: observations) {
-        if (o.observer() == logOutputObserver) {
+        if (o.trigger() == logOutputTrigger) {
           o.disconnect();
           moteObservations.remove(o);
         }
@@ -251,16 +218,13 @@ public class SimEventCentral {
       if (removed == null) {
         break;
       }
-      for (LogOutputListener l: logOutputListeners) {
-        l.removedLogOutput(removed);
-      }
     }
   }
   public int getLogOutputObservationsCount() {
     int count=0;
     MoteObservation[] observations = moteObservations.toArray(new MoteObservation[0]);
     for (MoteObservation o: observations) {
-      if (o.observer() == logOutputObserver) {
+      if (o.trigger() == logOutputTrigger) {
         count++;
       }
     }
@@ -271,8 +235,6 @@ public class SimEventCentral {
   public String toString() {
     return 
     "\nActive mote observations: " + moteObservations.size() +
-    "\n" +
-    "\nMote count listeners: " + moteCountListeners.length +
     "\n" +
     "\nLog output listeners: " + logOutputListeners.length +
     "\nLog output history: " + logOutputEvents.size()

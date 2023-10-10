@@ -36,11 +36,10 @@ import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Enumeration;
-import java.util.Vector;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
+import java.util.List;
 import org.jdom2.Element;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class represents an area with obstacles.
@@ -49,15 +48,15 @@ import org.jdom2.Element;
  * @author Fredrik Osterlind
  */
 class ObstacleWorld {
-  private static final Logger logger = LogManager.getLogger(ObstacleWorld.class);
+  private static final Logger logger = LoggerFactory.getLogger(ObstacleWorld.class);
   
   // All registered obstacles
-  private final Vector<Rectangle2D> allObstacles;
+  private final List<Rectangle2D> allObstacles = new ArrayList<>();
   
   // All registered obstacles, with spatial information
   private static final int spatialResolution = 10;
-  private final Vector<Rectangle2D>[][] allObstaclesSpatial = new Vector[spatialResolution][spatialResolution];
-  private boolean obstaclesOrganized = false;
+  private final ArrayList<Rectangle2D>[][] allObstaclesSpatial = new ArrayList[spatialResolution][spatialResolution];
+  private boolean obstaclesOrganized;
   
   // Outer bounds of all obstacles
   private Rectangle2D outerBounds;
@@ -67,12 +66,9 @@ class ObstacleWorld {
    * Creates a new obstacle world without any obstacles.
    */
   public ObstacleWorld() {
-    // No obstacles present so far
-    allObstacles = new Vector<>();
-    
     for (int x=0; x < spatialResolution; x++)
       for (int y=0; y < spatialResolution; y++) 
-        allObstaclesSpatial[x][y] = new Vector<>();
+        allObstaclesSpatial[x][y] = new ArrayList<>();
     
     outerBounds = new Rectangle2D.Double(0,0,0,0);
   }
@@ -108,7 +104,7 @@ class ObstacleWorld {
   /**
    * @return All registered obstacles
    */
-  public Vector<Rectangle2D> getAllObstacles() {
+  public List<Rectangle2D> getAllObstacles() {
     return allObstacles;
   }
   
@@ -120,7 +116,7 @@ class ObstacleWorld {
    * @param center Center point
    * @return All obstacles containing or near center
    */
-  public Vector<Rectangle2D> getAllObstaclesNear(Point2D center) {
+  public List<Rectangle2D> getAllObstaclesNear(Point2D center) {
     double boxWidth = outerBounds.getWidth() / (double) spatialResolution;
     double boxHeight = outerBounds.getHeight() / (double) spatialResolution;
     double areaStartX = outerBounds.getMinX();
@@ -129,8 +125,7 @@ class ObstacleWorld {
     double centerX = (center.getX() - areaStartX)/boxWidth;
     double centerY = (center.getY() - areaStartY)/boxHeight;
 
-    Vector<Rectangle2D> allNearObstacles = new Vector<>();
-
+    var allNearObstacles = new ArrayList<Rectangle2D>();
     Point pointToAdd = new Point((int) centerX, (int) centerY);
     if (pointToAdd.x >= 0 &&
         pointToAdd.x < allObstaclesSpatial.length &&
@@ -182,7 +177,7 @@ class ObstacleWorld {
    * @param angleInterval Angle interval
    * @return All obstacles in given angle interval
    */
-  public Vector<Rectangle2D> getAllObstaclesInAngleInterval(Point2D center, AngleInterval angleInterval) {
+  public List<Rectangle2D> getAllObstaclesInAngleInterval(Point2D center, AngleInterval angleInterval) {
     if (!obstaclesOrganized) {
       reorganizeSpatialObstacles();
     }
@@ -197,7 +192,7 @@ class ObstacleWorld {
         (int) ((center.getX() - areaStartX)/boxWidth),
         (int) ((center.getY() - areaStartY)/boxHeight)
     );
-    Vector<Point> pointsToCheck = new Vector<>();
+    var pointsToCheck = new ArrayList<Point>();
     
     int currentDistance = 0;
     while (currentDistance < 2*spatialResolution) {
@@ -256,7 +251,7 @@ class ObstacleWorld {
       }
       currentDistance++;  
     }
-    var obstaclesToReturn = new Vector<Rectangle2D>();
+    var obstaclesToReturn = new ArrayList<Rectangle2D>();
     for (var point : pointsToCheck) {
       // Check which obstacles should be in this box
       boolean hit = false;
@@ -323,10 +318,10 @@ class ObstacleWorld {
    * Removes all registered obstacles.
    */
   public void removeAll() {
-    allObstacles.removeAllElements();
+    allObstacles.clear();
     for (int x=0; x < spatialResolution; x++)
       for (int y=0; y < spatialResolution; y++) 
-        allObstaclesSpatial[x][y].removeAllElements();
+        allObstaclesSpatial[x][y].clear();
     
     outerBounds = new Rectangle2D.Double(0,0,0,0);
   }
@@ -353,7 +348,6 @@ class ObstacleWorld {
         (int) ((point.getX() - areaStartX)/boxWidth),
         (int) ((point.getY() - areaStartY)/boxHeight)
     );
-    Vector<Rectangle2D> allObstaclesToCheck;
     if (centerInArray.x < 0)
       centerInArray.x = 0;
     if (centerInArray.x >= spatialResolution)
@@ -363,9 +357,9 @@ class ObstacleWorld {
     if (centerInArray.y >= spatialResolution)
       centerInArray.y = spatialResolution-1;
     
-    allObstaclesToCheck = allObstaclesSpatial[centerInArray.x][centerInArray.y];
+    var allObstaclesToCheck = allObstaclesSpatial[centerInArray.x][centerInArray.y];
 
-    if (allObstaclesToCheck.size() == 0) {
+    if (allObstaclesToCheck.isEmpty()) {
       return false;
     } 
     
@@ -377,9 +371,7 @@ class ObstacleWorld {
     Point2D point4 = new Point2D.Double(point.getX() + deltaDistance, point.getY() + deltaDistance);
 
     int containedPoints = 0;
-    Enumeration<Rectangle2D> allObstaclesToCheckEnum = allObstaclesToCheck.elements();
-    while (allObstaclesToCheckEnum.hasMoreElements()) {
-      Rectangle2D obstacleToCheck = allObstaclesToCheckEnum.nextElement();
+    for (var obstacleToCheck : allObstaclesToCheck) {
       if (obstacleToCheck.contains(point1))
         containedPoints++;
       if (obstacleToCheck.contains(point2))
@@ -550,7 +542,7 @@ class ObstacleWorld {
     // Remove all spatial obstacles
     for (int x=0; x < spatialResolution; x++)
       for (int y=0; y < spatialResolution; y++) 
-        allObstaclesSpatial[x][y].removeAllElements();
+        allObstaclesSpatial[x][y].clear();
     
     double boxWidth = outerBounds.getWidth() / (double) spatialResolution;
     double boxHeight = outerBounds.getHeight() / (double) spatialResolution;

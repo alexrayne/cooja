@@ -2,6 +2,43 @@
 
 ## Cooja User Interface Changes
 
+### MSPSim and Cooja started from same Main
+
+MSPSim is started when `org.contikios.cooja.Main` is passed the command line parameter
+`--platform=<platform>`, otherwise Cooja is started. There is nothing that prevents
+Cooja-parameters from being passed when starting MSPSim, but they will be ignored
+by MSPSim.
+
+### Switched from Log4J 2 to SLF4J and Logback
+
+This removes the `--log4j2` and `--logname` parameters. Set the system property
+`logback.configurationFile` to use a different logback configuration.
+
+To start Cooja with a custom Logback configuration:
+```
+./gradlew -Dcooja.logback.configurationFile=my-logback-configuration.xml run
+```
+
+Plugins need to change calls to `logger.fatal` to instead call `logger.error`,
+and change the logger construction from
+```
+private static final Logger logger = LogManager.getLogger(MyClass.class);
+```
+to
+```
+private static final Logger logger = LoggerFactory.getLogger(MyClass.class);
+```
+Plugins also need to update their imports, change
+```
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+```
+to
+```
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+```
+
 ### Removed `-nogui` and `-quickstart` parameters
 
 Graphical/headless mode is now controlled by separate parameter (`--[no-]gui`),
@@ -22,6 +59,67 @@ a double dash, so the other command line options have been converted to also
 use a double dash for consistency.
 
 ## Cooja API changes for plugins outside the main tree
+
+### Removed removedLogOutput in LogOutputListener
+
+Plugins that need information on when pruning happens can implement the functionality
+internally, either by maintaining a counter, or keeping a full copy of the events.
+
+### Removed C_SOURCES support in ContikiMoteType
+
+No immediate replacement, report a bug on Cooja in the Contiki-NG repository
+if you need this feature.
+
+### Removed Observable from Log interface
+
+Call addTrigger/removeTrigger/deleteTriggers on `getLogDataTriggers()` instead.
+
+### Removed addRadioTransmissionObserver/removeRadioTransmissionObserver in RadioMedium
+
+Call addTrigger/removeTrigger/deleteTriggers on `getRadioTransmissionTriggers()`
+instead.
+
+### Removed addRadioMediumObserver/removeRadioMediumObserver in AbstractRadioMedium
+
+Call addTrigger/removeTrigger/deleteTriggers on `getRadioMediumTriggers()`
+instead.
+
+### Removed addMoteHighlightObserver/removeMoteHighlightObserver in Cooja
+
+Call addTrigger/removeTrigger/deleteTriggers on
+`simulation.getMoteHighlightTriggers()` instead.
+
+### Removed observable from SerialPort interface
+
+Use `getSerialDataTriggers()` instead.
+
+### Changed return type of getMoteInterfaceClasses in MoteType interface
+
+The method now returns a list instead of an array. The method implementation
+in AbstractApplicationMoteType should be usable for all motes.
+
+### Removed MoteCountListener from SimEventCentral
+
+Use `simulation.getMoteTriggers().addTrigger()` instead.
+
+### Removed MOTE_INTERFACES support in ContikiMoteType
+
+Extend ContikiMoteType and override the methods that deal with interfaces
+instead.
+
+### Removed mote interface RimeAddress
+
+The interface is no longer useful as Contiki-NG does not support Rime.
+
+### Removed Observable from Position, LED, and addresses mote interfaces
+
+Observable in these mote interfaces have been replaced by event triggers,
+accessible by methods such as `getPositionTriggers()` or `getTriggers()`.
+
+### Moved getExecutableAddressOf from WatchpointMote to MoteType
+
+Call the method with `mote.getType().getExecutableAddressOf(file, line)`
+instead of `mote.getExecutableAddressOf(file, line)`.
 
 ### Add added/removed methods to Mote interface
 

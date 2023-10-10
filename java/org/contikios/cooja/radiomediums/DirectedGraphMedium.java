@@ -31,13 +31,13 @@
 package org.contikios.cooja.radiomediums;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
-
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
+import org.contikios.cooja.util.EventTriggers;
 import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
@@ -45,6 +45,8 @@ import org.contikios.cooja.Mote;
 import org.contikios.cooja.RadioConnection;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.interfaces.Radio;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Directed Graph Radio Medium.
@@ -60,9 +62,8 @@ import org.contikios.cooja.interfaces.Radio;
  */
 @ClassDescription("Directed Graph Radio Medium (DGRM)")
 public class DirectedGraphMedium extends AbstractRadioMedium {
-  private static final Logger logger = LogManager.getLogger(DirectedGraphMedium.class);
+  private static final Logger logger = LoggerFactory.getLogger(DirectedGraphMedium.class);
 
-  private final Simulation simulation;
   private final Random random;
 
   private final ArrayList<Edge> edges = new ArrayList<>();
@@ -73,41 +74,40 @@ public class DirectedGraphMedium extends AbstractRadioMedium {
 
   public DirectedGraphMedium(Simulation simulation) {
     super(simulation);
-    this.simulation = simulation;
     random = simulation.getRandomGenerator();
 
     requestEdgeAnalysis();
   }
 
   @Override
-  public void removed() {
-    super.removed();
+  public List<Radio> getNeighbors(Radio radio) {
+    var destinations = getPotentialDestinations(radio);
+    if (destinations != null) {
+      return Arrays.stream(destinations).map(d -> d.radio).toList();
+    }
+    return Collections.emptyList();
   }
 
   public void addEdge(Edge e) {
     edges.add(e);
     requestEdgeAnalysis();
-
-    radioTransmissionObservable.setChangedAndNotify();
+    radioTransmissionTriggers.trigger(Radio.RadioEvent.UNKNOWN, e);
   }
 
   public void removeEdge(Edge edge) {
     if (!edges.contains(edge)) {
-      logger.fatal("Cannot remove edge: " + edge);
+      logger.error("Cannot remove edge: " + edge);
       return;
     }
     edges.remove(edge);
     requestEdgeAnalysis();
-
-
-    radioTransmissionObservable.setChangedAndNotify();
+    radioTransmissionTriggers.trigger(Radio.RadioEvent.UNKNOWN, edge);
   }
 
   public void clearEdges() {
     edges.clear();
     requestEdgeAnalysis();
-
-    radioTransmissionObservable.setChangedAndNotify();
+    radioTransmissionTriggers.trigger(Radio.RadioEvent.UNKNOWN, null);
   }
 
   public Edge[] getEdges() {
@@ -217,7 +217,7 @@ public class DirectedGraphMedium extends AbstractRadioMedium {
     edgesDirty = false;
     
     /* Radio Medium changed here so notify Observers */
-    radioMediumObservable.setChangedAndNotify();
+    radioMediumTriggers.trigger(EventTriggers.AddRemove.ADD, null);
   }
 
   /**
@@ -240,7 +240,7 @@ public class DirectedGraphMedium extends AbstractRadioMedium {
       analyzeEdges();
     }
     if (edgesDirty) {
-      logger.fatal("Error when analyzing edges, aborting new radio connection");
+      logger.error("Error when analyzing edges, aborting new radio connection");
       return new RadioConnection(source);
     }
 
@@ -388,23 +388,32 @@ public class DirectedGraphMedium extends AbstractRadioMedium {
               /* Backwards compatibility: se.sics -> org.contikios */
               destClassName = destClassName.replaceFirst("^se\\.sics", "org.contikios");
 
-              Class<? extends DGRMDestinationRadio> destClass =
-                      simulation.getCooja().tryLoadClass(this, DGRMDestinationRadio.class, destClassName);
-              if (destClass == null) {
-                throw new RuntimeException("Could not load class: " + destClassName);
+              var destinationRadioID = edgeElement.getChild("radio");
+              var destRadioMote = simulation.getMoteWithID(Integer.parseInt(destinationRadioID.getText().trim()));
+              if (destRadioMote == null) {
+                throw new IllegalStateException("Can not find mote with id " + destinationRadioID);
               }
-              try {
-                dest = destClass.getDeclaredConstructor().newInstance();
-                List<Element> children = edgeElement.getChildren();
-                dest.setConfigXML(children, simulation);
-              } catch (Exception e) {
-                throw new RuntimeException("Unknown class: " + destClassName, e);
+
+              if (DGRMDestinationRadio.class.getName().equals(destClassName)) {
+                dest = new DGRMDestinationRadio(destRadioMote.getInterfaces().getRadio());
+              } else {
+                Class<? extends DGRMDestinationRadio> destClass =
+                        simulation.getCooja().tryLoadClass(this, DGRMDestinationRadio.class, destClassName);
+                if (destClass == null) {
+                  throw new RuntimeException("Could not load class: " + destClassName);
+                }
+                try {
+                  dest = destClass.getDeclaredConstructor(Radio.class).newInstance(destRadioMote.getInterfaces().getRadio());
+                } catch (Exception e) {
+                  throw new RuntimeException("Could not configure radio destination of type: " + destClassName, e);
+                }
               }
+              dest.setConfigXML(edgeElement.getChildren(), simulation);
             }
           }
         }
         if (source == null || dest == null) {
-          logger.fatal("Failed loading DGRM links, aborting");
+          logger.error("Failed loading DGRM links, aborting");
           return false;
         } else {
           addEdge(new Edge(source, dest));

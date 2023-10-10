@@ -66,8 +66,8 @@ import org.contikios.cooja.VisPlugin;
 @PluginType(PluginType.PType.MOTE_PLUGIN)
 public class MoteInterfaceViewer extends VisPlugin implements HasQuickHelp, MotePlugin {
   private final Mote mote;
-  private MoteInterface selectedMoteInterface = null;
-  private JPanel currentInterfaceVisualizer = null;
+  private MoteInterface selectedMoteInterface;
+  private JPanel currentInterfaceVisualizer;
   private final JComboBox<String> selectInterfaceComboBox = new JComboBox<>();
   private final JScrollPane mainScrollPane;
 
@@ -146,13 +146,6 @@ public class MoteInterfaceViewer extends VisPlugin implements HasQuickHelp, Mote
     pack();
     setPreferredSize(new Dimension(350,300));
     setSize(new Dimension(350,300));
-
-    try {
-      setSelected(true);
-    } catch (java.beans.PropertyVetoException e) {
-      // Could not select
-    }
-
   }
 
   /**

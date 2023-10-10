@@ -34,11 +34,9 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.Observable;
-import java.util.Observer;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.interfaces.SerialPort;
@@ -50,13 +48,12 @@ import org.contikios.cooja.interfaces.SerialPort;
  */
 public class MoteSerialSocketConnection {
   private static final long serialVersionUID = 1L;
-  private static final Logger logger = LogManager.getLogger(MoteSerialSocketConnection.class);
+  private static final Logger logger = LoggerFactory.getLogger(MoteSerialSocketConnection.class);
 
   private boolean isConnected = false;
   public int toMote = 0, toSocket = 0;
 
   private SerialPort motePort;
-  private Observer moteObserver;
 
   private Socket socket;
   private DataInputStream socketIn;
@@ -70,14 +67,12 @@ public class MoteSerialSocketConnection {
 
     /* Simulated -> socket */
     motePort = (SerialPort) mote.getInterfaces().getSerial();
-    motePort.addSerialDataObserver(moteObserver = new Observer() {
-      @Override
-      public void update(Observable obs, Object obj) {
+    motePort.getSerialDataTriggers().addTrigger(this, (ev, ch) ->{
         try {
           if (socketOut == null) {
             return;
           }
-          socketOut.write(motePort.getLastSerialData());
+          socketOut.write(ch); //motePort.getLastSerialData()
           socketOut.flush();
           toSocket++;
 
@@ -88,10 +83,9 @@ public class MoteSerialSocketConnection {
           }
         } catch (IOException e) {
           e.printStackTrace();
-          logger.fatal("Write to socket error: " + e.getMessage(), e);
+          logger.error("Write to socket error: " + e.getMessage(), e);
           cleanup();
         }
-      }
     });
 
     /* Socket -> simulated */
@@ -125,7 +119,7 @@ public class MoteSerialSocketConnection {
             }
 
           } else {
-            logger.fatal("Incoming data thread shut down");
+            logger.error("Incoming data thread shut down");
             cleanup();
             break;
           }
@@ -145,7 +139,7 @@ public class MoteSerialSocketConnection {
     }
     isConnected = false;
 
-    motePort.deleteSerialDataObserver(moteObserver);
+    motePort.getSerialDataTriggers().deleteTriggers(this);
 
     try {
       if (socket != null) {

@@ -42,14 +42,11 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.util.Arrays;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Observable;
-import java.util.Observer;
-import java.util.Arrays;
-
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Arrays;
 import javax.swing.JButton;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -62,8 +59,6 @@ import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JToggleButton;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 import org.jdom2.Element;
 
 import org.contikios.cooja.Mote;
@@ -73,6 +68,12 @@ import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.interfaces.Log;
 import org.contikios.cooja.interfaces.SerialIO;
 import org.contikios.cooja.interfaces.SerialPort;
+import org.contikios.cooja.interfaces.Log.LogDataInfo;
+import org.contikios.cooja.util.EventTriggers;
+import java.util.function.BiConsumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.contikios.cooja.dialogs.HistoryUI;
 import org.contikios.cooja.interfaces.ApplicationLogPort;
 import org.contikios.cooja.dialogs.LogUI;
@@ -82,13 +83,15 @@ import org.contikios.cooja.dialogs.MessageContainer;
 
 import org.contikios.cooja.util.StringUtils;
 
+// legacy
+import java.util.Observer;
+import java.util.Observable;
+
 
 
 public abstract class SerialUI extends SerialIO 
-	implements SerialPort 
 {
-  private static final Logger logger = LogManager.getLogger(SerialUI.class);
-
+  private static final Logger logger = LoggerFactory.getLogger(SerialUI.class);
   private final static int MAX_LENGTH = 16*1024;
   private static final int LOG     = 0;
   private static final int SENDING = 1;
@@ -97,7 +100,10 @@ public abstract class SerialUI extends SerialIO
   private boolean is_recv = false; //flag that last activity is receiving
   private byte[] recvBuf = new byte[MAX_LENGTH];
   private int    recvLen = 0;
-  private byte lastSerialData = 0; /* SerialPort */
+
+  protected static final EventTriggers.Update UPDATE = EventTriggers.Update.UPDATE;
+  protected final EventTriggers<EventTriggers.Update, Byte> serialDataTriggers = new EventTriggers<>();
+  private byte lastSerialData; /* SerialPort */
   private String lastLogMessage = ""; /* Log */
   private final Pattern nonPrintable = Pattern.compile("[^\\p{Print}[ \\t]]");
   private final StringBuilder newMessage = new StringBuilder(); /* Log */
@@ -105,25 +111,20 @@ public abstract class SerialUI extends SerialIO
   private byte[] lastSendingData = null;
 
   /* Command history */
-  private HistoryUI                 history = new HistoryUI();;
+  private HistoryUI                 history = new HistoryUI();
 
   // informer about controls changes
-  private class controlsInformer extends Observable {
+  private class controlsInformer 
+          extends EventTriggers<EventTriggers.Update, Object > 
+  {
       public void refresh( Object x ) {
-          if (this.countObservers() == 0) {
-            return;
-          }
-          setChanged();
-          notifyObservers(x);
+          trigger(UPDATE , x);
       }
   }
 
+  // informs UI about log controls
   private controlsInformer controlsInform = new controlsInformer();
   
-  protected void InvalidatedData() {
-      controlsInform.refresh(null);
-  }
-
   /* Log */
   public String getLastLogMessage() {
     return lastLogMessage;
@@ -157,30 +158,16 @@ public abstract class SerialUI extends SerialIO
   }
 
   /* SerialPort */
-  private abstract static class SerialDataObservable extends Observable {
-    public abstract void notifyNewData();
-  }
-  private final SerialDataObservable serialDataObservable = new SerialDataObservable() {
-    @Override
-    public void notifyNewData() {
-      if (this.countObservers() == 0) {
-        return;
-      }
-      setChanged();
-      notifyObservers(SerialUI.this);
-    }
-  };
-  @Override
-  public void addSerialDataObserver(Observer o) {
-    serialDataObservable.addObserver(o);
-  }
-  @Override
-  public void deleteSerialDataObserver(Observer o) {
-    serialDataObservable.deleteObserver(o);
-  }
   @Override
   public byte getLastSerialData() {
     return lastSerialData;
+  }
+
+  // informs UI about recv/send data 
+  private controlsInformer serialInform   = new controlsInformer();
+  
+  protected void InvalidatedData() {
+      serialInform.trigger(UPDATE, new LogDataInfo(getMote(), lastLogMessage));
   }
 
   protected void receiveFlush() {
@@ -192,6 +179,8 @@ public abstract class SerialUI extends SerialIO
       lastLogMessage = nonPrintable.matcher(newMessage.toString()).replaceAll("");
       newMessage.setLength(0);
       is_recv = true;
+      logDataTriggers.trigger(UPDATE, new LogDataInfo(getMote(), lastLogMessage));
+
       InvalidatedData();
       recvLen = 0;
   }
@@ -203,7 +192,8 @@ public abstract class SerialUI extends SerialIO
 		++recvLen;
 
 		lastSerialData  = x;
-	    serialDataObservable.notifyNewData();
+        serialDataTriggers.trigger(EventTriggers.Update.UPDATE, x);
+        serialDataObservable.notifyNewData();                       // legacy
 
 		boolean flushed = false;
 		if (x == '\n') {
@@ -226,7 +216,7 @@ public abstract class SerialUI extends SerialIO
 
   public void dataReceived(int data) {
     lastSendingData = null;
-	on_recv_byte_flushed((byte)data);
+    on_recv_byte_flushed((byte)data);
     /* Notify observers of new serial character */
     is_recv = true;
   }
@@ -236,39 +226,39 @@ public abstract class SerialUI extends SerialIO
 
     boolean flushed = false;
     for (byte x : data)
-    	flushed = on_recv_byte_flushed(x);
+        flushed = on_recv_byte_flushed(x);
 
     if (!flushed)
-    	this.receiveFlush();
+        this.receiveFlush();
     is_recv = true;
   }
 
   protected void sendFlush() {
-	  is_recv = false;
+      is_recv = false;
       InvalidatedData();
   };
   
   public void writeString(String message) {
       logger.info("write serialUI mote"+ getMote().getID() + ":" + message);
-	  if (is_recv)
-		  this.receiveFlush();
-	  lastSendingData = message.getBytes();
-	  this.sendFlush();
+      if (is_recv)
+          this.receiveFlush();
+      lastSendingData = message.getBytes();
+      this.sendFlush();
   }
 
   public void writeArray(byte[] s) {
-	  if (is_recv)
-		  this.receiveFlush();
-	  lastSendingData = s;
-	  this.sendFlush();
+      if (is_recv)
+          this.receiveFlush();
+      lastSendingData = s;
+      this.sendFlush();
   }
 
   public void writeByte(final byte b) {
-	  if (is_recv)
-		  this.receiveFlush();
-	  lastSendingData = new byte[1];
-	  lastSendingData[0] = b;
-	  this.sendFlush();
+      if (is_recv)
+          this.receiveFlush();
+      lastSendingData = new byte[1];
+      lastSendingData[0] = b;
+      this.sendFlush();
   }
 
   private JScrollPane fanoutMessageList(MessageListUI x) {
@@ -384,40 +374,32 @@ public abstract class SerialUI extends SerialIO
         public void itemStateChanged(ItemEvent e) {
             setLogged(logButton.isSelected());
         }  
-    }); 
-
-    /* Mote interface observer */
-    Observer observer;
-    observer = (obs, obj) -> {
-          if (obs == controlsInform ) {
-              EventQueue.invokeLater(() -> logButton.setSelected(isLogged()) );
-              return;
-          }
-
+    });
+    controlsInform.addTrigger( panel, (e, obj) -> {
+        EventQueue.invokeLater(() -> logButton.setSelected(isLogged()) );
+    });
+    
+    serialInform.addTrigger(panel, (obs, x) -> {
         final byte[] sendData = (lastSendingData != null) 
         				? Arrays.copyOf(lastSendingData, lastSendingData.length)
         				: null;
         final byte[] recvData = Arrays.copyOf(recvBuf, recvLen);
-        EventQueue.invokeLater(new Runnable() {
-          public void run() {
-        	final int recvLen = recvData.length;
+        EventQueue.invokeLater(() -> {
+            final int recvLen = recvData.length;
             if (recvLen > 0){
-        		//logger.info("SUI: logMessage "+recvLen );
+                //logger.info("SUI: logMessage "+recvLen );
                 appendToTextArea(logTextPane, recvData );
-              	appendToHexArea(logHexPane, recvData, RECEIVING);
-              	appendToDumpArea(logDumpPane, recvData, RECEIVING);
+                appendToHexArea(logHexPane, recvData, RECEIVING);
+                appendToDumpArea(logDumpPane, recvData, RECEIVING);
             }
             if ( sendData != null) {
-        		//logger.info("SUI: lastSendingData "+sendData.length);
-            	appendToHexArea(logHexPane, sendData, SENDING);
-            	appendToDumpArea(logDumpPane, sendData, SENDING);
+                //logger.info("SUI: lastSendingData "+sendData.length);
+                appendToHexArea(logHexPane, sendData, SENDING);
+                appendToDumpArea(logDumpPane, sendData, SENDING);
                 appendToTextArea(logTextPane, sendData );
             }
-          }
         });
-    };
-    controlsInform.addObserver(observer);
-    panel.putClientProperty("intf_obs", observer);
+    });
 
     panel.add(BorderLayout.NORTH, controlsPane);
     panel.add(BorderLayout.CENTER, tabbedView);
@@ -427,13 +409,8 @@ public abstract class SerialUI extends SerialIO
 
   @Override
   public void releaseInterfaceVisualizer(JPanel panel) {
-    Observer observer = (Observer) panel.getClientProperty("intf_obs");
-    if (observer == null) {
-      logger.fatal("Error when releasing panel, observer is null");
-      return;
-    }
-
-    controlsInform.deleteObserver(observer);
+      serialInform.deleteTriggers(panel);
+      controlsInform.deleteTriggers(panel);
   }
 
   @Override
@@ -511,7 +488,7 @@ public abstract class SerialUI extends SerialIO
                               , "org.contikios.cooja.interfaces.ApplicationLogPort");
     
           if (moteInterfaceClass == null) {
-            logger.fatal("Could not append interface default LogUI" + 
+            logger.error("Could not append interface default LogUI" + 
                         "for old project mote type " + getMote().getID() );
             return ;
           }
@@ -530,7 +507,7 @@ public abstract class SerialUI extends SerialIO
                   );
       }
       catch (MoteType.MoteTypeCreationException e) { 
-          logger.fatal("Crushed assign interface LogUI" + 
+          logger.error("Crushed assign interface LogUI" + 
                   "for project mote type " + getMote().getID() );
           return; 
       }
@@ -646,7 +623,37 @@ public abstract class SerialUI extends SerialIO
   }
 
   private static String trim(String text) {
-    return (text != null) && ((text = text.trim()).length() > 0) ? text : null;
+    return (text != null) && (!(text = text.trim()).isEmpty()) ? text : null;
   }
+
+  @Override
+  public EventTriggers<EventTriggers.Update, Byte> getSerialDataTriggers() {
+    return serialDataTriggers;
+  }
+
+  
+  // legacy
+    private abstract static class SerialDataObservable extends Observable {
+      public abstract void notifyNewData();
+    }
+    
+    private final SerialDataObservable serialDataObservable = new SerialDataObservable() {
+      @Override
+      public void notifyNewData() {
+        if (this.countObservers() == 0) {
+          return;
+        }
+        setChanged();
+        notifyObservers(SerialUI.this);
+      }
+    };
+    @Override
+    public void addSerialDataObserver(Observer o) {
+      serialDataObservable.addObserver(o);
+    }
+    @Override
+    public void deleteSerialDataObserver(Observer o) {
+      serialDataObservable.deleteObserver(o);
+    }
   
 }

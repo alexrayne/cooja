@@ -67,7 +67,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Observer;
 import java.util.Set;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
@@ -86,11 +85,11 @@ import javax.swing.event.MenuEvent;
 import javax.swing.event.MenuListener;
 import javax.swing.plaf.basic.BasicInternalFrameUI;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 import org.contikios.cooja.mote.BaseContikiMoteType;
 import org.contikios.cooja.plugins.skins.DGRMVisualizerSkin;
 import org.contikios.cooja.plugins.skins.LogisticLossVisualizerSkin;
+import org.contikios.cooja.util.Annotations;
+import org.contikios.cooja.util.EventTriggers;
 import org.contikios.mrm.MRMVisualizerSkin;
 import org.jdom2.Element;
 
@@ -101,7 +100,6 @@ import org.contikios.cooja.Mote;
 import org.contikios.cooja.RadioMedium;
 import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.PluginType;
-import org.contikios.cooja.SimEventCentral.MoteCountListener;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.Simulation.MoteRelation;
 import org.contikios.cooja.SupportedArguments;
@@ -119,6 +117,8 @@ import org.contikios.cooja.plugins.skins.MoteTypeVisualizerSkin;
 import org.contikios.cooja.plugins.skins.PositionVisualizerSkin;
 import org.contikios.cooja.plugins.skins.TrafficVisualizerSkin;
 import org.contikios.cooja.plugins.skins.UDGMVisualizerSkin;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Simulation visualizer supporting different visualizers
@@ -138,18 +138,18 @@ import org.contikios.cooja.plugins.skins.UDGMVisualizerSkin;
 @ClassDescription("Network")
 @PluginType(PluginType.PType.SIM_STANDARD_PLUGIN)
 public class Visualizer extends VisPlugin implements HasQuickHelp {
-  private static final Logger logger = LogManager.getLogger(Visualizer.class);
+  private static final Logger logger = LoggerFactory.getLogger(Visualizer.class);
 
   public static final int MOTE_RADIUS = 8;
   private static final Color[] DEFAULT_MOTE_COLORS = {Color.WHITE};
 
   private final Simulation simulation;
   private final JPanel canvas;
-  private boolean loadedConfig = false;
+  private boolean loadedConfig;
 
   /* Viewport */
   private final AffineTransform viewportTransform;
-  public int resetViewport = 0;
+  public int resetViewport;
 
   enum MotesActionState {
     NONE,
@@ -199,9 +199,6 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
   private final ArrayList<VisualizerSkin> currentSkins = new ArrayList<>();
 
   /* Generic visualization */
-  private final MoteCountListener newMotesListener;
-  private final Observer posObserver;
-  private final Observer moteHighligtObserver;
   private final ArrayList<Mote> highlightedMotes = new ArrayList<>();
   private final static Color HIGHLIGHT_COLOR = Color.CYAN;
   private final static Color MOVE_COLOR = Color.WHITE;
@@ -264,7 +261,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
         viewMenu.add(new JSeparator());
         for (var skinClass : visualizerSkins) {
           // Should skin be enabled in this simulation?
-          if (!isSkinCompatible(skinClass)) {
+          if (!Annotations.isCompatible(skinClass.getAnnotation(SupportedArguments.class), simulation.getRadioMedium())) {
             continue;
           }
 
@@ -280,13 +277,13 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
           item.addItemListener(e1 -> {
             var menuItem = ((JCheckBoxMenuItem) e1.getItem());
             if (menuItem == null) {
-              logger.fatal("No menu item");
+              logger.error("No menu item");
               return;
             }
 
             var skinClass1 = (Class<VisualizerSkin>) menuItem.getClientProperty("skinclass");
             if (skinClass1 == null) {
-              logger.fatal("Unknown visualizer skin class");
+              logger.error("Unknown visualizer skin class");
               return;
             }
 
@@ -303,7 +300,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
                 }
               }
               if (skinToDeactivate == null) {
-                logger.fatal("Unknown visualizer to deactivate: " + skinClass1);
+                logger.error("Unknown visualizer to deactivate: " + skinClass1);
                 return;
               }
               skinToDeactivate.setInactive();
@@ -424,42 +421,17 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
     this.add(BorderLayout.CENTER, canvas);
 
     /* Observe simulation and mote positions */
-    posObserver = (obs, obj) -> repaint();
-    simulation.getEventCentral().addMoteCountListener(newMotesListener = new MoteCountListener() {
-      @Override
-      public void moteWasAdded(Mote mote) {
-        Position pos = mote.getInterfaces().getPosition();
-        if (pos != null) {
-          pos.addObserver(posObserver);
-          EventQueue.invokeLater(() -> {
-            resetViewport = 1;
-            repaint();
-          });
-        }
-      }
+    simulation.getEventCentral().getPositionTriggers().addTrigger(this, (o, m) -> EventQueue.invokeLater(this::repaint));
 
-      @Override
-      public void moteWasRemoved(Mote mote) {
-        Position pos = mote.getInterfaces().getPosition();
-        if (pos != null) {
-          pos.deleteObserver(posObserver);
-          repaint();
-        }
+    simulation.getMoteTriggers().addTrigger(this, (operation, mote) -> EventQueue.invokeLater(() -> {
+      if (operation == EventTriggers.AddRemove.ADD) {
+        resetViewport = 1;
       }
-    });
-    for (Mote mote : simulation.getMotes()) {
-      Position pos = mote.getInterfaces().getPosition();
-      if (pos != null) {
-        pos.addObserver(posObserver);
-      }
-    }
+      repaint();
+    }));
 
     /* Observe mote highlights */
-    Cooja.addMoteHighlightObserver(moteHighligtObserver = (obs, obj) -> {
-      if (!(obj instanceof final Mote mote)) {
-        return;
-      }
-
+    simulation.getMoteHighlightTriggers().addTrigger(this, (event, mote) -> {
       final Timer timer = new Timer(100, null);
       timer.addActionListener(e -> {
         // Count down.
@@ -606,7 +578,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
                   menu.add(menuItem);
                 }
               } catch (InvocationTargetException | NoSuchMethodException | InstantiationException | IllegalAccessException e1) {
-                logger.fatal("Error: " + e1.getMessage(), e1);
+                logger.error("Error: " + e1.getMessage(), e1);
               }
             }
           }
@@ -640,7 +612,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
               menu.add(menuItem);
             }
           } catch (InvocationTargetException | NoSuchMethodException | InstantiationException | IllegalAccessException e1) {
-            logger.fatal("Error: " + e1.getMessage(), e1);
+            logger.error("Error: " + e1.getMessage(), e1);
           }
         }
 
@@ -795,7 +767,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
           return;
         }
         // TODO: implement drag and drop.
-        logger.fatal("Drag and drop not implemented: " + file);
+        logger.error("Drag and drop not implemented: " + file);
       }
 
       private boolean acceptOrRejectDrag(DropTargetDragEvent dtde) {
@@ -846,7 +818,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
       }
     }
 
-    if (!isSkinCompatible(skinClass)) {
+    if (!Annotations.isCompatible(skinClass.getAnnotation(SupportedArguments.class), simulation.getRadioMedium())) {
       return;
     }
 
@@ -857,7 +829,7 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
       currentSkins.add(0, newSkin);
     }
     catch (InvocationTargetException | NoSuchMethodException | InstantiationException | IllegalAccessException e1) {
-      e1.printStackTrace();
+      logger.error("Could not create skin: {}", skinClass.getName());
     }
     repaint();
   }
@@ -942,25 +914,6 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
   }
 
   private boolean showMoteToMoteRelations = true;
-
-  public boolean isSkinCompatible(Class<? extends VisualizerSkin> skinClass) {
-    if (skinClass == null) {
-      return false;
-    }
-
-    /* Check if skin depends on any particular radio medium */
-    boolean showMenuItem = true;
-    var annotation = skinClass.getAnnotation(SupportedArguments.class);
-    if (annotation != null) {
-      showMenuItem = false;
-      for (var o : annotation.radioMediums()) {
-        if (o.isAssignableFrom(simulation.getRadioMedium().getClass())) {
-          return true;
-        }
-      }
-    }
-    return showMenuItem;
-  }
 
   private void handleMousePress(MouseEvent mouseEvent) {
     int x = mouseEvent.getX();
@@ -1376,18 +1329,10 @@ public class Visualizer extends VisPlugin implements HasQuickHelp {
       skin.setInactive();
     }
     currentSkins.clear();
-    if (moteHighligtObserver != null) {
-      Cooja.deleteMoteHighlightObserver(moteHighligtObserver);
-    }
+    simulation.getMoteHighlightTriggers().deleteTriggers(this);
     simulation.getMoteRelationsTriggers().deleteTriggers(this);
-
-    simulation.getEventCentral().removeMoteCountListener(newMotesListener);
-    for (Mote mote : simulation.getMotes()) {
-      Position pos = mote.getInterfaces().getPosition();
-      if (pos != null) {
-        pos.deleteObserver(posObserver);
-      }
-    }
+    simulation.getEventCentral().getPositionTriggers().deleteTriggers(this);
+    simulation.getMoteTriggers().deleteTriggers(this);
   }
 
   /**

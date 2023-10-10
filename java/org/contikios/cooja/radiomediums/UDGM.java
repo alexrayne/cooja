@@ -30,24 +30,22 @@
 
 package org.contikios.cooja.radiomediums;
 
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Observer;
+import java.util.List;
 import java.util.Random;
-
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 import org.contikios.cooja.Cooja;
 import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
-import org.contikios.cooja.Mote;
 import org.contikios.cooja.RadioConnection;
-import org.contikios.cooja.SimEventCentral.MoteCountListener;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.interfaces.Position;
 import org.contikios.cooja.interfaces.Radio;
 import org.contikios.cooja.plugins.Visualizer;
 import org.contikios.cooja.plugins.skins.UDGMVisualizerSkin;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The Unit Disk Graph Radio Medium abstracts radio transmission range as circles.
@@ -80,7 +78,7 @@ import org.contikios.cooja.plugins.skins.UDGMVisualizerSkin;
  */
 @ClassDescription("Unit Disk Graph Medium (UDGM): Distance Loss")
 public class UDGM extends AbstractRadioMedium {
-  private static final Logger logger = LogManager.getLogger(UDGM.class);
+  private static final Logger logger = LoggerFactory.getLogger(UDGM.class);
 
   public double SUCCESS_RATIO_TX = 1.0; /* Success ratio of TX. If this fails, no radios receive the packet */
   public double SUCCESS_RATIO_RX = 1.0; /* Success ratio of RX. If this fails, the single affected receiver does not receive the packet */
@@ -123,28 +121,33 @@ public class UDGM extends AbstractRadioMedium {
 
     /* Register as position observer.
      * If any positions change, re-analyze potential receivers. */
-    final Observer positionObserver = (o, arg) -> dgrm.requestEdgeAnalysis();
+    simulation.getEventCentral().getPositionTriggers().addTrigger(this, (o, m) -> dgrm.requestEdgeAnalysis());
     /* Re-analyze potential receivers if radios are added/removed. */
-    simulation.getEventCentral().addMoteCountListener(new MoteCountListener() {
-      @Override
-      public void moteWasAdded(Mote mote) {
-        mote.getInterfaces().getPosition().addObserver(positionObserver);
-        dgrm.requestEdgeAnalysis();
-      }
-      @Override
-      public void moteWasRemoved(Mote mote) {
-        mote.getInterfaces().getPosition().deleteObserver(positionObserver);
-        dgrm.requestEdgeAnalysis();
-      }
-    });
-    for (Mote mote: simulation.getMotes()) {
-      mote.getInterfaces().getPosition().addObserver(positionObserver);
-    }
+    simulation.getMoteTriggers().addTrigger(this, (o, m) -> dgrm.requestEdgeAnalysis());
+
     dgrm.requestEdgeAnalysis();
 
     if (Cooja.isVisualized()) {
       Visualizer.registerVisualizerSkin(UDGMVisualizerSkin.class);
     }
+  }
+
+  @Override
+  public List<Radio> getNeighbors(Radio sourceRadio) {
+    var list = new ArrayList<Radio>();
+    var sourceRadioPosition = sourceRadio.getPosition();
+    double moteTransmissionRange = TRANSMITTING_RANGE
+            * ((double) sourceRadio.getCurrentOutputPowerIndicator() / (double) sourceRadio.getOutputPowerIndicatorMax());
+    for (var radio : dgrm.getPotentialDestinations(sourceRadio)) {
+      if (radio.radio == sourceRadio) {
+        continue;
+      }
+      double distance = sourceRadioPosition.getDistanceTo(radio.radio.getPosition());
+      if (distance <= moteTransmissionRange) {
+        list.add(radio.radio);
+      }
+    }
+    return list;
   }
 
   @Override
@@ -204,9 +207,8 @@ public class UDGM extends AbstractRadioMedium {
     for (DestinationRadio dest: potentialDestinations) {
       Radio recv = dest.radio;
 
-      /* Fail if radios are on different (but configured) channels */ 
+      /* Fail if radios are on different (but configured) channels */
       if ( not_same_chanel(sender, recv) ) {
-
         /* Add the connection in a dormant state;
            it will be activated later when the radio will be
            turned on and switched to the right channel. This behavior

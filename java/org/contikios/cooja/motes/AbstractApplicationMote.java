@@ -34,7 +34,6 @@ import org.contikios.cooja.MoteType;
 import org.contikios.cooja.RadioPacket;
 import org.contikios.cooja.mote.memory.SectionMoteMemory;
 import org.contikios.cooja.Simulation;
-import org.contikios.cooja.interfaces.ApplicationRadio;
 import org.contikios.cooja.interfaces.ApplicationSerialPort;
 import org.contikios.cooja.interfaces.ApplicationLogPort;
 import org.contikios.cooja.interfaces.Radio;
@@ -51,12 +50,10 @@ public abstract class AbstractApplicationMote extends AbstractWakeupMote<MoteTyp
   public abstract void sentPacket(RadioPacket p);
   
   public AbstractApplicationMote(MoteType moteType, Simulation sim) throws MoteType.MoteTypeCreationException {
-    super(moteType, sim);
-    moteMemory = new SectionMoteMemory(new HashMap<>());
-    this.moteInterfaces = new MoteInterfaceHandler(this, moteType.getMoteInterfaceClasses());
+    super(moteType, new SectionMoteMemory(new HashMap<>()), sim);
+    this.moteInterfaces = new MoteInterfaceHandler(this);
     // Observe our own radio for incoming radio packets.
-    moteInterfaces.getRadio().addObserver((obs, obj) -> {
-      var radio = (ApplicationRadio) obs;
+    moteInterfaces.getRadio().getRadioEventTriggers().addTrigger(this, (event, radio) -> {
       if (radio.getLastEvent() == Radio.RadioEvent.RECEPTION_FINISHED) {
         if (radio.getLastPacketReceived() != null) // Only send in packets when they exist.
           receivedPacket(radio.getLastPacketReceived());

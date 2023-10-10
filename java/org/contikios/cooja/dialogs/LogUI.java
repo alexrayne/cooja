@@ -42,8 +42,8 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Observable;
-import java.util.Observer;
+import java.util.function.BiConsumer;
+import java.util.regex.Pattern;
 import java.lang.String;
 
 import javax.swing.JButton;
@@ -55,8 +55,8 @@ import javax.swing.JTextField;
 import javax.swing.BoxLayout;
 import javax.swing.JToggleButton;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.jdom2.Element;
 
 import org.contikios.cooja.Mote;
@@ -64,11 +64,12 @@ import org.contikios.cooja.interfaces.Log;
 import org.contikios.cooja.interfaces.SerialIO;
 import org.contikios.cooja.interfaces.SerialPort;
 import org.contikios.cooja.dialogs.SerialUI;
+import org.contikios.cooja.util.EventTriggers;
 
 public abstract class LogUI extends Log 
     //implements SerialPort 
 {
-  private static final Logger logger = LogManager.getLogger(LogUI.class);
+  private static final Logger logger = LoggerFactory.getLogger(LogUI.class);
 
   private final static int MAX_LENGTH = 16*1024;
 
@@ -81,17 +82,23 @@ public abstract class LogUI extends Log
   }
 
   // informer about controls changes
-  private class controlsInformer extends Observable {
+  private class controlsInformer 
+          extends EventTriggers<EventTriggers.Update, Object > 
+  {
       public void refresh( Object x ) {
-          if (this.countObservers() == 0) {
-            return;
-          }
-          setChanged();
-          notifyObservers(x);
+          trigger(UPDATE , x);
       }
   }
 
   private controlsInformer controlsInform = new controlsInformer();
+  
+  protected final EventTriggers<EventTriggers.Update, String> msgEvent = new EventTriggers<>();
+  protected static final EventTriggers.Update UPDATE = EventTriggers.Update.UPDATE;
+
+  protected void InvalidatedData() {
+      logDataTriggers.trigger(EventTriggers.Update.UPDATE, new LogDataInfo(getMote(), lastLogMessage));
+      msgEvent.trigger(UPDATE, lastLogMessage);
+  }
 
   /* controls */
   private boolean is_serial_listen=false;//sends to mote.Log all received data
@@ -120,10 +127,10 @@ public abstract class LogUI extends Log
       mote_sio.setLogged(onoff);
       
       if (is_serial_listen) {
-          mote_sio.addObserver(serial_observer);
+          mote_sio.getLogDataTriggers().addTrigger(this, serialEvent);
       }
       else {
-          mote_sio.deleteObserver(serial_observer);
+          mote_sio.getLogDataTriggers().removeTrigger(this, serialEvent);
       }
           
   }
@@ -140,21 +147,29 @@ public abstract class LogUI extends Log
   }
 
   // observes moteSerial
-  private Observer serial_observer = new Observer() {
-      @Override
-      public void update(Observable obs, Object obj) {
-          if (obs == mote_sio)
-          if ( mote_sio != null) {
-              String msg = mote_sio.getLastLogMessage();
-              if (msg != null)
-              if (msg.length() > 0) {
-                  lastLogMessage = msg;
-                  LogUI.this.setChanged();
-                  LogUI.this.notifyObservers(getMote());
-              }
+  protected final BiConsumer<EventTriggers.Update, Log.LogDataInfo> serialEvent = (event, ev) ->{
+      
+      if (ev.mote() == getMote())
+      if ( mote_sio != null) {
+          //String msg = mote_sio.getLastLogMessage();
+          final String msg = ev.msg();
+          if (msg != null)
+          if (msg.length() > 0) {
+              lastLogMessage = msg;
+              InvalidatedData();
           }
       }
-  }; //serial_observer
+  };
+
+  private final Pattern nonPrintable = Pattern.compile("[^\\p{Print}[ \\t]]");
+  protected String fix_nonPrintable( final String x) {
+      try {
+          return nonPrintable.matcher(x).replaceAll("");
+      }
+      catch (Exception e) {
+          return x;
+      }
+  }
 
   public void dataReceivedBuf(final byte[] data) {
       int len = data.length;
@@ -178,13 +193,12 @@ public abstract class LogUI extends Log
                   /*logger.warn("Dropping too large log message (>" + MAX_LENGTH + " bytes).");*/
                   lastLogMessage = "# [1024 bytes, no line ending]: " + new String(data, 0, 20) + "...";
               }
-              lastLogMessage = lastLogMessage.replaceAll("[^\\p{Print}\\p{Blank}]", "");
+              lastLogMessage = fix_nonPrintable(lastLogMessage);
               }
               else {
                   lastLogMessage = "";
               }
-              this.setChanged();
-              this.notifyObservers(getMote());
+              InvalidatedData();
               start = i+1;
           }
       }
@@ -199,20 +213,17 @@ public abstract class LogUI extends Log
   public void dataReceived(int data) {
     if (data == '\n') {
       /* Notify observers of new log */
-      lastLogMessage = newMessage.toString();
-      lastLogMessage = lastLogMessage.replaceAll("[^\\p{Print}\\p{Blank}]", "");
+      lastLogMessage = fix_nonPrintable( newMessage.toString() );
       newMessage.setLength(0);
-      this.setChanged();
-      this.notifyObservers(getMote());
+      InvalidatedData();
     } else {
       newMessage.append((char) data);
       if (newMessage.length() > MAX_LENGTH) {
         /*logger.warn("Dropping too large log message (>" + MAX_LENGTH + " bytes).");*/
         lastLogMessage = "# [1024 bytes, no line ending]: " + newMessage.substring(0, 20) + "...";
-        lastLogMessage = lastLogMessage.replaceAll("[^\\p{Print}\\p{Blank}]", "");
+        lastLogMessage = fix_nonPrintable(lastLogMessage);
         newMessage.setLength(0);
-        this.setChanged();
-        this.notifyObservers(getMote());
+        InvalidatedData();
       }
     }
   }
@@ -243,29 +254,17 @@ public abstract class LogUI extends Log
     }); 
 
     /* Mote interface observer */
-    Observer observer;
-    this.addObserver(observer = new Observer() {
-      public void update(Observable obs, Object obj) {
-          if (obs == controlsInform ) {
-              EventQueue.invokeLater(new Runnable() {
-                  public void run() {
-                      listenSerialButton.setSelected(isSerialListen());
-                  }
-              });
-              return;
-          }
-
+    msgEvent.addTrigger(panel, (e, msg) -> {
         final String logMessage = getLastLogMessage();
-        EventQueue.invokeLater(new Runnable() {
-          public void run() {
+        EventQueue.invokeLater(() -> {
             appendToTextArea(logTextPane, logMessage);
-          }
         });
-      }
     });
-    controlsInform.addObserver(observer);
-    panel.putClientProperty("intf_obs", observer);
-
+    
+    controlsInform.addTrigger(panel, (e, o) -> {
+        EventQueue.invokeLater(() ->{listenSerialButton.setSelected(isSerialListen());} );
+    });
+    
     JScrollPane scrollPane = new JScrollPane(logTextPane);
     scrollPane.setPreferredSize(new Dimension(100, 100));
     panel.add(BorderLayout.NORTH, controlsPane);
@@ -274,14 +273,8 @@ public abstract class LogUI extends Log
   }
 
   public void releaseInterfaceVisualizer(JPanel panel) {
-    Observer observer = (Observer) panel.getClientProperty("intf_obs");
-    if (observer == null) {
-      logger.fatal("Error when releasing panel, observer is null");
-      return;
-    }
-
-    this.deleteObserver(observer);
-    controlsInform.deleteObserver(observer);
+    msgEvent.deleteTriggers(panel);
+    controlsInform.deleteTriggers(panel);
   }
 
   public Collection<Element> getConfigXML() {
@@ -306,6 +299,8 @@ public abstract class LogUI extends Log
 
   @Override
   public void added() {
+      getMote().getInterfaces().setLog(this);
+
       //for legacy ContikiRSR232 compatibily, listen serial by default
       if (!cfg_serial_ok)
       if (!isSerialListen())

@@ -28,23 +28,27 @@
 
 package org.contikios.cooja;
 
+import static se.sics.mspsim.Main.createNode;
+import static se.sics.mspsim.Main.getNodeTypeByPlatform;
+
+import ch.qos.logback.core.pattern.color.ANSIConstants;
+import java.awt.GraphicsEnvironment;
+import java.io.File;
 import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.core.Filter;
-import org.apache.logging.log4j.core.appender.ConsoleAppender;
-import org.apache.logging.log4j.core.config.Configurator;
-import org.apache.logging.log4j.core.config.builder.api.AppenderComponentBuilder;
-import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilder;
-import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFactory;
-import org.apache.logging.log4j.core.config.builder.impl.BuiltConfiguration;
+import java.util.Objects;
 import org.contikios.cooja.Cooja.Config;
+import org.contikios.cooja.Cooja.LogbackColors;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
+import se.sics.mspsim.util.ArgumentManager;
 
 import java.awt.GraphicsEnvironment;
 import java.io.File;
@@ -74,22 +78,10 @@ class Main {
   boolean logColor;
 
   /**
-   * Option for specifying log4j2 config file.
-   */
-  @Option(names = "--log4j2", paramLabel = "FILE", description = "the log4j2 config file")
-  String logConfigFile;
-
-  /**
    * Option for specifying log directory.
    */
   @Option(names = "--logdir", paramLabel = "DIR", description = "the log directory use")
   String logDir = ".";
-
-  /**
-   * Option for also logging stdout output to a file.
-   */
-  @Option(names = "--logname", paramLabel = "NAME", description = "the filename for the log")
-  String logName;
 
   /**
    * Option for specifying Contiki-NG path.
@@ -131,7 +123,7 @@ class Main {
    * Option for specifying simulation files to load.
    */
   @Parameters(paramLabel = "FILE", description = "one or more simulation files")
-  List<String> simulationFiles = new ArrayList<>();
+  final List<String> simulationFiles = new ArrayList<>();
 
   /**
    * Option for instructing Cooja to update the simulation file (.csc).
@@ -150,6 +142,12 @@ class Main {
    */
   @Option(names = "--print-simulation-config-version", description = "print simulation config version")
   boolean simulationConfigVersion;
+
+  /**
+   * Option for starting MSPSim with a platform.
+   */
+  @Option(names = "--platform", paramLabel = "ARCH", description = "MSPSim platform")
+  String mspSimPlatform;
 
   @Option(names = "--version", versionHelp = true,
           description = "print version information and exit")
@@ -200,6 +198,15 @@ class Main {
       System.exit(1);
     }
 
+    if (!options.logColor) {
+      if (System.getProperty("logback.layoutPattern") != null
+              || !"logback.xml".equals(System.getProperty("logback.configurationFile", "logback.xml"))) {
+        System.err.println("Option for no log color can not be used together with custom logback configuration");
+        System.exit(1);
+      }
+      System.setProperty("logback.layoutPattern", "%-5level [%thread] [%file:%line] - %msg%n");
+    }
+
     if (!options.gui) {
       // Ensure no UI is used by Java
       System.setProperty("java.awt.headless", "true");
@@ -212,6 +219,12 @@ class Main {
           System.exit(1);
         }
       }
+    }
+
+    var mspSim = options.mspSimPlatform != null;
+    if (mspSim && options.simulationFiles.isEmpty()) {
+      System.err.println("MSPSim: missing firmware name argument");
+      System.exit(1);
     }
 
     // Parse and verify soundness of simulation files argument.
@@ -236,7 +249,7 @@ class Main {
         System.err.println("Failed argument parsing of simulation file " + arg);
         System.exit(1);
       }
-      if (!file.endsWith(".csc") && !file.endsWith(".csc.gz")) {
+      if (!mspSim && !file.endsWith(".csc") && !file.endsWith(".csc.gz")) {
         System.err.println("Cooja expects simulation filenames to have an extension of '.csc' or '.csc.gz");
         System.exit(1);
       }
@@ -244,17 +257,14 @@ class Main {
         System.err.println("File '" + file + "' does not exist");
         System.exit(1);
       }
+      // MSPSim does not use the SimConfig record, so skip to next validation.
+      if (mspSim) continue;
       var randomSeed = map.get("random-seed");
       var autoStart = map.getOrDefault("autostart", Boolean.toString(options.autoStart || !options.gui));
       var updateSim = map.getOrDefault("update-simulation", Boolean.toString(options.updateSimulation));
       var logDir = map.getOrDefault("logdir", options.logDir);
       simConfigs.add(new Simulation.SimConfig(file, randomSeed == null ? options.randomSeed : Long.decode(randomSeed),
               Boolean.parseBoolean(autoStart), Boolean.parseBoolean(updateSim), logDir, map));
-    }
-
-    if (options.logConfigFile != null && !Files.exists(Path.of(options.logConfigFile))) {
-      System.err.println("Configuration file '" + options.logConfigFile + "' does not exist");
-      System.exit(1);
     }
 
     if (options.contikiPath != null && !Files.exists(Path.of(options.contikiPath))) {
@@ -290,57 +300,28 @@ class Main {
       System.exit(1);
     }
 
-    if (options.logName != null && !options.logName.endsWith(".log")) {
-      options.logName += ".log";
-    }
 
-    var cfg = new Config(options.gui, options.externalUserConfig,
-            options.logDir, options.contikiPath, options.coojaPath, options.javac);
-    // Configure logger
-    if (options.logConfigFile == null) {
-      var startColor = options.logColor ? "%highlight{" : "";
-      var endColor = options.logColor ? "}" : "";
-      ConfigurationBuilder<BuiltConfiguration> builder = ConfigurationBuilderFactory.newConfigurationBuilder();
-      builder.setStatusLevel(Level.INFO);
-      builder.setConfigurationName("DefaultConfig");
-      builder.add(builder.newFilter("ThresholdFilter", Filter.Result.ACCEPT, Filter.Result.NEUTRAL)
-              .addAttribute("level", Level.INFO));
-      // Configure console appender.
-      AppenderComponentBuilder appenderBuilder = builder.newAppender("Stdout", "CONSOLE")
-              .addAttribute("target", ConsoleAppender.Target.SYSTEM_OUT);
-      appenderBuilder.add(builder.newLayout("PatternLayout")
-              .addAttribute("pattern", startColor + "%5p [%t] (%F:%L) - %m" + endColor + "%n"));
-      appenderBuilder.add(builder.newFilter("MarkerFilter", Filter.Result.DENY, Filter.Result.NEUTRAL)
-              .addAttribute("marker", "FLOW"));
-      builder.add(appenderBuilder);
-      builder.add(builder.newLogger("org.apache.logging.log4j", Level.DEBUG)
-              .add(builder.newAppenderRef("Stdout")).addAttribute("additivity", false));
-      if (options.logName != null) {
-        // Configure logfile file appender.
-        appenderBuilder = builder.newAppender("File", "FILE")
-                .addAttribute("fileName", options.logDir + "/" + options.logName)
-                .addAttribute("Append", "false");
-        appenderBuilder.add(builder.newLayout("PatternLayout")
-                .addAttribute("pattern", "[%d{HH:mm:ss} - %t] [%F:%L] [%p] - %m%n"));
-        appenderBuilder.add(builder.newFilter("MarkerFilter", Filter.Result.DENY, Filter.Result.NEUTRAL)
-                .addAttribute("marker", "FLOW"));
-        builder.add(appenderBuilder);
-        builder.add(builder.newLogger("org.apache.logging.log4j", Level.DEBUG)
-                .add(builder.newAppenderRef("File")).addAttribute("additivity", false));
-        // Construct the root logger and initialize the configurator
-        builder.add(builder.newRootLogger(Level.INFO).add(builder.newAppenderRef("Stdout"))
-                .add(builder.newAppenderRef("File")));
-      } else {
-        builder.add(builder.newRootLogger(Level.INFO).add(builder.newAppenderRef("Stdout")));
+    if (options.mspSimPlatform == null) { // Start Cooja.
+      // Use colors that are good on a dark background and readable on a white background.
+      var colors = new LogbackColors(ANSIConstants.BOLD + "91", "96",
+              ANSIConstants.GREEN_FG, ANSIConstants.DEFAULT_FG);
+      var cfg = new Config(colors, options.gui, options.externalUserConfig,
+                options.logDir, options.contikiPath, options.coojaPath, options.javac);
+      Cooja.go(cfg, simConfigs);
+    } else { // Start MSPSim.
+      var config = new ArgumentManager(options.simulationFiles.toArray(new String[0]));
+      var node = createNode(Objects.requireNonNullElseGet(config.getProperty("nodeType"), () ->
+              getNodeTypeByPlatform(options.mspSimPlatform)));
+      if (node == null) {
+        System.err.println("MSPSim does not currently support the platform '" + options.mspSimPlatform + "'.");
+        System.exit(1);
       }
-      // FIXME: This should be try (LoggerContext cxt = Configurator.initialize(..)),
-      //        but go immediately returns which causes the log file to be closed
-      //        while the simulation is still running.
-      Configurator.initialize(builder.build());
-      Cooja.go(cfg, simConfigs);
-    } else {
-      Configurator.initialize("ConfigFile", options.logConfigFile);
-      Cooja.go(cfg, simConfigs);
+      try {
+        node.setupArgs(config);
+      } catch (IOException e) {
+        System.err.println("IOException from setupArgs: " + e.getMessage());
+        System.exit(1);
+      }
     }
   }
 }

@@ -31,8 +31,6 @@
 package org.contikios.cooja.plugins;
 
 import java.awt.BorderLayout;
-import java.util.Observer;
-
 import javax.swing.DefaultCellEditor;
 import javax.swing.JComboBox;
 import javax.swing.JScrollPane;
@@ -44,9 +42,7 @@ import javax.swing.table.TableCellEditor;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
-import org.contikios.cooja.Mote;
 import org.contikios.cooja.PluginType;
-import org.contikios.cooja.SimEventCentral.MoteCountListener;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.SupportedArguments;
 import org.contikios.cooja.VisPlugin;
@@ -69,12 +65,10 @@ public class BaseRSSIconf extends VisPlugin {
 	private final static int IDX_Mote = 0;
 	private final static int IDX_BaseRSSI = 1;
 
-	private final static String[] COLUMN_NAMES = new String[] { "Mote",
+	private final static String[] COLUMN_NAMES = { "Mote",
 			"BaseRSSI (-45!)" }; // TODO maybe include offset of -45 directly
 
 	private final AbstractRadioMedium radioMedium;
-	private final Observer changeObserver;
-  private final MoteCountListener moteCountListener;
 	private final Simulation sim;
 	
 	
@@ -147,13 +141,11 @@ public class BaseRSSIconf extends VisPlugin {
         }
 
         if (column == IDX_Mote) {
-          Cooja.signalMoteHighlight(radioMedium.getRegisteredRadios()[row]
-                  .getMote());
+          gui.signalMoteHighlight(radioMedium.getRegisteredRadios()[row].getMote());
           return false;
         }
         if (column == IDX_BaseRSSI) {
-          Cooja.signalMoteHighlight(radioMedium.getRegisteredRadios()[row]
-                  .getMote());
+          gui.signalMoteHighlight(radioMedium.getRegisteredRadios()[row].getMote());
           return true;
         }
         return false;
@@ -164,20 +156,8 @@ public class BaseRSSIconf extends VisPlugin {
         return getValueAt(0, c).getClass();
       }
     };
-    changeObserver = (obs, obj) -> model.fireTableDataChanged();
-		radioMedium.addRadioMediumObserver(changeObserver);
-    sim.getEventCentral().addMoteCountListener(moteCountListener = new MoteCountListener() {
-      @Override
-      public void moteWasAdded(Mote mote) {
-        model.fireTableDataChanged();
-      }
-
-      @Override
-      public void moteWasRemoved(Mote mote) {
-        model.fireTableDataChanged();
-      }
-    });
-
+    radioMedium.getRadioMediumTriggers().addTrigger(this, (obs, obj) -> model.fireTableDataChanged());
+    sim.getMoteTriggers().addTrigger(this, (o, m) -> model.fireTableDataChanged());
 		/* Represent motes and RSSI by table */
     final var combo = new JComboBox<Number>();
 		JTable motesTable = new JTable(model) {
@@ -240,7 +220,7 @@ public class BaseRSSIconf extends VisPlugin {
 
 	@Override
 	public void closePlugin() {
-		radioMedium.deleteRadioMediumObserver(changeObserver);
-    sim.getEventCentral().removeMoteCountListener(moteCountListener);
+    radioMedium.getRadioMediumTriggers().deleteTriggers(this);
+    sim.getMoteTriggers().deleteTriggers(this);
   }
 }

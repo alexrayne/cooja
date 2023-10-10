@@ -35,7 +35,7 @@ import java.awt.Point;
 import java.awt.Polygon;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Observer;
+import java.util.function.BiConsumer;
 
 import javax.swing.SwingUtilities;
 
@@ -64,10 +64,10 @@ public class TrafficVisualizerSkin implements VisualizerSkin {
   private final float[] TRANSMITTED_COLOR_RGB = Color.BLUE.getRGBColorComponents(null);
   private final float[] UNTRANSMITTED_COLOR_RGB = Color.RED.getRGBColorComponents(null);
 
-  private boolean active = false;
-  private Simulation simulation = null;
-  private Visualizer visualizer = null;
-  private AbstractRadioMedium radioMedium = null;
+  private boolean active;
+  private Simulation simulation;
+  private Visualizer visualizer;
+  private AbstractRadioMedium radioMedium;
 
   private final List<RadioConnectionArrow> historyList = new ArrayList<>();
 
@@ -75,7 +75,7 @@ public class TrafficVisualizerSkin implements VisualizerSkin {
       java.awt.EventQueue.invokeLater(() -> visualizer.repaint(500));
   }
   
-  private final Observer radioMediumObserver = (obs, obj) -> {
+  private final BiConsumer<Radio.RadioEvent, Object> radioMediumObserver = (event, obj) -> {
     RadioConnection last = radioMedium.getLastConnection();
       
     if (last != null && historyList.size() < MAX_HISTORY_SIZE) {
@@ -93,7 +93,7 @@ public class TrafficVisualizerSkin implements VisualizerSkin {
         return;
       }
 
-      if (historyList.size() > 0) {
+      if (!historyList.isEmpty()) {
 
         synchronized (historyList) {
           /* Try to increase age and remove if max age was reached */
@@ -117,7 +117,7 @@ public class TrafficVisualizerSkin implements VisualizerSkin {
     simulation.invokeSimulationThread(() -> {
       historyList.clear();
       /* Start observing radio medium for transmissions */
-      radioMedium.addRadioTransmissionObserver(radioMediumObserver);
+      radioMedium.getRadioTransmissionTriggers().addTrigger(this, radioMediumObserver);
       /* Fade away arrows */
       simulation.scheduleEvent(ageArrowsTimeEvent, simulation.getSimulationTime() + 100*Simulation.MILLISECOND);
     });
@@ -132,7 +132,7 @@ public class TrafficVisualizerSkin implements VisualizerSkin {
     }
 
     /* Stop observing radio medium */
-    radioMedium.deleteRadioTransmissionObserver(radioMediumObserver);
+    radioMedium.getRadioTransmissionTriggers().removeTrigger(this, radioMediumObserver);
   }
 
   @Override

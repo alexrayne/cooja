@@ -60,7 +60,7 @@ public class IPHCPacketAnalyzer extends PacketAnalyzer {
   public final static byte[] UNSPECIFIED_ADDRESS
           = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-  private static final byte[][] addrContexts = new byte[][]{
+  private static final byte[][] addrContexts = {
     {(byte) 0xaa, (byte) 0xaa, 0, 0, 0, 0, 0, 0}
   };
 
@@ -464,6 +464,7 @@ public class IPHCPacketAnalyzer extends PacketAnalyzer {
     verbose.append("<br/><b>IPv6</b>")
             .append(" TC = ").append(trafficClass)
             .append(", FL = ").append(flowLabel)
+            .append(", ttl = ").append(ttl)
             .append("<br>");
     verbose.append("From ");
     IPUtils.getUncompressedIPv6AddressString(verbose, srcAddress);

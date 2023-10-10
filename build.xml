@@ -35,8 +35,11 @@
     <pathelement path="${build}"/>
   	<!-- https://mvnrepository.com/artifact/org.jdom/jdom2/2.0.6.1 -->
     <pathelement location="lib/jdom2-2.0.6.1.jar"/>
-    <pathelement location="lib/log4j-core-${log4j.version}.jar"/>
-    <pathelement location="lib/log4j-api-${log4j.version}.jar"/>
+  	<!-- https://mvnrepository.com/artifact/ch.qos.logback/logback-classic -->
+    <pathelement location="lib/logback-classic-1.4.11.jar"/>
+    <pathelement location="lib/logback-core-1.4.11.jar"/>
+    <!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-api -->
+    <pathelement location="lib/slf4j-api-2.0.9.jar"/>
     
     <!-- https://search.maven.org/artifact/org.openjdk.nashorn/nashorn-core/15.4/jar -->
     <pathelement location="lib/nashorn-core-15.4.jar"/>
@@ -50,15 +53,13 @@
     
     <!-- https://mvnrepository.com/artifact/com.github.cliftonlabs/json-simple/4.0.1 -->
     <pathelement location="lib/json-simple-4.0.1.jar"/>
+    <pathelement location="lib/jipv6.jar"/>
   	
     <!-- Downloaded from
          https://mvnrepository.com/artifact/info.picocli/picocli/4.7.3 -->
     <pathelement location="lib/picocli-4.7.3.jar"/>
-    <pathelement location="lib/syntaxpane-1.2.1.jar"/>
+    <pathelement location="lib/syntaxpane-1.3.0.jar"/>
     <pathelement location="lib/swingx-autocomplete-1.6.5-1.jar"/>
-    <!-- Copied into dist/lib by the mspsim rule -->
-    <pathelement location="dist/lib/jipv6.jar" />
-    <pathelement location="dist/lib/mspsim.jar" />
   </path>
 
   <target name="help">
@@ -131,7 +132,7 @@ The COOJA Simulator
     <ant antfile="build.xml" dir="apps/avrora" target="jar" inheritAll="false"/>
   </target>
 
-  <target name="compile" depends="mspsim">
+  <target name="compile">
     <mkdir dir="${build}"/>
     <javac srcdir="tools/coffee-manager" destdir="${build}" debug="on" release="${languageversion}"
            includeantruntime="false"
@@ -238,4 +239,122 @@ The COOJA Simulator
     </copy>
   </target>
 
+
+  <target name="runesb" depends="jar" description="run MSPSim with platform ESB">
+    <property name="FIRMWAREFILE" value="firmware/esb/sensor-demo.esb"/>
+    <java fork="true" classpath="${dist}/cooja.jar"
+          classname="se.sics.mspsim.platform.esb.ESBNode">
+      <arg value="${FIRMWAREFILE}"/>
+      <arg line="${args}"/>
+    </java>
+  </target>
+
+  <target name="runsky" depends="jar" description="run MSPSim with platform Sky">
+    <property name="FIRMWAREFILE" value="firmware/sky/blink.sky"/>
+    <java fork="true" classpath="${dist}/cooja.jar"
+          classname="se.sics.mspsim.platform.sky.SkyNode">
+      <arg value="${FIRMWAREFILE}"/>
+      <arg line="${args}"/>
+    </java>
+  </target>
+
+  <target name="runskyprof" depends="jar" description="run MSPSim with platform Sky for profiling">
+    <property name="FIRMWAREFILE" value="firmware/sky/blink.sky"/>
+    <java fork="true" classpath="${dist}/cooja.jar"
+          classname="se.sics.mspsim.platform.sky.SkyNode">
+      <jvmarg value="-agentlib:yjpagent" />
+      <arg value="${FIRMWAREFILE}"/>
+      <arg line="${args}"/>
+    </java>
+  </target>
+
+  <target name="runtelos" depends="jar" description="run MSPSim with platform Telos">
+    <property name="FIRMWAREFILE" value="firmware/sky/blink.sky"/>
+    <java fork="true" classpath="${dist}/cooja.jar"
+          classname="se.sics.mspsim.platform.sky.TelosNode">
+      <arg value="${FIRMWAREFILE}"/>
+      <arg line="${args}"/>
+    </java>
+  </target>
+
+  <target name="runjcreate" depends="jar" description="run MSPSim with platform Sentilla JCreate">
+    <property name="FIRMWAREFILE" value="firmware/sky/blink.sky"/>
+    <java fork="true" classpath="${dist}/cooja.jar"
+          classname="se.sics.mspsim.platform.jcreate.JCreateNode">
+      <arg value="${FIRMWAREFILE}"/>
+      <arg line="${args}"/>
+    </java>
+  </target>
+
+  <target name="runsentillausb" depends="jar" description="run MSPSim with platform Sentilla Gateway USB">
+    <property name="FIRMWAREFILE" value="firmware/sky/blink.sky"/>
+    <java fork="true" classpath="${dist}/cooja.jar"
+          classname="se.sics.mspsim.platform.sentillausb.SentillaUSBNode">
+      <arg value="${FIRMWAREFILE}"/>
+      <arg line="${args}"/>
+    </java>
+  </target>
+
+  <target name="runz1" depends="jar" description="run MSPSim with platform Zolertia Z1">
+    <property name="FIRMWAREFILE" value="firmware/z1/blink.z1"/>
+    <java fork="true" classpath="${dist}/cooja.jar"
+          classname="se.sics.mspsim.platform.z1.Z1Node">
+      <arg value="${FIRMWAREFILE}"/>
+      <arg line="${args}"/>
+    </java>
+  </target>
+
+  <target name="runwismote" depends="jar" description="run MSPSim with platform Wismote">
+    <property name="FIRMWAREFILE" value="firmware/wismote/blink.wismote"/>
+    <java fork="true" classpath="${dist}/cooja.jar"
+          classname="se.sics.mspsim.platform.wismote.WismoteNode">
+      <arg value="${FIRMWAREFILE}"/>
+      <arg line="${args}"/>
+    </java>
+  </target>
+
+  <target name="runtyndall" depends="jar" description="run MSPSim with platform Tyndall">
+    <property name="FIRMWAREFILE" value="firmware/tyndall/blink.tyndall"/>
+    <java fork="true" classpath="${dist}/cooja.jar"
+          classname="se.sics.mspsim.platform.tyndall.TyndallNode">
+      <arg value="${FIRMWAREFILE}"/>
+      <arg line="${args}"/>
+    </java>
+  </target>
+
+  <target name="runexp5438" depends="jar" description="run MSPSim with platform exp5438">
+    <property name="FIRMWAREFILE" value="firmware/exp5438/tesetcase-bits.exp5438"/>
+    <java fork="true" classpath="${dist}/cooja.jar"
+          classname="se.sics.mspsim.platform.ti.Exp5438">
+      <arg value="${FIRMWAREFILE}"/>
+      <arg line="${args}"/>
+    </java>
+  </target>
+
+  <target name="run-mspsim" depends="jar" description="run MSPSim">
+    <property name="FIRMWAREFILE" value="firmware/sky/blink.sky"/>
+    <java fork="true" classpath="${dist}/cooja.jar"
+          classname="se.sics.mspsim.Main">
+      <arg value="${FIRMWAREFILE}"/>
+      <arg line="${args}"/>
+    </java>
+  </target>
+
+  <target name="test-cpu" depends="jar" description="run MSPSim CPU test">
+    <java fork="true" classpath="${dist}/cooja.jar"
+          classname="se.sics.mspsim.util.Test"
+          failonerror="true" timeout="10000">
+      <arg value="firmware/sky/cputest.sky"/>
+    </java>
+  </target>
+
+  <target name="test-timer" depends="jar" description="run MSPSim Timer test">
+    <java fork="true" classpath="${dist}/cooja.jar"
+          classname="se.sics.mspsim.util.Test"
+          failonerror="true" timeout="10000">
+      <arg value="firmware/sky/timertest.sky"/>
+    </java>
+  </target>
+
+  <target name="test" depends="jar, test-cpu, test-timer"/>
 </project>

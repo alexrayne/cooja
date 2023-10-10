@@ -38,8 +38,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemListener;
 import java.awt.event.ItemEvent;
-import java.util.Observable;
-import java.util.Observer;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
@@ -65,6 +63,7 @@ import org.contikios.cooja.HasQuickHelp;
 import org.contikios.cooja.PluginType;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.VisPlugin;
+import org.contikios.cooja.util.EventTriggers;
 
 /**
  * Control panel for starting and pausing the current simulation.
@@ -82,8 +81,6 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
   private final JButton stopButton;
   private final JLabel simulationTime;
   private final JLabel simulationSpeedup;
-
-  private final Observer simObserver;
 
   private long lastSimulationTimeTimestamp;
   private long lastSystemTimeTimestamp;
@@ -211,14 +208,11 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
     this.lastSimulationTimeTimestamp = 0;
 
     /* Observe current simulation */
-    simulation.addObserver(simObserver = new Observer() {
-      @Override
-      public void update(Observable obs, Object obj) {
-        SwingUtilities.invokeLater(() -> updateValues());
-      }
-    });
+    simulation.getSimulationStateTriggers().addTrigger(this
+            , (op, sim) ->{ SwingUtilities.invokeLater(() -> updateValues(op));}
+            );
     /* Set initial values */
-    updateValues();
+    updateValues(EventTriggers.Operation.STOP);
     
     /* XXX HACK: here we set the position and size of the window when it
      * appears on a blank simulation screen. */
@@ -445,7 +439,7 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
     }
   }
 
-  private void updateValues() {
+  private void updateValues(EventTriggers.Operation op) {
       /* Update current time */
       simulationTime.setText(getTimeString());
       simulationSpeedup.setText("Speed: ---");
@@ -506,9 +500,7 @@ public class SimControl extends VisPlugin implements HasQuickHelp {
   @Override
   public void closePlugin() {
     /* Remove simulation observer */
-    if (simObserver != null) {
-      simulation.deleteObserver(simObserver);
-    }
+    simulation.getSimulationStateTriggers().deleteTriggers(this);
 
     /* Remove label update timer */
     //updateLabelTimer.stop();

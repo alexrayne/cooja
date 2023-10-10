@@ -84,14 +84,11 @@ import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableModel;
 import javax.swing.table.TableRowSorter;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.Plugin;
 import org.contikios.cooja.PluginType;
-import org.contikios.cooja.SimEventCentral.MoteCountListener;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.TimeEvent;
 import org.contikios.cooja.VisPlugin;
@@ -104,9 +101,12 @@ import org.contikios.cooja.mote.memory.MemoryInterface.SegmentMonitor;
 import org.contikios.cooja.mote.memory.VarMemory;
 import org.contikios.cooja.motes.AbstractEmulatedMote;
 import org.contikios.cooja.util.ArrayQueue;
+import org.contikios.cooja.util.EventTriggers;
 import org.contikios.cooja.util.IPUtils;
 import org.contikios.cooja.util.StringUtils;
 import org.jdom2.Element;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author Fredrik Osterlind, Niclas Finne
@@ -116,7 +116,7 @@ import org.jdom2.Element;
 public class BufferListener extends VisPlugin
     implements TimeSelect
 {
-  private static final Logger logger = LogManager.getLogger(BufferListener.class);
+  private static final Logger logger = LoggerFactory.getLogger(BufferListener.class);
 
   private final static int COLUMN_TIME = 0;
   private final static int COLUMN_FROM = 1;
@@ -166,8 +166,8 @@ public class BufferListener extends VisPlugin
     registerBufferType(CustomPointerBuffer.class);
   }
 
-  private Parser parser = null;
-  private Buffer buffer = null;
+  private Parser parser;
+  private Buffer buffer;
   @Override
   public void startPlugin() {
     super.startPlugin();
@@ -184,8 +184,8 @@ public class BufferListener extends VisPlugin
     }
   }
 
-  private boolean formatTimeString = false;
-  private boolean hasHours = false;
+  private boolean formatTimeString;
+  private boolean hasHours;
 
   private final JTable logTable;
   private final TableRowSorter<TableModel> logFilter;
@@ -199,18 +199,16 @@ public class BufferListener extends VisPlugin
 
   private final AbstractTableModel model;
 
-  private final MoteCountListener logOutputListener;
-
-  private boolean backgroundColors = false;
+  private boolean backgroundColors;
   private final JCheckBoxMenuItem colorCheckbox;
 
-  private boolean inverseFilter = false;
+  private boolean inverseFilter;
   private final JCheckBoxMenuItem inverseFilterCheckbox;
 
   private boolean hideReads = true;
   private final JCheckBoxMenuItem hideReadsCheckbox;
 
-  private boolean withStackTrace = false;
+  private boolean withStackTrace;
   private final JCheckBoxMenuItem withStackTraceCheckbox;
 
   private final JMenu bufferMenu = new JMenu("Buffer");
@@ -355,7 +353,7 @@ public class BufferListener extends VisPlugin
       }
     };
     DefaultTableCellRenderer cellRenderer = new DefaultTableCellRenderer() {
-      private final Color[] BG_COLORS = new Color[] {
+      private final Color[] BG_COLORS = {
           new Color(200, 200, 200),
           new Color(200, 200, 255),
           new Color(200, 255, 200),
@@ -441,7 +439,7 @@ public class BufferListener extends VisPlugin
       }
     });
     logTable.addMouseListener(new MouseAdapter() {
-      private Parser lastParser = null;
+      private Parser lastParser;
       @Override
       public void mousePressed(MouseEvent e) {
         if (e.getButton() != MouseEvent.BUTTON2) {
@@ -484,7 +482,7 @@ public class BufferListener extends VisPlugin
         if (d == null) {
           return;
         }
-        Cooja.signalMoteHighlight(d.mote);
+        gui.signalMoteHighlight(d.mote);
       }
     });
 
@@ -597,20 +595,15 @@ public class BufferListener extends VisPlugin
     });
 
     logUpdateAggregator.start();
-    simulation.getEventCentral().addMoteCountListener(logOutputListener = new MoteCountListener() {
-      @Override
-      public void moteWasAdded(Mote mote) {
-        /* Update title */
+    simulation.getMoteTriggers().addTrigger(this, (event, m) -> {
+      if (event == EventTriggers.AddRemove.ADD) {
         try {
-          startMonitoring(mote);
+          startMonitoring(m);
         } catch (Exception e) {
-          logger.warn("Could not monitor buffer on: " + mote, e);
+          logger.warn("Could not monitor buffer on: " + m, e);
         }
-      }
-      @Override
-      public void moteWasRemoved(Mote mote) {
-        /* Update title */
-        stopObserving(mote);
+      } else {
+        stopObserving(m);
       }
     });
 
@@ -661,10 +654,10 @@ public class BufferListener extends VisPlugin
     updateTitle();
   }
 
-  public enum MemoryMonitorType { SEGMENT, POINTER, CONSTPOINTER }
+  public enum MemoryMonitorType { SEGMENT, POINTER }
 
   static class PointerMemoryMonitor extends SegmentMemoryMonitor {
-    private SegmentMemoryMonitor segmentMonitor = null;
+    private SegmentMemoryMonitor segmentMonitor;
     private long lastSegmentAddress = -1;
     private final long pointerAddress;
     private final int pointerSize;
@@ -732,7 +725,7 @@ public class BufferListener extends VisPlugin
     private final long address;
     private final int size;
 
-    private byte[] oldData = null;
+    private byte[] oldData;
 
     public SegmentMemoryMonitor(BufferListener bl, Mote mote, long address, int size)
     throws Exception {
@@ -821,8 +814,7 @@ public class BufferListener extends VisPlugin
 
     /* Stop observing motes */
     logUpdateAggregator.stop();
-    simulation.getEventCentral().removeMoteCountListener(logOutputListener);
-
+    simulation.getMoteTriggers().deleteTriggers(this);
     for (Mote m: simulation.getMotes()) {
       stopObserving(m);
     }
@@ -928,7 +920,7 @@ public class BufferListener extends VisPlugin
 
     try {
       final RowFilter<Object,Object> regexp;
-      if (str != null && str.length() > 0) {
+      if (str != null && !str.isEmpty()) {
         /* TODO Handle graphical components */
         regexp = RowFilter.regexFilter(str, COLUMN_FROM, COLUMN_TYPE, COLUMN_SOURCE, COLUMN_DATA);
       } else {
@@ -988,7 +980,7 @@ public class BufferListener extends VisPlugin
     public final long time;
 
     public final byte[] mem;
-    private boolean[] accessedBitpattern = null;
+    private boolean[] accessedBitpattern;
 
     public final SegmentMonitor.EventType type;
     public final String sourceStr;
@@ -1093,7 +1085,7 @@ public class BufferListener extends VisPlugin
 
       Cooja.setExternalToolsSetting("BUFFER_LISTENER_SAVEFILE", saveFile.getPath());
       if (saveFile.exists() && !saveFile.canWrite()) {
-        logger.fatal("No write access to file: " + saveFile);
+        logger.error("No write access to file: " + saveFile);
         return;
       }
 
@@ -1121,7 +1113,7 @@ public class BufferListener extends VisPlugin
         outStream.print(sb);
         outStream.close();
       } catch (Exception ex) {
-        logger.fatal("Could not write to file: " + saveFile);
+        logger.error("Could not write to file: " + saveFile);
       }
     }
   };
@@ -1355,7 +1347,7 @@ public class BufferListener extends VisPlugin
     Object parse(BufferAccess ba);
   }
   public static abstract class GraphicalParser implements Parser {
-    BufferAccess ba = null;
+    BufferAccess ba;
     @Override
     public Object parse(BufferAccess ba) {
       this.ba = ba;
@@ -1817,17 +1809,17 @@ public class BufferListener extends VisPlugin
         size = Integer.parseInt(infoComponent.getSize());
         if (size < 1 || size > MAX_BUFFER_SIZE) {
           /* Abort */
-          logger.fatal("Bad buffer size " + infoComponent.getSize() + ": min 1, max " + MAX_BUFFER_SIZE);
+          logger.error("Bad buffer size " + infoComponent.getSize() + ": min 1, max " + MAX_BUFFER_SIZE);
           return false;
         }
       } catch (RuntimeException e) {
-        logger.fatal("Failed parsing buffer size " + infoComponent.getSize() + ": " + e.getMessage(), e);
+        logger.error("Failed parsing buffer size " + infoComponent.getSize() + ": " + e.getMessage(), e);
         return false;
       }
       try {
         offset = Long.parseLong(infoComponent.getOffset());
       } catch (RuntimeException e) {
-        logger.fatal("Failed parsing buffer offset " + infoComponent.getOffset() + ": " + e.getMessage(), e);
+        logger.error("Failed parsing buffer offset " + infoComponent.getOffset() + ": " + e.getMessage(), e);
         /* Abort */
         return false;
       }
@@ -1904,17 +1896,17 @@ public class BufferListener extends VisPlugin
         size = Integer.parseInt(infoComponent.getSize());
         if (size < 1 || size > MAX_BUFFER_SIZE) {
           /* Abort */
-          logger.fatal("Bad buffer size " + infoComponent.getSize() + ": min 1, max " + MAX_BUFFER_SIZE);
+          logger.error("Bad buffer size " + infoComponent.getSize() + ": min 1, max " + MAX_BUFFER_SIZE);
           return false;
         }
       } catch (RuntimeException e) {
-        logger.fatal("Failed parsing buffer size " + infoComponent.getSize() + ": " + e.getMessage(), e);
+        logger.error("Failed parsing buffer size " + infoComponent.getSize() + ": " + e.getMessage(), e);
         return false;
       }
       try {
         offset = Long.parseLong(infoComponent.getOffset());
       } catch (RuntimeException e) {
-        logger.fatal("Failed parsing buffer offset " + infoComponent.getOffset() + ": " + e.getMessage(), e);
+        logger.error("Failed parsing buffer offset " + infoComponent.getOffset() + ": " + e.getMessage(), e);
         /* Abort */
         return false;
       }

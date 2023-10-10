@@ -30,8 +30,8 @@
 
 package org.contikios.cooja.mspmote.interfaces;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Ported from contiki-2.x/core/lib/gcr.[ch].
@@ -39,17 +39,17 @@ import org.apache.logging.log4j.LogManager;
  * @author Fredrik Osterlind
  */
 public class GCRCoder {
-  private static final Logger logger = LogManager.getLogger(GCRCoder.class);
+  private static final Logger logger = LoggerFactory.getLogger(GCRCoder.class);
 
   /*
    * GCR conversion table - used for converting ordinary byte to 10-bits (or 4
    * bits to 5)
    */
-  static final int[] GCR_encode = new int[] { 0x0a, 0x0b, 0x12, 0x13, 0x0e,
+  static final int[] GCR_encode = { 0x0a, 0x0b, 0x12, 0x13, 0x0e,
       0x0f, 0x16, 0x17, 0x09, 0x19, 0x1a, 0x1b, 0x0d, 0x1d, 0x1e, 0x15 };
 
   /* 5 bits > 4 bits (0xff => invalid) */
-  static final int[] GCR_decode = new int[] { 0xff, 0xff, 0xff, 0xff, // 0 -
+  static final int[] GCR_decode = { 0xff, 0xff, 0xff, 0xff, // 0 -
       // 3invalid...
       0xff, 0xff, 0xff, 0xff, // 4 - 7 invalid...
       0xff, 0x08, 0x00, 0x01, // 8 invalid... 9 = 8, a = 0, b = 1
@@ -61,9 +61,9 @@ public class GCRCoder {
       0xff, 0x0d, 0x0e, 0xff, // 1c, 1f invalid...
   };
 
-  private int gcr_bits = 0;
+  private int gcr_bits;
 
-  private int gcr_val = 0;
+  private int gcr_val;
 
   public GCRCoder() {
   }
@@ -151,7 +151,7 @@ public class GCRCoder {
       // Try to decode byte
       gcr_decode(0xff & data[i]);
       if (!gcr_valid()) {
-        logger.fatal("GCR decoding failed, dropping packet");
+        logger.error("GCR decoding failed, dropping packet");
         return null;
       }
 

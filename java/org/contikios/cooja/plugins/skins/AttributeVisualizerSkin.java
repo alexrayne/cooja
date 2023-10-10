@@ -34,20 +34,18 @@ import java.awt.Color;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Point;
-import java.util.Observer;
-
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
-
+import java.util.function.BiConsumer;
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.Simulation;
-import org.contikios.cooja.SimEventCentral.MoteCountListener;
 import org.contikios.cooja.interfaces.MoteAttributes;
 import org.contikios.cooja.interfaces.Position;
 import org.contikios.cooja.plugins.Visualizer;
 import org.contikios.cooja.plugins.VisualizerSkin;
 import org.contikios.cooja.ui.ColorUtils;
+import org.contikios.cooja.util.EventTriggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Visualizer skin for mote attributes.
@@ -57,25 +55,19 @@ import org.contikios.cooja.ui.ColorUtils;
  */
 @ClassDescription("Mote attributes")
 public class AttributeVisualizerSkin implements VisualizerSkin {
-  private static final Logger logger = LogManager.getLogger(AttributeVisualizerSkin.class);
+  private static final Logger logger = LoggerFactory.getLogger(AttributeVisualizerSkin.class);
 
-  private Simulation simulation = null;
-  private Visualizer visualizer = null;
+  private Simulation simulation;
+  private Visualizer visualizer;
 
-  private final Observer attributesObserver = (obs, obj) -> visualizer.repaint();
-  private final MoteCountListener newMotesListener = new MoteCountListener() {
-    @Override
-    public void moteWasAdded(Mote mote) {
-      MoteAttributes intf = mote.getInterfaces().getInterfaceOfType(MoteAttributes.class);
-      if (intf != null) {
-        intf.addObserver(attributesObserver);
-      }
-    }
-    @Override
-    public void moteWasRemoved(Mote mote) {
-      MoteAttributes intf = mote.getInterfaces().getInterfaceOfType(MoteAttributes.class);
-      if (intf != null) {
-        intf.deleteObserver(attributesObserver);
+  private final BiConsumer<EventTriggers.AddRemoveUpdate, MoteAttributes.MoteAttributeUpdateData> attributesTrigger = (obs, obj) -> visualizer.repaint();
+  private final BiConsumer<EventTriggers.AddRemove, Mote> newMotesListener = (event, mote) -> {
+    var intf = mote.getInterfaces().getInterfaceOfType(MoteAttributes.class);
+    if (intf != null) {
+      if (event == EventTriggers.AddRemove.ADD) {
+        intf.getAttributesTriggers().addTrigger(this, attributesTrigger);
+      } else {
+        intf.getAttributesTriggers().removeTrigger(this, attributesTrigger);
       }
     }
   };
@@ -85,17 +77,17 @@ public class AttributeVisualizerSkin implements VisualizerSkin {
     this.simulation = simulation;
     this.visualizer = vis;
 
-    simulation.getEventCentral().addMoteCountListener(newMotesListener);
+    simulation.getMoteTriggers().addTrigger(this, newMotesListener);
     for (Mote m: simulation.getMotes()) {
-      newMotesListener.moteWasAdded(m);
+      newMotesListener.accept(EventTriggers.AddRemove.ADD, m);
     }
   }
 
   @Override
   public void setInactive() {
-    simulation.getEventCentral().removeMoteCountListener(newMotesListener);
+    simulation.getMoteTriggers().removeTrigger(this, newMotesListener);
     for (Mote m: simulation.getMotes()) {
-      newMotesListener.moteWasRemoved(m);
+      newMotesListener.accept(EventTriggers.AddRemove.REMOVE, m);
     }
   }
 

@@ -57,7 +57,7 @@ public class MspCycleWatcher extends VisPlugin implements MotePlugin {
   private final Simulation simulation;
   private final JTextField cycleTextField = new JTextField("");
   private final JTextField resetTextField = new JTextField("");
-  private long cycleReset = 0;
+  private long cycleReset;
 
   public MspCycleWatcher(Mote mote, Simulation simulationToVisualize, Cooja gui) {
     super("Msp Cycle Watcher", gui);
@@ -95,13 +95,6 @@ public class MspCycleWatcher extends VisPlugin implements MotePlugin {
     simulation.getSimulationStateTriggers().addTrigger(this, (obs, obj) -> updateLabels());
 
     updateLabels();
-
-    // Tries to select this plugin
-    try {
-      setSelected(true);
-    } catch (java.beans.PropertyVetoException e) {
-      // Could not select
-    }
   }
 
   private void updateLabels() {

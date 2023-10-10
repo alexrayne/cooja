@@ -61,10 +61,7 @@ import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Enumeration;
-import java.util.Observable;
-import java.util.Observer;
 import java.util.Random;
-
 import javax.swing.AbstractAction;
 import javax.swing.AbstractButton;
 import javax.swing.Action;
@@ -89,8 +86,6 @@ import javax.swing.Popup;
 import javax.swing.PopupFactory;
 import javax.swing.ProgressMonitor;
 import javax.swing.filechooser.FileNameExtensionFilter;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 import org.jdom2.Element;
 
 import org.contikios.cooja.ClassDescription;
@@ -103,6 +98,8 @@ import org.contikios.cooja.interfaces.DirectionalAntennaRadio;
 import org.contikios.cooja.interfaces.Position;
 import org.contikios.cooja.interfaces.Radio;
 import org.contikios.mrm.ChannelModel.TxPair;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The class AreaViewer belongs to the MRM package.
@@ -121,22 +118,28 @@ import org.contikios.mrm.ChannelModel.TxPair;
 @PluginType(PluginType.PType.SIM_PLUGIN)
 @SupportedArguments(radioMediums = {MRM.class})
 public class AreaViewer extends VisPlugin {
-  private static final Logger logger = LogManager.getLogger(AreaViewer.class);
+  private static final Logger logger = LoggerFactory.getLogger(AreaViewer.class);
 
-  private final JPanel canvas;
+  private final JPanel canvas = new JPanel() {
+    @Override
+    public void paintComponent(Graphics g) {
+      super.paintComponent(g);
+      repaintCanvas((Graphics2D) g);
+    }
+  };
 
   ChannelModel.TransmissionData dataTypeToVisualize = ChannelModel.TransmissionData.SIGNAL_STRENGTH;
   final ButtonGroup visTypeSelectionGroup;
 
   // General drawing parameters
   private Point lastHandledPosition = new Point(0,0);
-  private double zoomCenterX = 0.0;
-  private double zoomCenterY = 0.0;
+  private double zoomCenterX;
+  private double zoomCenterY;
   private Point zoomCenterPoint = new Point();
   private double currentZoomX = 1.0f;
   private double currentZoomY = 1.0f;
-  private double currentPanX = 0.0f;
-  private double currentPanY = 0.0f;
+  private double currentPanX;
+  private double currentPanY;
 
   private boolean drawBackgroundImage = true;
   private boolean drawCalculatedObstacles = true;
@@ -146,27 +149,27 @@ public class AreaViewer extends VisPlugin {
   private boolean drawScaleArrow = true;
 
   // Background drawing parameters (meters)
-  private double backgroundStartX = 0.0;
-  private double backgroundStartY = 0.0;
-  private double backgroundWidth = 0.0;
-  private double backgroundHeight = 0.0;
-  private Image backgroundImage = null;
-  private File backgroundImageFile = null;
+  private double backgroundStartX;
+  private double backgroundStartY;
+  private double backgroundWidth;
+  private double backgroundHeight;
+  private Image backgroundImage;
+  private File backgroundImageFile;
 
   // Obstacle drawing parameters (same scale as background)
-  private boolean needToRepaintObstacleImage = false;
-  private double obstacleStartX = 0.0;
-  private double obstacleStartY = 0.0;
-  private double obstacleWidth = 0.0;
-  private double obstacleHeight = 0.0;
-  private Image obstacleImage = null;
+  private boolean needToRepaintObstacleImage;
+  private double obstacleStartX;
+  private double obstacleStartY;
+  private double obstacleWidth;
+  private double obstacleHeight;
+  private Image obstacleImage;
 
   // Channel probabilities drawing parameters (meters)
-  private double channelStartX = 0.0;
-  private double channelStartY = 0.0;
-  private double channelWidth = 0.0;
-  private double channelHeight = 0.0;
-  private Image channelImage = null;
+  private double channelStartX;
+  private double channelStartY;
+  private double channelWidth;
+  private double channelHeight;
+  private Image channelImage;
 
   private final JSlider resolutionSlider;
   private final JScrollPane scrollControlPanel;
@@ -178,19 +181,19 @@ public class AreaViewer extends VisPlugin {
   private static final String antennaImageFilename = "/images/antenna.png";
   private final Image antennaImage;
 
-  private Radio selectedRadio = null;
+  private Radio selectedRadio;
   private boolean inSelectMode = true;
-  private boolean inTrackMode = false;
+  private boolean inTrackMode;
 
-  private ChannelModel.TrackedSignalComponents trackedComponents = null;
+  private ChannelModel.TrackedSignalComponents trackedComponents;
 
   // Coloring variables
   private final JPanel coloringIntervalPanel;
-  private double coloringHighest = 0;
-  private double coloringLowest = 0;
+  private double coloringHighest;
+  private double coloringLowest;
   private boolean coloringIsFixed = true;
 
-  private Thread attenuatorThread = null;
+  private Thread attenuatorThread;
 
   private final JCheckBox showSettingsBox;
   private final JCheckBox backgroundCheckBox;
@@ -205,9 +208,14 @@ public class AreaViewer extends VisPlugin {
   private final JRadioButton selectModeButton;
   private final JRadioButton panModeButton;
   private final JRadioButton zoomModeButton;
-  private final JRadioButton trackModeButton;
+  private final JRadioButton trackModeButton = new JRadioButton("track rays");
 
-  private final Action paintEnvironmentAction;
+  private final Action paintEnvironmentAction = new AbstractAction("Paint radio channel") {
+    @Override
+    public void actionPerformed(ActionEvent e) {
+      repaintRadioEnvironment();
+    }
+  };
 
   /**
    * Initializes an AreaViewer.
@@ -222,9 +230,21 @@ public class AreaViewer extends VisPlugin {
     currentChannelModel = currentRadioMedium.getChannelModel();
 
     // We want to listen to changes both in the channel model and the radio medium
-    currentChannelModel.addSettingsObserver(channelModelSettingsObserver);
-    currentRadioMedium.addRadioMediumObserver(radioMediumSettingsObserver);
-    currentRadioMedium.addRadioTransmissionObserver(radioMediumActivityObserver);
+    currentChannelModel.getSettingsTriggers().addTrigger(this, (event, param) -> {
+      needToRepaintObstacleImage = true;
+      canvas.repaint();
+    });
+    currentRadioMedium.getRadioMediumTriggers().addTrigger(this, (event, radio) -> {
+      // Clear selected radio (if any selected) and radio medium coverage.
+      selectedRadio = null;
+      channelImage = null;
+      trackModeButton.setEnabled(false);
+      paintEnvironmentAction.setEnabled(false);
+      canvas.repaint();
+    });
+    currentRadioMedium.getRadioTransmissionTriggers().addTrigger(this, (event, obj) -> {
+      canvas.repaint(); // Remove any selected radio (it may have been removed).
+    });
 
     // Set initial size etc.
     setSize(500, 500);
@@ -256,7 +276,6 @@ public class AreaViewer extends VisPlugin {
     zoomModeButton.setActionCommand("set zoom mode");
     zoomModeButton.addActionListener(canvasModeHandler);
 
-    trackModeButton = new JRadioButton ("track rays");
     trackModeButton.setAlignmentY(Component.BOTTOM_ALIGNMENT);
     trackModeButton.setContentAreaFilled(false);
     trackModeButton.setActionCommand("set track rays mode");
@@ -269,22 +288,15 @@ public class AreaViewer extends VisPlugin {
     group.add(zoomModeButton);
     group.add(trackModeButton);
 
-    // Create canvas
-    canvas = new JPanel() {
-      @Override
-      public void paintComponent(Graphics g) {
-        super.paintComponent(g);
-        repaintCanvas((Graphics2D) g);
-      }
-    };
+    // Configure canvas.
     canvas.setBorder(BorderFactory.createLineBorder(Color.BLACK));
     canvas.setBackground(Color.WHITE);
     canvas.setLayout(new BorderLayout());
     canvas.addMouseListener(new MouseAdapter() {
-      private Popup popUpToolTip = null;
-      private boolean temporaryZoom = false;
-      private boolean temporaryPan = false;
-      private boolean trackedPreviously = false;
+      private Popup popUpToolTip;
+      private boolean temporaryZoom;
+      private boolean temporaryPan;
+      private boolean trackedPreviously;
 
       @Override
       public void mouseReleased(MouseEvent e1) {
@@ -343,7 +355,7 @@ public class AreaViewer extends VisPlugin {
         /* Select */
         if (inSelectMode) {
           ArrayList<Radio> hitRadios = trackClickedRadio(e1.getPoint());
-          if (hitRadios == null || hitRadios.size() == 0) {
+          if (hitRadios == null || hitRadios.isEmpty()) {
             if (e1.getButton() != MouseEvent.BUTTON1) {
               selectedRadio = null;
               channelImage = null;
@@ -422,7 +434,7 @@ public class AreaViewer extends VisPlugin {
           t.setTipText("<html>" +
                   trackedComponents.log.replace("\n", "<br>").replace(" pi", " &pi;") +
                   "</html>");
-          if (t.getTipText() == null || t.getTipText().equals("")) {
+          if (t.getTipText() == null || t.getTipText().isEmpty()) {
             return;
           }
           popUpToolTip = PopupFactory.getSharedInstance().getPopup(
@@ -525,7 +537,7 @@ public class AreaViewer extends VisPlugin {
             repaint();
             break;
           default:
-            logger.fatal("Unhandled action command: " + e.getActionCommand());
+            logger.error("Unhandled action command: " + e.getActionCommand());
             break;
         }
       }
@@ -539,7 +551,7 @@ public class AreaViewer extends VisPlugin {
         }
         File file = fileChooser.getSelectedFile();
         if (!filter.accept(file)) {
-          logger.fatal("Non-supported file type, aborting");
+          logger.error("Non-supported file type, aborting");
           return false;
         }
         Toolkit toolkit = Toolkit.getDefaultToolkit();
@@ -553,14 +565,14 @@ public class AreaViewer extends VisPlugin {
             return false;
           }
         } catch (InterruptedException ex) {
-          logger.fatal("Interrupted during image loading, aborting");
+          logger.error("Interrupted during image loading, aborting");
           return false;
         }
 
         // Set virtual size of image.
         var dialog = new ImageSettingsDialog();
         if (!dialog.terminatedOK()) {
-          logger.fatal("User canceled, aborting");
+          logger.error("User canceled, aborting");
           return false;
         }
 
@@ -581,7 +593,7 @@ public class AreaViewer extends VisPlugin {
 
         var parentContainer = Cooja.getTopParentContainer();
         if (parentContainer == null) {
-          logger.fatal("Unknown parent container");
+          logger.error("Unknown parent container");
           return false;
         }
         // Show obstacle finder dialog.
@@ -631,7 +643,7 @@ public class AreaViewer extends VisPlugin {
             if (pm.isCanceled()) {
               return;
             }
-            logger.fatal("Obstacle adding exception: " + ex.getMessage());
+            logger.error("Obstacle adding exception: " + ex.getMessage());
             ex.printStackTrace();
             pm.close();
             return;
@@ -842,12 +854,6 @@ public class AreaViewer extends VisPlugin {
     visualizeChannelPanel.add(Box.createRigidArea(new Dimension(0,20)));
 
     JButton recalculateVisibleButton = new JButton("Paint radio channel");
-    paintEnvironmentAction = new AbstractAction("Paint radio channel") {
-      @Override
-      public void actionPerformed(ActionEvent e) {
-        repaintRadioEnvironment();
-      }
-    };
     paintEnvironmentAction.setEnabled(false);
     recalculateVisibleButton.setAction(paintEnvironmentAction);
     visualizeChannelPanel.add(recalculateVisibleButton);
@@ -879,16 +885,7 @@ public class AreaViewer extends VisPlugin {
     try {
       tracker.waitForAll();
     } catch (InterruptedException ex) {
-      logger.fatal("Interrupted during image loading, aborting");
-      return;
-    }
-
-
-    // Try to select current plugin
-    try {
-      setSelected(true);
-    } catch (java.beans.PropertyVetoException e) {
-      // Could not select
+      logger.error("Interrupted during image loading, aborting");
     }
   }
 
@@ -998,33 +995,30 @@ public class AreaViewer extends VisPlugin {
   /**
    * Selects which graphical parts should be painted
    */
-  private final ActionListener selectGraphicsHandler = new ActionListener() {
-    @Override
-    public void actionPerformed(ActionEvent e) {
-      if (e.getActionCommand().equals("toggle background")) {
-        drawBackgroundImage = ((JCheckBox) e.getSource()).isSelected();
-      } else if (e.getActionCommand().equals("toggle obstacles")) {
-        drawCalculatedObstacles = ((JCheckBox) e.getSource()).isSelected();
-      } else if (e.getActionCommand().equals("toggle channel")) {
-        drawChannelProbabilities = ((JCheckBox) e.getSource()).isSelected();
-      } else if (e.getActionCommand().equals("toggle radios")) {
-        drawRadios = ((JCheckBox) e.getSource()).isSelected();
+  private final ActionListener selectGraphicsHandler = e -> {
+    // FIXME: use a switch here.
+    if (e.getActionCommand().equals("toggle background")) {
+      drawBackgroundImage = ((JCheckBox) e.getSource()).isSelected();
+    } else if (e.getActionCommand().equals("toggle obstacles")) {
+      drawCalculatedObstacles = ((JCheckBox) e.getSource()).isSelected();
+    } else if (e.getActionCommand().equals("toggle channel")) {
+      drawChannelProbabilities = ((JCheckBox) e.getSource()).isSelected();
+    } else if (e.getActionCommand().equals("toggle radios")) {
+      drawRadios = ((JCheckBox) e.getSource()).isSelected();
 //      } else if (e.getActionCommand().equals("toggle radio activity")) {
 //        drawRadioActivity = ((JCheckBox) e.getSource()).isSelected();
-      } else if (e.getActionCommand().equals("toggle arrow")) {
-        drawScaleArrow = ((JCheckBox) e.getSource()).isSelected();
-      }
-
-      canvas.repaint();
+    } else if (e.getActionCommand().equals("toggle arrow")) {
+      drawScaleArrow = ((JCheckBox) e.getSource()).isSelected();
     }
+    canvas.repaint();
   };
 
   static class ObstacleFinderDialog extends JDialog {
     private final BufferedImage imageToAnalyze;
     private BufferedImage obstacleImage;
-    private JPanel canvasPanel = null;
-    private boolean[][] obstacleArray = null;
-    private boolean exitedOK = false;
+    private JPanel canvasPanel;
+    private boolean[][] obstacleArray;
+    private boolean exitedOK;
 
     private final JSlider redSlider;
     private final JSlider greenSlider;
@@ -1380,43 +1374,6 @@ public class AreaViewer extends VisPlugin {
     }
 
   /**
-   * Listens to settings changes in the radio medium.
-   */
-  private final Observer radioMediumSettingsObserver = new Observer() {
-    @Override
-    public void update(Observable obs, Object obj) {
-      // Clear selected radio (if any selected) and radio medium coverage
-      selectedRadio = null;
-      channelImage = null;
-      trackModeButton.setEnabled(false);
-      paintEnvironmentAction.setEnabled(false);
-      canvas.repaint();
-    }
-  };
-
-  /**
-   * Listens to settings changes in the radio medium.
-   */
-  private final Observer radioMediumActivityObserver = new Observer() {
-    @Override
-    public void update(Observable obs, Object obj) {
-      // Just remove any selected radio (it may have been removed)
-      canvas.repaint();
-    }
-  };
-
-  /**
-   * Listens to settings changes in the channel model.
-   */
-  private final Observer channelModelSettingsObserver = new Observer() {
-    @Override
-    public void update(Observable obs, Object obj) {
-      needToRepaintObstacleImage = true;
-      canvas.repaint();
-    }
-  };
-
-  /**
    * Returns a color corresponding to given value where higher values are more green, and lower values are more red.
    *
    * @param value Signal strength of received signal (dB)
@@ -1680,7 +1637,7 @@ public class AreaViewer extends VisPlugin {
         if (pm.isCanceled()) {
           return;
         }
-        logger.fatal("Attenuation aborted: " + ex, ex);
+        logger.error("Attenuation aborted: " + ex, ex);
       }
       pm.close();
     }, "repaintRadioEnvironment");
@@ -1937,23 +1894,23 @@ public class AreaViewer extends VisPlugin {
 
       // Decide on scale comparator
       double currentArrowDistance = 0.1; // in meters
-      if (currentZoomX < canvas.getWidth() / 2) {
+      if (currentZoomX < canvas.getWidth() / 2.0) {
         currentArrowDistance = 1; // 1m
       }
-      if (10 * currentZoomX < canvas.getWidth() / 2) {
+      if (10 * currentZoomX < canvas.getWidth() / 2.0) {
         currentArrowDistance = 10; // 10m
       }
-      if (100 * currentZoomX < canvas.getWidth() / 2) {
+      if (100 * currentZoomX < canvas.getWidth() / 2.0) {
         currentArrowDistance = 100; // 100m
       }
-      if (1000 * currentZoomX < canvas.getWidth() / 2) {
-        currentArrowDistance = 1000; // 100m
+      if (1000 * currentZoomX < canvas.getWidth() / 2.0) {
+        currentArrowDistance = 1000; // 1000m
       }
 
       // "Arrow" points
       int pixelArrowLength = (int) (currentArrowDistance * currentZoomX);
-      int[] xPoints = new int[] { -pixelArrowLength, -pixelArrowLength, -pixelArrowLength, 0, 0, 0 };
-      int[] yPoints = new int[] { -5, 5, 0, 0, -5, 5 };
+      int[] xPoints = { -pixelArrowLength, -pixelArrowLength, -pixelArrowLength, 0, 0, 0 };
+      int[] yPoints = { -5, 5, 0, 0, -5, 5 };
 
       // Paint arrow and text
       g2d.setTransform(originalTransform);
@@ -2014,7 +1971,7 @@ public class AreaViewer extends VisPlugin {
       }
     }
 
-    if (hitRadios.size() == 0) {
+    if (hitRadios.isEmpty()) {
       return null;
     }
     return hitRadios;
@@ -2023,23 +1980,16 @@ public class AreaViewer extends VisPlugin {
   @Override
   public void closePlugin() {
     // Remove all our observers
-
-    if (currentChannelModel != null && channelModelSettingsObserver != null) {
-      currentChannelModel.deleteSettingsObserver(channelModelSettingsObserver);
-    } else {
-      logger.fatal("Could not remove observer: " + channelModelSettingsObserver);
+    if (currentChannelModel != null) {
+      currentChannelModel.getSettingsTriggers().deleteTriggers(this);
     }
 
-    if (currentRadioMedium != null && radioMediumSettingsObserver != null) {
-      currentRadioMedium.deleteRadioMediumObserver(radioMediumSettingsObserver);
-    } else {
-      logger.fatal("Could not remove observer: " + radioMediumSettingsObserver);
+    if (currentRadioMedium != null) {
+      currentRadioMedium.getRadioMediumTriggers().deleteTriggers(this);
     }
 
-    if (currentRadioMedium != null && radioMediumActivityObserver != null) {
-      currentRadioMedium.deleteRadioTransmissionObserver(radioMediumActivityObserver);
-    } else {
-      logger.fatal("Could not remove observer: " + radioMediumActivityObserver);
+    if (currentRadioMedium != null) {
+      currentRadioMedium.getRadioTransmissionTriggers().deleteTriggers(this);
     }
   }
 
@@ -2205,7 +2155,7 @@ public class AreaViewer extends VisPlugin {
             try {
               tracker.waitForAll();
             } catch (InterruptedException ex) {
-              logger.fatal("Interrupted during image loading, aborting");
+              logger.error("Interrupted during image loading, aborting");
               backgroundImage = null;
             }
           }
@@ -2215,7 +2165,7 @@ public class AreaViewer extends VisPlugin {
         case "back_width" -> backgroundWidth = Double.parseDouble(element.getText());
         case "back_height" -> backgroundHeight = Double.parseDouble(element.getText());
         case "resolution" -> resolutionSlider.setValue(Integer.parseInt(element.getText()));
-        default -> logger.fatal("Unknown configuration value: " + name);
+        default -> logger.error("Unknown configuration value: " + name);
       }
     }
 
@@ -2224,16 +2174,16 @@ public class AreaViewer extends VisPlugin {
   }
 
   static class ImageSettingsDialog extends JDialog {
-    private double virtualStartX = 0.0;
-    private double virtualStartY = 0.0;
-    private double virtualWidth = 0.0;
-    private double virtualHeight = 0.0;
+    private double virtualStartX;
+    private double virtualStartY;
+    private double virtualWidth;
+    private double virtualHeight;
 
     private final JFormattedTextField virtualStartXField;
     private final JFormattedTextField virtualStartYField;
     private final JFormattedTextField virtualWidthField;
     private final JFormattedTextField virtualHeightField;
-    private boolean terminatedOK = false;
+    private boolean terminatedOK;
 
     /**
      * Creates a new dialog for settings background parameters

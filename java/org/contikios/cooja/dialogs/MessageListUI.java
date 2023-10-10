@@ -74,9 +74,9 @@ import javax.swing.JPopupMenu;
 import javax.swing.JSeparator;
 import javax.swing.ListModel;
 import javax.swing.ListSelectionModel;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.contikios.cooja.Cooja;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *
@@ -87,14 +87,14 @@ import org.contikios.cooja.Cooja;
  */
 public class MessageListUI extends JList<MessageContainer> implements MessageList {
 
-  private static final Logger logger = LogManager.getLogger(MessageListUI.class);
+  private static final Logger logger = LoggerFactory.getLogger(MessageListUI.class);
 
   private Color[] foregrounds = new Color[] { null, Color.red };
   private Color[] backgrounds = new Color[] { null, null };
   private Border[] borders = new Border[] { null, null };
 
-  private JPopupMenu popup = null;
-  private boolean hideNormal = false;
+  private JPopupMenu popup;
+  private boolean hideNormal;
   private boolean isVerticalScrollable = false;
   private boolean isAutoScrolling = true;
   private int max = -1;
@@ -237,7 +237,7 @@ public class MessageListUI extends JList<MessageContainer> implements MessageLis
 
       return new PrintStream(output);
     } catch (IOException e) {
-      logger.error(messages);
+      logger.error("IO exception on input stream: {}", messages);
       return null;
     }
   }
@@ -288,10 +288,13 @@ public class MessageListUI extends JList<MessageContainer> implements MessageLis
 
   @Override
   public void addMessage(final String message, final int type) {
-      // this is for text messages log/warn/error
+    // this is for text messages log/warn/error
+    java.awt.EventQueue.invokeLater( () -> {
       Cooja.setProgressMessage(message, type);
       StringMessage msg = new StringMessage(message, type);
-      addMessage(msg);
+      messages.add(msg);
+      updateModel();
+    });
   } 
 
   public void addMessage(final MessageContainer msg)
@@ -372,7 +375,7 @@ public class MessageListUI extends JList<MessageContainer> implements MessageLis
               if (hideNormal && msg.type == NORMAL) {
               continue;
             }
-            logger.info(msg);
+            logger.info(msg.toString());
           }
           logger.info("\n");
         });

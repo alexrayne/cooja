@@ -39,7 +39,7 @@ import org.contikios.cooja.CoreComm;
  * @see CoreComm
  * @author Fredrik Osterlind
  */
-public class CoreCommTemplate extends CoreComm {
+public class CoreCommTemplate implements CoreComm {
 
   /**
    * Loads library libFile.
@@ -56,6 +56,7 @@ public class CoreCommTemplate extends CoreComm {
   protected native void init();
   public native void kill();
   public native void setReferenceAddress(long addr);
+  public long getReferenceAddress() { return 0;}
   public native void getMemory(long rel_addr, int length, byte[] mem);
   public native void setMemory(long rel_addr, int length, byte[] mem);
 }

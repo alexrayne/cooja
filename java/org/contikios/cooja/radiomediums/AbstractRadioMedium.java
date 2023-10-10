@@ -37,12 +37,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Observable;
-import java.util.Observer;
-
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
-
+import java.util.function.BiConsumer;
 import org.contikios.cooja.RadioConnection;
 import org.contikios.cooja.RadioMedium;
 import org.contikios.cooja.RadioPacket;
@@ -50,8 +45,10 @@ import org.contikios.cooja.Simulation;
 import org.contikios.cooja.TimeEvent;
 import org.contikios.cooja.interfaces.CustomDataRadio;
 import org.contikios.cooja.interfaces.Radio;
-import org.contikios.cooja.util.ScnObservable;
+import org.contikios.cooja.util.EventTriggers;
 import org.jdom2.Element;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
@@ -70,7 +67,7 @@ import org.jdom2.Element;
  * @author Fredrik Osterlind
  */
 public abstract class AbstractRadioMedium implements RadioMedium {
-	private static final Logger logger = LogManager.getLogger(AbstractRadioMedium.class);
+	private static final Logger logger = LoggerFactory.getLogger(AbstractRadioMedium.class);
 	
 	/* Signal strengths in dBm.
 	 * Approx. values measured on TmoteSky */
@@ -84,32 +81,217 @@ public abstract class AbstractRadioMedium implements RadioMedium {
 	
 	private final ArrayList<RadioConnection> activeConnections = new ArrayList<>();
 	
-	private RadioConnection lastConnection = null;
+	private RadioConnection lastConnection;
 	
-	private final Simulation simulation;
+	protected final Simulation simulation;
 	
 	/* Bookkeeping */
-	public int COUNTER_TX = 0;
-	public int COUNTER_RX = 0;
-	public int COUNTER_INTERFERED = 0;
+	public int COUNTER_TX;
+	public int COUNTER_RX;
+	public int COUNTER_INTERFERED;
+
+  protected final EventTriggers<EventTriggers.AddRemove, Radio> radioMediumTriggers = new EventTriggers<>();
+
+  protected final EventTriggers<Radio.RadioEvent, Object> radioTransmissionTriggers = new EventTriggers<>();
+
+  /**
+   * This observer is responsible for detecting radio interface events, for example
+   * new transmissions.
+   */
+  private final BiConsumer<Radio.RadioEvent, Radio> radioEventsObserver;
+
+    /**
+     * This constructor should always be called from implemented radio mediums.
+     *
+     * @param simulation Simulation
+     */
+    public AbstractRadioMedium(Simulation simulation) {
+        this.simulation = simulation;
+        radioEventsObserver = (event, radio) -> { update(event, radio); };
+    }
 	
-	/**
-	 * Two Observables to observe the radioMedium and radioTransmissions
-	 * @see #addRadioTransmissionObserver
-	 * @see #addRadioMediumObserver
-	 */
-	protected final ScnObservable radioMediumObservable = new ScnObservable();
-	protected final ScnObservable radioTransmissionObservable = new ScnObservable();
-	
-	/**
-	 * This constructor should always be called from implemented radio mediums.
-	 *
-	 * @param simulation Simulation
-	 */
-	public AbstractRadioMedium(Simulation simulation) {
-		this.simulation = simulation;
-	}
-	
+
+    /**
+     * This observer is responsible for detecting radio interface events, for example
+     * new transmissions.
+     */
+    protected void update(Radio.RadioEvent event, Radio radio) {
+            
+            switch (event) {
+                case RECEPTION_STARTED:
+                case RECEPTION_INTERFERED:
+                case RECEPTION_FINISHED:
+                    break;
+
+                case UNKNOWN:
+                case HW_ON: {
+                    updateSignalStrengths();
+                }
+                break;
+                case HW_OFF: {
+                  // This radio must not be a connection source.
+                  if (getActiveConnectionFrom(radio) != null) {
+                    logger.error("Connection source turned off radio: " + radio);
+                  }
+
+                    removeFromActiveConnections(radio);
+                    updateSignalStrengths();
+                }
+                break;
+                case TRANSMISSION_STARTED: {
+                    if (radio.isReceiving()) {
+                        /*
+                         * Radio starts transmitting when it should be
+                         * receiving! Ok, but it won't receive the packet
+                         */
+                        radio.interfereAnyReception();
+                        for (RadioConnection conn : activeConnections) {
+                            if (conn.isDestination(radio)) {
+                                conn.addInterfered(radio);
+                            }
+                        }
+                    }
+                    
+                    RadioConnection newConnection = createConnections(radio);
+                    if (newConnection != null) {
+                        activeConnections.add(newConnection);
+                    }
+
+                    /* Update signal strengths before reception start */
+                    updateSignalStrengths();
+                    
+                    if (newConnection != null)
+                    for (Radio r : newConnection.getAllDestinations()) {
+                        invokeRemote(newConnection, r, (x)->{ x.signalReceptionStart(); } );
+                    } 
+                    
+                    /* Notify observers */
+                    lastConnection = null;
+                    radioTransmissionTriggers.trigger(Radio.RadioEvent.TRANSMISSION_STARTED, null);
+                }
+                break;
+                case TRANSMISSION_FINISHED: {
+                    /* Remove radio connection */
+
+                    RadioConnection connection = getActiveConnectionFrom(radio);
+                    if (connection == null) {
+                        return; // SilentRadioMedium will return here.
+                    }
+                    
+                    activeConnections.remove(connection);
+                    lastConnection = connection;
+                    COUNTER_TX++;
+                    for (Radio dstRadio : connection.getAllDestinations()) {
+                        invokeRemote(connection, dstRadio, (x)->{ x.signalReceptionEnd(); } );
+                    }
+                    COUNTER_RX += connection.getDestinations().length;
+                    COUNTER_INTERFERED += connection.getInterfered().length;
+                    for (Radio intRadio : connection.getInterferedNonDestinations()) {
+
+                      if (intRadio.isInterfered()) {
+                        intRadio.signalReceptionEnd();
+                      }
+                    }
+                    
+                    /* Notify observers */
+                    // TODO: observers takes old signal strengs for last transmited - right before finished
+                    //      this gives observers sence rssi for receivers.
+                    radioTransmissionTriggers.trigger(Radio.RadioEvent.TRANSMISSION_FINISHED, null);
+
+                    updateSignalStrengths();
+                    
+                }
+                break;
+                case CUSTOM_DATA_TRANSMITTED: {
+                    
+                    RadioConnection connection = getActiveConnectionFrom(radio);
+                    if (connection == null) {
+                        logger.error("No radio connection found");
+                        return;
+                    }
+                    
+                    Object data = ((CustomDataRadio) radio).getLastCustomDataTransmitted();
+                    if (data == null) {
+                        logger.error("No custom data objecTransmissiont to forward");
+                        return;
+                    }
+                    
+                    for (Radio dstRadio : connection.getAllDestinations()) {
+                        if (!(dstRadio instanceof CustomDataRadio) || 
+                            !((CustomDataRadio) dstRadio).canReceiveFrom((CustomDataRadio)radio)) {
+                            /* Radios communicate via radio packets */
+                            continue;
+                        }
+                        
+                        invokeRemote(connection, dstRadio, 
+                                new RadioMethod() {
+                                        final Object xdata = data;
+                                        public void run( Radio x) {
+                                            ((CustomDataRadio) x).receiveCustomData(xdata);
+                                        }
+                                    } 
+                                );
+                    }
+                    
+                }
+                break;
+                case PACKET_TRANSMITTED: {
+                    RadioConnection connection = getActiveConnectionFrom(radio);
+                    if (connection == null) {
+                        return; // SilentRadioMedium will return here.
+                    }
+                    
+                    RadioPacket packet = radio.getLastPacketTransmitted();
+                    if (packet == null) {
+                        logger.error("No radio packet to forward");
+                        return;
+                    }
+                    
+                    for (Radio dstRadio : connection.getAllDestinations()) {
+
+                      if ((radio instanceof CustomDataRadio) &&
+                          (dstRadio instanceof CustomDataRadio) && 
+                          ((CustomDataRadio) dstRadio).canReceiveFrom((CustomDataRadio)radio)) {
+                        /* Radios instead communicate via custom data objects */
+                        continue;
+                      }
+
+                    
+                    invokeRemote(connection, dstRadio, 
+                            new RadioMethod() {
+                                final RadioPacket xPacket = packet;
+                                public void run( Radio x) {
+                                    x.setReceivedPacket(xPacket);
+                                }
+                            } 
+                        );
+                        
+                    }
+                }
+                break;
+                default:
+                    logger.error("Unsupported radio event: " + event);
+            }
+    };
+
+    protected void invokeRemote(RadioConnection connection,  Radio radio, RadioMethod action) {
+        long delay = connection.getDestinationDelay(radio);
+            if (delay == 0) {
+                action.run(radio);
+            } else {
+                
+                /* EXPERIMENTAL: Simulating propagation delay */
+                final Radio delayedRadio = radio;
+                TimeEvent delayedEvent = new TimeEvent() {
+                    @Override
+                    public void execute(long t) {
+                        action.run(delayedRadio);
+                    }
+                };
+                simulation.scheduleEvent(delayedEvent, simulation.getSimulationTime() + delay);
+            }
+    }
+
 	/**
 	 * @return All registered radios
 	 */
@@ -145,9 +327,11 @@ public abstract class AbstractRadioMedium implements RadioMedium {
 	/* Fail if radios are on different (but configured) channels */
 	final
 	protected boolean not_same_chanel(Radio sender, Radio recv) {
-		return sender.getChannel() >= 0 &&
-				recv.getChannel() >= 0 &&
-				sender.getChannel() != recv.getChannel();
+	      var srcChannel = sender.getChannel();
+	      var dstChannel = recv.getChannel();
+	      return (srcChannel >= 0) && (dstChannel >= 0) 
+	              && (srcChannel != dstChannel)
+	              ;
 	}
 
 
@@ -231,237 +415,40 @@ public abstract class AbstractRadioMedium implements RadioMedium {
 	}
 
 
-	protected void invokeRemote(RadioConnection connection,  Radio radio, RadioMethod action) {
-		long delay = connection.getDestinationDelay(radio);
-			if (delay == 0) {
-				action.run(radio);
-			} else {
-				
-				/* EXPERIMENTAL: Simulating propagation delay */
-				final Radio delayedRadio = radio;
-				TimeEvent delayedEvent = new TimeEvent() {
-					@Override
-					public void execute(long t) {
-						action.run(delayedRadio);
-					}
-				};
-				simulation.scheduleEvent(delayedEvent, simulation.getSimulationTime() + delay);
-			}
-	}
+    @Override
+    public void registerRadioInterface(Radio radio, Simulation sim) {
+        if (radio == null) {
+            logger.warn("No radio to register");
+            return;
+        }
+        if (registeredRadios.contains(radio)) {
+            logger.warn("Alredy registrered radio to register: mote" + radio.getMote().getID() );
+            return;
+        }
+        
+        registeredRadios.add(radio);
+        radio.getRadioEventTriggers().addTrigger(this, radioEventsObserver);
+        radioMediumTriggers.trigger(EventTriggers.AddRemove.ADD, radio);
+        
+        /* Update signal strengths */
+        updateSignalStrengths();
+    }
 
-	/**
-	 * This observer is responsible for detecting radio interface events, for example
-	 * new transmissions.
-	 */
-	private final Observer radioEventsObserver = new Observer() {
-		@Override
-		public void update(Observable obs, Object obj) {
-      if (!(obs instanceof Radio radio)) {
-				logger.fatal("Radio event dispatched by non-radio object");
-				return;
-			}
-			final Radio.RadioEvent event = radio.getLastEvent();
-			
-			switch (event) {
-				case RECEPTION_STARTED:
-				case RECEPTION_INTERFERED:
-				case RECEPTION_FINISHED:
-					break;
+    @Override
+    public void unregisterRadioInterface(Radio radio, Simulation sim) {
+        if (!registeredRadios.contains(radio)) {
+            logger.warn("No radio to unregister: " + radio);
+            return;
+        }
+        radio.getRadioEventTriggers().removeTrigger(this, radioEventsObserver);
+        registeredRadios.remove(radio);
+    
+        removeFromActiveConnections(radio);
+        radioMediumTriggers.trigger(EventTriggers.AddRemove.REMOVE, radio);
 
-				case UNKNOWN:
-				case HW_ON: {
-					/* Update signal strengths */
-					updateSignalStrengths();
-				}
-				break;
-				case HW_OFF: {
-          // This radio must not be a connection source.
-          if (getActiveConnectionFrom(radio) != null) {
-            logger.fatal("Connection source turned off radio: " + radio);
-          }
-
-					/* Remove any radio connections from this radio */
-					removeFromActiveConnections(radio);
-					/* Update signal strengths */
-					updateSignalStrengths();
-				}
-				break;
-				case TRANSMISSION_STARTED: {
-					/* Create new radio connection */
-					if (radio.isReceiving()) {
-						/*
-						 * Radio starts transmitting when it should be
-						 * receiving! Ok, but it won't receive the packet
-						 */
-						radio.interfereAnyReception();
-						for (RadioConnection conn : activeConnections) {
-							if (conn.isDestination(radio)) {
-								conn.addInterfered(radio);
-							}
-						}
-					}
-					
-					RadioConnection newConnection = createConnections(radio);
-                    if (newConnection != null) {
-                        activeConnections.add(newConnection);
-                    }
-
-					/* Update signal strengths before reception start */
-					updateSignalStrengths();
-					
-					if (newConnection != null)
-					for (Radio r : newConnection.getAllDestinations()) {
-						invokeRemote(newConnection, r, (x)->{ x.signalReceptionStart(); } );
-					} 
-					
-					/* Notify observers */
-					lastConnection = null;
-					radioTransmissionObservable.setChangedAndNotify();
-				}
-				break;
-				case TRANSMISSION_FINISHED: {
-					/* Remove radio connection */
-
-					/* Connection */
-					RadioConnection connection = getActiveConnectionFrom(radio);
-					if (connection == null) {
-						return; // SilentRadioMedium will return here.
-					}
-					
-					activeConnections.remove(connection);
-					lastConnection = connection;
-					COUNTER_TX++;
-					for (Radio dstRadio : connection.getAllDestinations()) {
-						invokeRemote(connection, dstRadio, (x)->{ x.signalReceptionEnd(); } );
-					}
-					COUNTER_RX += connection.getDestinations().length;
-					COUNTER_INTERFERED += connection.getInterfered().length;
-					for (Radio intRadio : connection.getInterferedNonDestinations()) {
-
-					  if (intRadio.isInterfered()) {
-					    intRadio.signalReceptionEnd();
-					  }
-					}
-					
-					/* Notify observers */
-					// TODO: observers takes old signal strengs for last transmited - right before finished
-					//		this gives observers sence rssi for receivers.
-					radioTransmissionObservable.setChangedAndNotify();
-
-					/* Update signal strengths */
-					updateSignalStrengths();
-					
-				}
-				break;
-				case CUSTOM_DATA_TRANSMITTED: {
-					
-					/* Connection */
-					RadioConnection connection = getActiveConnectionFrom(radio);
-					if (connection == null) {
-						logger.fatal("No radio connection found");
-						return;
-					}
-					
-					/* Custom data object */
-					Object data = ((CustomDataRadio) radio).getLastCustomDataTransmitted();
-					if (data == null) {
-						logger.fatal("No custom data objecTransmissiont to forward");
-						return;
-					}
-					
-					for (Radio dstRadio : connection.getAllDestinations()) {
-						if (!(dstRadio instanceof CustomDataRadio) || 
-						    !((CustomDataRadio) dstRadio).canReceiveFrom((CustomDataRadio)radio)) {
-							/* Radios communicate via radio packets */
-							continue;
-						}
-						
-						invokeRemote(connection, dstRadio, 
-								new RadioMethod() {
-										final Object xdata = data;
-										public void run( Radio x) {
-											((CustomDataRadio) x).receiveCustomData(xdata);
-										}
-									} 
-								);
-					}
-					
-				}
-				break;
-				case PACKET_TRANSMITTED: {
-					/* Connection */
-					RadioConnection connection = getActiveConnectionFrom(radio);
-					if (connection == null) {
-						return; // SilentRadioMedium will return here.
-					}
-					
-					/* Radio packet */
-					RadioPacket packet = radio.getLastPacketTransmitted();
-					if (packet == null) {
-						logger.fatal("No radio packet to forward");
-						return;
-					}
-					
-					for (Radio dstRadio : connection.getAllDestinations()) {
-
-					  if ((radio instanceof CustomDataRadio) &&
-					      (dstRadio instanceof CustomDataRadio) && 
-					      ((CustomDataRadio) dstRadio).canReceiveFrom((CustomDataRadio)radio)) {
-					    /* Radios instead communicate via custom data objects */
-					    continue;
-					  }
-
-					
-					invokeRemote(connection, dstRadio, 
-							new RadioMethod() {
-								final RadioPacket xPacket = packet;
-								public void run( Radio x) {
-									x.setReceivedPacket(xPacket);
-								}
-							} 
-						);
-						
-					}
-				}
-				break;
-				default:
-					logger.fatal("Unsupported radio event: " + event);
-			}
-		}
-	};
-
-	@Override
-	public void registerRadioInterface(Radio radio, Simulation sim) {
-		if (radio == null) {
-			logger.warn("No radio to register");
-			return;
-		}
-		
-		registeredRadios.add(radio);
-		radio.addObserver(radioEventsObserver);
-		radioMediumObservable.setChangedAndNotify();
-		
-		/* Update signal strengths */
-		updateSignalStrengths();
-	}
-	
-	@Override
-	public void unregisterRadioInterface(Radio radio, Simulation sim) {
-		if (!registeredRadios.contains(radio)) {
-			logger.warn("No radio to unregister: " + radio);
-			return;
-		}
-		
-		radio.deleteObserver(radioEventsObserver);
-		registeredRadios.remove(radio);
-		
-		removeFromActiveConnections(radio);
-		
-		radioMediumObservable.setChangedAndNotify();
-		
-		/* Update signal strengths */
-		updateSignalStrengths();
-	}
+        /* Update signal strengths */
+        updateSignalStrengths();
+    }
 	
 	/**
 	* Get the RSSI value that is set when there is "silence"
@@ -487,8 +474,10 @@ public abstract class AbstractRadioMedium implements RadioMedium {
 	*          The RSSI value to set during silence
 	*/
 	public void setBaseRssi(Radio radio, double rssi) {
-		baseRssi.put(radio, rssi);
-		simulation.invokeSimulationThread(this::updateSignalStrengths);
+    simulation.invokeSimulationThread(() -> {
+      baseRssi.put(radio, rssi);
+      updateSignalStrengths();
+    });
 	}
 
 	
@@ -517,47 +506,32 @@ public abstract class AbstractRadioMedium implements RadioMedium {
 	*          The minimum RSSI value to set when sending
 	*/
 	public void setSendRssi(Radio radio, double rssi) {
-		sendRssi.put(radio, rssi);
+    simulation.invokeSimulationThread(() -> sendRssi.put(radio, rssi));
 	}
 	
-	/**
-	 * Register an observer that gets notified when the radiotransmissions changed.
-	 * E.g. creating new connections.
-	 * This does not include changes in the settings and (de-)registration of radios.
-	 * @see #addRadioMediumObserver
-	 * @param observer the Observer to register
-	 */
-	@Override
-	public void addRadioTransmissionObserver(Observer observer) {
-		radioTransmissionObservable.addObserver(observer);
-	}
-	
-	@Override
-	public Observable getRadioTransmissionObservable() {
-		return radioTransmissionObservable;
-	}
-	
-	@Override
-	public void deleteRadioTransmissionObserver(Observer observer) {
-		radioTransmissionObservable.deleteObserver(observer);
-	}
-	
-	/**
-	 * Register an observer that gets notified when the radio medium changed.
-	 * This includes changes in the settings and (de-)registration of radios. 
-	 * This does not include transmissions, etc. as these are part of the radio
-	 * and not the radio medium itself.
-	 * @see #addRadioTransmissionObserver
-	 * @param observer the Observer to register
-	 */
-	public void addRadioMediumObserver(Observer observer) {
-		radioMediumObservable.addObserver(observer);
-	}
+  /**
+   * Register an observer that gets notified when the radio transmissions changed,
+   * e.g. creating new connections. Radio registration is covered by the medium triggers.
+   * @see #getRadioMediumTriggers()
+   */
+  @Override
+  public EventTriggers<Radio.RadioEvent, Object> getRadioTransmissionTriggers() {
+    return radioTransmissionTriggers;
+  }
 
-	public void deleteRadioMediumObserver(Observer observer) {
-		radioMediumObservable.deleteObserver(observer);
-	}
-	
+
+  /** Get the radio medium triggers for when the radio medium is changed.
+   * <p>
+   * This includes changes in the settings and (de-)registration of radios.
+   * This does not include transmissions, etc. as these are part of the radio
+   * and not the radio medium itself.
+   * <p>
+   * Sends ADD+null when change is unknown, otherwise sends ADD/REMOVE+radio.
+   */
+  public EventTriggers<EventTriggers.AddRemove, Radio> getRadioMediumTriggers() {
+    return radioMediumTriggers;
+  }
+
 	@Override
 	public RadioConnection getLastConnection() {
 		return lastConnection;

@@ -34,8 +34,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import org.jdom2.Element;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.contikios.cooja.interfaces.PolledAfterActiveTicks;
 import org.contikios.cooja.interfaces.PolledAfterAllTicks;
@@ -75,8 +75,8 @@ import org.contikios.cooja.contikimote.interfaces.ContikiRadio;
  * @author      Fredrik Osterlind
  */
 public class ContikiMote extends AbstractWakeupMote<ContikiMoteType, SectionMoteMemory> {
-  private static final Logger logger = LogManager.getLogger(ContikiMote.class);
-  
+  private static final Logger logger = LoggerFactory.getLogger(ContikiMote.class);
+
   public enum MoteState{ STATE_OK, STATE_EXEC, STATE_HANG};
   public MoteState execute_state = MoteState.STATE_OK;
   private final ArrayList<PolledBeforeActiveTicks> polledBeforeActive = new ArrayList<>();
@@ -93,9 +93,8 @@ public class ContikiMote extends AbstractWakeupMote<ContikiMoteType, SectionMote
    * @param sim Mote's simulation
    */
   protected ContikiMote(ContikiMoteType moteType, Simulation sim) throws MoteType.MoteTypeCreationException {
-    super(moteType, sim);
-    moteMemory = moteType.createInitialMemory();
-    moteInterfaces = new MoteInterfaceHandler(this, moteType.getMoteInterfaceClasses());
+    super(moteType, moteType.createInitialMemory(), sim);
+    moteInterfaces = new MoteInterfaceHandler(this);
     for (var intf : moteInterfaces.getInterfaces()) {
       if (intf instanceof PolledBeforeActiveTicks) {
         polledBeforeActive.add( (PolledBeforeActiveTicks)intf );
@@ -135,9 +134,18 @@ public class ContikiMote extends AbstractWakeupMote<ContikiMoteType, SectionMote
   public void execute(long simTime) {
     if (execute_state != MoteState.STATE_OK)
         return;
-    /* Poll mote interfaces */
-    polledBeforeActive.forEach(PolledBeforeActiveTicks::doActionsBeforeTick);
-    polledBeforePassive.forEach(PolledBeforeAllTicks::doActionsBeforeTick);
+    // (Jan 2023, Java 17/IntelliJ): Keep the interface actions in explicit for-loops,
+    // so costs are clearly attributed in performance profiles.
+    for (int i = 0; i < polledBeforeActive.size(); ++i) {
+        var moteInterface = polledBeforeActive.get(i);
+        if (moteInterface != null)
+            moteInterface.doActionsBeforeTick();
+    }
+    for (int i = 0; i < polledBeforePassive.size(); ++i) {
+      var moteInterface = polledBeforePassive.get(i);
+      if (moteInterface != null)
+          moteInterface.doActionsBeforeTick();
+    }
 
     /* Check if pre-boot time */
     var moteTime = moteInterfaces.getClock().getTime();
@@ -159,7 +167,7 @@ public class ContikiMote extends AbstractWakeupMote<ContikiMoteType, SectionMote
         execute_state = MoteState.STATE_HANG;
         //coffeecatch_throw_exception rises Error
         String dump = StringUtils.dumpStackTrace(e);
-        logger.fatal( "mote" + getID() 
+        logger.error( "mote" + getID() 
                       + "crashed with:" + e.toString()
                       + dump 
                     );
@@ -168,7 +176,7 @@ public class ContikiMote extends AbstractWakeupMote<ContikiMoteType, SectionMote
         execute_state = MoteState.STATE_HANG;
         //coffeecatch_throw_exception rises Error
         String dump = StringUtils.dumpStackTrace(e);
-        logger.fatal( "mote" + getID() 
+        logger.error( "mote" + getID() 
                       + "crashed with:" + e.toString()
                       + dump 
                     );
@@ -177,7 +185,7 @@ public class ContikiMote extends AbstractWakeupMote<ContikiMoteType, SectionMote
         execute_state = MoteState.STATE_HANG;
         //coffeecatch_throw_exception rises Error
         String dump = StringUtils.dumpStackTrace(e);
-        logger.fatal( "mote" + getID() 
+        logger.error( "mote" + getID() 
                       + "crashed with:" + e.toString()
                       + dump 
                     );
@@ -186,10 +194,17 @@ public class ContikiMote extends AbstractWakeupMote<ContikiMoteType, SectionMote
     /* Copy mote memory from Contiki */
     moteType.getCoreMemory(moteMemory);
 
-    /* Poll mote interfaces */
     moteMemory.pollForMemoryChanges();
-    polledAfterActive.forEach(PolledAfterActiveTicks::doActionsAfterTick);
-    polledAfterPassive.forEach(PolledAfterAllTicks::doActionsAfterTick);
+    for (int i = 0; i < polledAfterActive.size(); ++i) {
+        var moteInterface = polledAfterActive.get(i);
+        if (moteInterface != null)
+            moteInterface.doActionsAfterTick();
+    }
+    for (int i = 0; i < polledAfterPassive.size(); ++i) {
+        var moteInterface = polledAfterPassive.get(i);
+        if (moteInterface != null)
+            moteInterface.doActionsAfterTick();
+    }
 
     if (execute_state != MoteState.STATE_OK) {
         simulation.stopSimulation();
@@ -250,7 +265,7 @@ public class ContikiMote extends AbstractWakeupMote<ContikiMoteType, SectionMote
               simulation.getCooja().tryLoadClass(this, MoteInterface.class, typeName);
 
       if (moteInterfaceClass == null) {
-        logger.fatal("Could not append mote interface class: " + typeName);
+        logger.error("Could not append mote interface class: " + typeName);
         return null;
       }
       else {

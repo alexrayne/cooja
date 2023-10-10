@@ -29,13 +29,13 @@
  */
 package org.contikios.cooja.emulatedmote;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.RadioPacket;
 import org.contikios.cooja.interfaces.CustomDataRadio;
 import org.contikios.cooja.interfaces.Position;
 import org.contikios.cooja.interfaces.Radio;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 802.15.4 radio class for COOJA.
@@ -47,28 +47,28 @@ public abstract class Radio802154 extends Radio implements CustomDataRadio {
 
     private final static boolean DEBUG = false;
     
-    private static final Logger logger = LogManager.getLogger(Radio802154.class);
+    private static final Logger logger = LoggerFactory.getLogger(Radio802154.class);
 
-    protected long lastEventTime = 0;
+    protected long lastEventTime;
 
     protected RadioEvent lastEvent = RadioEvent.UNKNOWN;
 
-    protected boolean isInterfered = false;
+    protected boolean isInterfered;
 
     private final boolean isTransmitting = false;
 
-    protected boolean isReceiving = false;
+    protected boolean isReceiving;
     //    private boolean hasFailedReception = false;
 
     private final boolean radioOn = true;
 
-    private RadioByte lastOutgoingByte = null;
+    private RadioByte lastOutgoingByte;
 
-    private RadioByte lastIncomingByte = null;
+    private RadioByte lastIncomingByte;
 
-    private RadioPacket lastOutgoingPacket = null;
+    private RadioPacket lastOutgoingPacket;
 
-    private RadioPacket lastIncomingPacket = null;
+    private RadioPacket lastIncomingPacket;
 
     //    private int mode;
     protected final Mote mote;
@@ -77,22 +77,20 @@ public abstract class Radio802154 extends Radio implements CustomDataRadio {
         this.mote = mote;
     }
 
-    int len = 0;
-    int expLen = 0;
+    int len;
+    int expLen;
     final byte[] buffer = new byte[127 + 15];
     protected void handleTransmit(byte val) {
         if (len == 0) {
             lastEventTime = mote.getSimulation().getSimulationTime();
             lastEvent = RadioEvent.TRANSMISSION_STARTED;
-            setChanged();
-            notifyObservers();
+            radioEventTriggers.trigger(RadioEvent.TRANSMISSION_STARTED, this);
         }
         /* send this byte to all nodes */
         lastOutgoingByte = new RadioByte(val);
         lastEventTime = mote.getSimulation().getSimulationTime();
         lastEvent = RadioEvent.CUSTOM_DATA_TRANSMITTED;
-        setChanged();
-        notifyObservers();
+        radioEventTriggers.trigger(RadioEvent.CUSTOM_DATA_TRANSMITTED, this);
 
         buffer[len++] = val;
 
@@ -106,13 +104,11 @@ public abstract class Radio802154 extends Radio implements CustomDataRadio {
             lastOutgoingPacket = Radio802154PacketConverter.fromCC2420ToCooja(buffer);
             lastEventTime = mote.getSimulation().getSimulationTime();
             lastEvent = RadioEvent.PACKET_TRANSMITTED;
-            setChanged();
-            notifyObservers();
+            radioEventTriggers.trigger(RadioEvent.PACKET_TRANSMITTED, this);
 
             lastEventTime = mote.getSimulation().getSimulationTime();
             lastEvent = RadioEvent.TRANSMISSION_FINISHED;
-            setChanged();
-            notifyObservers();
+            radioEventTriggers.trigger(RadioEvent.TRANSMISSION_FINISHED, this);
             len = 0;
         }
     }
@@ -205,8 +201,7 @@ public abstract class Radio802154 extends Radio implements CustomDataRadio {
 
         lastEventTime = mote.getSimulation().getSimulationTime();
         lastEvent = RadioEvent.RECEPTION_STARTED;
-        setChanged();
-        notifyObservers();
+        radioEventTriggers.trigger(RadioEvent.RECEPTION_STARTED, this);
     }
 
     @Override
@@ -222,8 +217,7 @@ public abstract class Radio802154 extends Radio implements CustomDataRadio {
 
         lastEventTime = mote.getSimulation().getSimulationTime();
         lastEvent = RadioEvent.RECEPTION_FINISHED;
-        setChanged();
-        notifyObservers();
+        radioEventTriggers.trigger(RadioEvent.RECEPTION_FINISHED, this);
     }
 
     @Override
@@ -246,8 +240,7 @@ public abstract class Radio802154 extends Radio implements CustomDataRadio {
 
         lastEventTime = mote.getSimulation().getSimulationTime();
         lastEvent = RadioEvent.RECEPTION_INTERFERED;
-        setChanged();
-        notifyObservers();
+        radioEventTriggers.trigger(RadioEvent.RECEPTION_INTERFERED, this);
     }
 
     @Override

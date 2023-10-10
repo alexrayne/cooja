@@ -47,7 +47,7 @@ import org.jdom2.Element;
 public abstract class AbstractWakeupMote<T extends MoteType, M extends MemoryInterface> implements Mote {
   protected final Simulation simulation;
   protected final T moteType;
-  protected M moteMemory;
+  protected       M moteMemory;
 
   protected MoteInterfaceHandler moteInterfaces;
   private long nextWakeupTime = -1;
@@ -55,8 +55,9 @@ public abstract class AbstractWakeupMote<T extends MoteType, M extends MemoryInt
   protected final ArrayList<WatchpointListener> watchpointListeners = new ArrayList<>();
   protected final ArrayList<Watchpoint> watchpoints = new ArrayList<>();
 
-  protected AbstractWakeupMote(T moteType, Simulation sim) {
+  protected AbstractWakeupMote(T moteType, M moteMemory, Simulation sim) {
     this.moteType = moteType;
+    this.moteMemory = moteMemory;
     this.simulation = sim;
   }
 
@@ -125,8 +126,16 @@ public abstract class AbstractWakeupMote<T extends MoteType, M extends MemoryInt
   {
       for (var element : configXML) {
           var name = element.getName();
-          if (name.equals("interface_config")) {
-            if (!getInterfaces().setConfigXML(sim, element, this)) {
+          if ("breakpoints".equals(name)) {
+            for (Element elem : element.getChildren("breakpoint")) {
+              var breakpoint = createBreakpoint();
+              if (breakpoint != null && breakpoint.setConfigXML(elem.getChildren())) {
+                watchpoints.add(breakpoint);
+              }
+            }
+          } 
+          else if ("interface_config".equals(name)) {
+            if (!getInterfaces().setConfigXML(this, element, !simulation.isQuickSetup())) {
               return false;
             }
           }
@@ -138,6 +147,7 @@ public abstract class AbstractWakeupMote<T extends MoteType, M extends MemoryInt
   public boolean setConfigXML(Simulation sim, Collection<Element> configXML, boolean vis) throws MoteType.MoteTypeCreationException {
     if (!confInterfaces(sim, configXML, vis))
         return false;
+    /* Schedule us immediately */
     requestImmediateWakeup();
     return true;
   }
@@ -154,8 +164,27 @@ public abstract class AbstractWakeupMote<T extends MoteType, M extends MemoryInt
     return watchpointListeners.toArray(new WatchpointListener[0]);
   }
 
-  public Watchpoint addBreakpoint(File codeFile, int lineNr, long address) {
-    return null; // FIXME: make a usable general Watchpoint class and implement this method.
+  protected Watchpoint createBreakpoint() {
+    // Implemented by subclasses supporting breakpoints
+    return null;
+  }
+
+  protected Watchpoint createBreakpoint(long address, File codeFile, int lineNr) {
+    return null;
+  }
+
+  public Watchpoint addBreakpoint(long address, File codeFile, int lineNr) {
+    var bp = createBreakpoint(address, codeFile, lineNr);
+    if (bp == null) {
+      // Breakpoints not supported by this mote type
+      return null;
+    }
+    watchpoints.add(bp);
+
+    for (WatchpointListener listener: watchpointListeners) {
+      listener.watchpointsChanged();
+    }
+    return bp;
   }
 
   public void removeBreakpoint(Watchpoint watchpoint) {
@@ -191,10 +220,6 @@ public abstract class AbstractWakeupMote<T extends MoteType, M extends MemoryInt
       return true;
     }
     return false;
-  }
-
-  public long getExecutableAddressOf(File file, int lineNr) {
-    return -1; // FIXME: this belongs in MoteType, not Mote.
   }
 
   /**
@@ -260,7 +285,7 @@ public abstract class AbstractWakeupMote<T extends MoteType, M extends MemoryInt
     return true;
   }
 
-  private HashMap<String, Object> properties = null;
+  private HashMap<String, Object> properties;
   @Override
   public void setProperty(String key, Object obj) {
     if (properties == null) {

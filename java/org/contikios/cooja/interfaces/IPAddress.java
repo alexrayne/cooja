@@ -38,8 +38,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.Mote;
@@ -59,7 +59,7 @@ import org.contikios.cooja.util.IPUtils;
  */
 @ClassDescription("IP Addresses")
 public class IPAddress implements MoteInterface {
-  private static final Logger logger = LogManager.getLogger(IPAddress.class);
+  private static final Logger logger = LoggerFactory.getLogger(IPAddress.class);
   private static final int IPv6_MAX_ADDRESSES = 4;
 
   private enum IPv {
@@ -73,17 +73,18 @@ public class IPAddress implements MoteInterface {
   private final Mote mote;
   private final VarMemory moteMem;
   private final MemoryLayout memLayout;
-  private IPContainer localIPAddr = null;
+  private IPContainer localIPAddr;
 
   private final SegmentMonitor memMonitor;
 
   private final List<IPContainer> ipList = new ArrayList<>();
 
-  private int ipv6_addr_size = 0;
-  private int ipv6_addr_list_offset = 0;
+  private int ipv6_addr_size;
+  private int ipv6_addr_list_offset;
 
   private final LinkedHashMap<JPanel, JLabel> labels = new LinkedHashMap<>();
   private final EventTriggers<Update, Mote> triggers = new EventTriggers<>();
+  private final ArrayList<MonitorPost> monitors = new ArrayList<>();
 
   public IPAddress(final Mote mote) {
     this.mote = mote;
@@ -93,8 +94,8 @@ public class IPAddress implements MoteInterface {
     /* If the ip memory sections changed, we recalculate addresses
      * and notify our observers.*/
     memMonitor = new MemoryInterface.SegmentMonitor() {
-      int accessCount = 0;
-      long lastAccess = 0;
+      int accessCount;
+      long lastAccess;
       @Override
       public void memoryChanged(MemoryInterface memory, SegmentMonitor.EventType type, long address) {
         if (type != SegmentMonitor.EventType.WRITE) {
@@ -128,10 +129,11 @@ public class IPAddress implements MoteInterface {
                       addr_of_ip,
                       16, /* Size of ip address in byte */
                       memMonitor);
+              monitors.add(new MonitorPost(addr_of_ip, 16));
             }
             /* Initial scan for IP address */
             updateIPAddresses();
-            if (ipList.size() > 0) {
+            if (!ipList.isEmpty()) {
               updateUI();
             }
             // TODO: Remove other listeners?
@@ -299,7 +301,9 @@ public class IPAddress implements MoteInterface {
       else if (ipVersion == IPv.IPv6) {
         moteMem.removeVarMonitor("uip_ds6_netif_addr_list_offset", memMonitor);
         moteMem.removeVarMonitor("uip_ds6_addr_size", memMonitor);
-        moteMem.removeVarMonitor("uip_ds6_if", memMonitor);
+      for (var entry : monitors) {
+        moteMem.removeMemoryMonitor(entry.address, entry.size, memMonitor);
+      }
       }
     }
   }
@@ -407,4 +411,6 @@ public class IPAddress implements MoteInterface {
       }
     }
   }
+
+  private record MonitorPost(long address, int size) {}
 }

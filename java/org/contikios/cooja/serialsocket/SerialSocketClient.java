@@ -49,7 +49,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Observer;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
@@ -61,8 +60,6 @@ import javax.swing.JSeparator;
 import javax.swing.JTextField;
 import javax.swing.border.EtchedBorder;
 import javax.swing.text.NumberFormatter;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 import org.jdom2.Element;
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
@@ -73,6 +70,8 @@ import org.contikios.cooja.PluginType;
 import org.contikios.cooja.Simulation;
 import org.contikios.cooja.VisPlugin;
 import org.contikios.cooja.interfaces.SerialPort;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Socket to simulated serial port forwarder. Client version.
@@ -83,7 +82,7 @@ import org.contikios.cooja.interfaces.SerialPort;
 @ClassDescription("Serial Socket (CLIENT)")
 @PluginType(PluginType.PType.MOTE_PLUGIN)
 public class SerialSocketClient implements Plugin, MotePlugin {
-  private static final Logger logger = LogManager.getLogger(SerialSocketClient.class);
+  private static final Logger logger = LoggerFactory.getLogger(SerialSocketClient.class);
 
   private static final String SERVER_DEFAULT_HOST = "localhost";
   private static final int SERVER_DEFAULT_PORT = 1234;
@@ -95,8 +94,6 @@ public class SerialSocketClient implements Plugin, MotePlugin {
   private static final Color ST_COLOR_FAILED = Color.RED;
   
   private final SerialPort serialPort;
-  private Observer serialDataObserver;
-
   private JLabel socketToMoteLabel;
   private JLabel moteToSocketLabel;
   private JLabel socketStatusLabel;
@@ -104,7 +101,7 @@ public class SerialSocketClient implements Plugin, MotePlugin {
   private JFormattedTextField serverPortField;
   private JButton serverSelectButton;
   
-  private int inBytes = 0, outBytes = 0;
+  private int inBytes, outBytes;
 
   private Socket socket;
   private DataInputStream in;
@@ -246,7 +243,7 @@ public class SerialSocketClient implements Plugin, MotePlugin {
           serverPortField.commitEdit();
           startClient(serverHostField.getText(), ((Long) serverPortField.getValue()).intValue());
         } catch (ParseException ex) {
-          logger.error(ex);
+          logger.error("Server port '{}' is not a number", serverPortField.getText());
         }
       } else { // Close socket.
         cleanup();
@@ -254,8 +251,9 @@ public class SerialSocketClient implements Plugin, MotePlugin {
     });
 
 
-    /* Observe serial port for outgoing data and write to socket */
-    serialPort.addSerialDataObserver(serialDataObserver = (obs, obj) -> {
+    // Observe serial port for outgoing data and write to socket.
+    // FIXME: update code to use data directly.
+    serialPort.getSerialDataTriggers().addTrigger(this, (event, data) -> {
       if (out == null) {
         return;
       }
@@ -374,7 +372,7 @@ public class SerialSocketClient implements Plugin, MotePlugin {
         socket.close();
         notifyClientDisconnected();
       } catch (IOException ex) {
-        logger.error(ex);
+        logger.error("Failed to close client socket:", ex);
         notifyClientError(ex.getMessage());
       } finally {
         socket = null;
@@ -497,8 +495,7 @@ public class SerialSocketClient implements Plugin, MotePlugin {
 
 
   private void cleanup() {
-    serialPort.deleteSerialDataObserver(serialDataObserver);
-
+    serialPort.getSerialDataTriggers().deleteTriggers(this);
     try {
       if (socket != null) {
         socket.close();

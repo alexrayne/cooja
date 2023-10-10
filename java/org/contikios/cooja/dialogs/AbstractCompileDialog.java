@@ -65,8 +65,6 @@ import javax.swing.KeyStroke;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.MoteInterface;
@@ -74,6 +72,8 @@ import org.contikios.cooja.interfaces.MoteID;
 import org.contikios.cooja.interfaces.Position;
 import org.contikios.cooja.mote.BaseContikiMoteType;
 import org.contikios.cooja.util.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Abstract configure mote type dialog used by Contiki-based mote type implementations.
@@ -89,11 +89,11 @@ import org.contikios.cooja.util.StringUtils;
  * @author Fredrik Osterlind
  */
 public abstract class AbstractCompileDialog extends JDialog {
-  private static final Logger logger = LogManager.getLogger(AbstractCompileDialog.class);
+  private static final Logger logger = LoggerFactory.getLogger(AbstractCompileDialog.class);
 
   protected final static Dimension LABEL_DIMENSION = new Dimension(170, 25);
 
-  private static File lastFile = null;
+  private static File lastFile;
 
   public enum DialogState {
     NO_SELECTION,
@@ -114,12 +114,12 @@ public abstract class AbstractCompileDialog extends JDialog {
   private final JButton createButton = new JButton("Create");
 
   protected final String targetName;
-  private Component currentCompilationOutput = null;
-  private Process currentCompilationProcess = null;
+  private Component currentCompilationOutput;
+  private Process currentCompilationProcess;
 
   /* Accessible at Contiki compilation success */
-  protected File contikiSource = null;
-  protected File contikiFirmware = null;
+  protected File contikiSource;
+  protected File contikiFirmware;
 
   public AbstractCompileDialog(Cooja gui, final BaseContikiMoteType moteType, BaseContikiMoteType.MoteTypeConfig cfg) {
     super(Cooja.getTopParentContainer(), "Create Mote Type: Compile Contiki", ModalityType.APPLICATION_MODAL);
@@ -238,9 +238,8 @@ public abstract class AbstractCompileDialog extends JDialog {
                   false
               );
             } catch (Exception ex) {
-              logger.fatal("Exception when compiling: " + ex.getMessage());
+              logger.error("Exception when compiling: " + ex.getMessage());
               taskOutput.addMessage(ex.getMessage(), MessageList.ERROR);
-              ex.printStackTrace();
               compilationFailureAction.actionPerformed(null);
             }
           }
@@ -256,7 +255,7 @@ public abstract class AbstractCompileDialog extends JDialog {
             moteType.getCompilationEnvironment(), new File(contikiField.getText()).getParentFile(),
             null, null, new MessageListUI(), true);
       } catch (Exception e1) {
-        logger.fatal("Clean failed: " + e1.getMessage(), e1);
+        logger.error("Clean failed: " + e1.getMessage(), e1);
       }
     });
 
@@ -312,7 +311,7 @@ public abstract class AbstractCompileDialog extends JDialog {
           }
         }
         // Select default.
-        for (var moteIntf : AbstractCompileDialog.this.moteType.getDefaultMoteInterfaceClasses()) {
+        for (var moteIntf : cfg.defaultInterfaces()) {
           addMoteInterface(moteIntf, true);
         }
       }
@@ -321,7 +320,7 @@ public abstract class AbstractCompileDialog extends JDialog {
     panel.add(BorderLayout.NORTH, b);
     panel.add(BorderLayout.CENTER, new JScrollPane(moteIntfBox));
     tabbedPane.addTab("Mote interfaces", null, panel, "Mote interfaces");
-    for (var moteInterfaces : this.moteType.getAllMoteInterfaceClasses()) {
+    for (var moteInterfaces : cfg.allInterfaces()) {
       addMoteInterface(moteInterfaces, false);
     }
 
@@ -429,9 +428,8 @@ public abstract class AbstractCompileDialog extends JDialog {
         }
       }
     }
-    Class<? extends MoteInterface>[] arr = new Class[selected.size()];
     return new BaseContikiMoteType.MoteTypeConfig(descriptionField.getText(), null, contikiField.getText(),
-            commandsArea.getText(), selected.toArray(arr));
+            commandsArea.getText(), selected, null, null);
   }
   
   /**
@@ -498,7 +496,7 @@ public abstract class AbstractCompileDialog extends JDialog {
         }
         contikiSource = null;
         contikiFirmware = new File(input);
-        cleanButton.setEnabled(true);
+        cleanButton.setEnabled(false);
         compileButton.setEnabled(false);
         createButton.setEnabled(true);
         commandsArea.setEnabled(false);
@@ -518,20 +516,11 @@ public abstract class AbstractCompileDialog extends JDialog {
   protected void addMoteInterface(Class<? extends MoteInterface> intfClass, boolean selected) {
     /* If mote interface was already added  */
     for (Component c : moteIntfBox.getComponents()) {
-      if (!(c instanceof JCheckBox)) {
+      if (!(c instanceof JCheckBox checkBox)) {
         continue;
       }
-
-      Class<? extends MoteInterface> existingClass =
-        (Class<? extends MoteInterface>)
-        ((JCheckBox) c).getClientProperty("class");
-
-      if (existingClass == null) {
-        continue;
-      }
-
-      if (existingClass == intfClass) {
-        ((JCheckBox) c).setSelected(selected);
+      if (checkBox.getClientProperty("class") == intfClass) {
+        checkBox.setSelected(selected);
         return;
       }
     }

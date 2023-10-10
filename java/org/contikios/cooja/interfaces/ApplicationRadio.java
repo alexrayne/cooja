@@ -32,8 +32,7 @@ package org.contikios.cooja.interfaces;
 
 import java.awt.BorderLayout;
 import java.util.ArrayList;
-import java.util.Observer;
-
+import java.util.function.BiConsumer;
 import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -41,13 +40,13 @@ import javax.swing.JFormattedTextField;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteTimeEvent;
 import org.contikios.cooja.RadioPacket;
 import org.contikios.cooja.Simulation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Application radio.
@@ -59,26 +58,26 @@ import org.contikios.cooja.Simulation;
  * @author Fredrik Osterlind
  */
 public class ApplicationRadio extends Radio implements NoiseSourceRadio, DirectionalAntennaRadio {
-  private static final Logger logger = LogManager.getLogger(ApplicationRadio.class);
+  private static final Logger logger = LoggerFactory.getLogger(ApplicationRadio.class);
 
   private final Simulation simulation;
   private final Mote mote;
 
-  private RadioPacket packetFromMote = null;
-  private RadioPacket packetToMote = null;
+  private RadioPacket packetFromMote;
+  private RadioPacket packetToMote;
 
-  private boolean isTransmitting = false;
-  private boolean isReceiving = false;
-  private boolean isInterfered = false;
+  private boolean isTransmitting;
+  private boolean isReceiving;
+  private boolean isInterfered;
 
   private static final long transmissionEndTime = 0;
 
   private RadioEvent lastEvent = RadioEvent.UNKNOWN;
-  private long lastEventTime = 0;
+  private long lastEventTime;
 
   private double signalStrength = -100;
   private int radioChannel = -1;
-  private double outputPower = 0; /* typical cc2420 values: -25 <-> 0 dBm */
+  private double outputPower; /* typical cc2420 values: -25 <-> 0 dBm */
   private int outputPowerIndicator = 100;
 
   private int interfered;
@@ -116,8 +115,7 @@ public class ApplicationRadio extends Radio implements NoiseSourceRadio, Directi
     isReceiving = true;
     lastEventTime = simulation.getSimulationTime();
     lastEvent = RadioEvent.RECEPTION_STARTED;
-    this.setChanged();
-    this.notifyObservers();
+    radioEventTriggers.trigger(RadioEvent.RECEPTION_STARTED, this);
   }
 
   @Override
@@ -138,8 +136,7 @@ public class ApplicationRadio extends Radio implements NoiseSourceRadio, Directi
     isReceiving = false;
     lastEventTime = simulation.getSimulationTime();
     lastEvent = RadioEvent.RECEPTION_FINISHED;
-    this.setChanged();
-    this.notifyObservers();
+    radioEventTriggers.trigger(RadioEvent.RECEPTION_FINISHED, this);
   }
 
   @Override
@@ -180,8 +177,7 @@ public class ApplicationRadio extends Radio implements NoiseSourceRadio, Directi
 
       lastEvent = RadioEvent.RECEPTION_INTERFERED;
       lastEventTime = simulation.getSimulationTime();
-      this.setChanged();
-      this.notifyObservers();
+      radioEventTriggers.trigger(RadioEvent.RECEPTION_INTERFERED, this);
     }
   }
 
@@ -234,14 +230,12 @@ public class ApplicationRadio extends Radio implements NoiseSourceRadio, Directi
     isTransmitting = true;
     lastEvent = RadioEvent.TRANSMISSION_STARTED;
     lastEventTime = simulation.getSimulationTime();
-    ApplicationRadio.this.setChanged();
-    ApplicationRadio.this.notifyObservers();
+    radioEventTriggers.trigger(RadioEvent.TRANSMISSION_STARTED, this);
 
     // Deliver data.
     packetFromMote = packet;
     lastEvent = RadioEvent.PACKET_TRANSMITTED;
-    ApplicationRadio.this.setChanged();
-    ApplicationRadio.this.notifyObservers();
+    radioEventTriggers.trigger(RadioEvent.PACKET_TRANSMITTED, this);
 
     // Finish transmission.
     simulation.scheduleEvent(new MoteTimeEvent(mote) {
@@ -250,8 +244,7 @@ public class ApplicationRadio extends Radio implements NoiseSourceRadio, Directi
         isTransmitting = false;
         lastEvent = RadioEvent.TRANSMISSION_FINISHED;
         lastEventTime = t;
-        ApplicationRadio.this.setChanged();
-        ApplicationRadio.this.notifyObservers();
+        radioEventTriggers.trigger(RadioEvent.TRANSMISSION_FINISHED, ApplicationRadio.this);
       }
     }, simulation.getSimulationTime() + duration);
   }
@@ -277,8 +270,7 @@ public class ApplicationRadio extends Radio implements NoiseSourceRadio, Directi
     radioChannel = channel;
     lastEvent = RadioEvent.UNKNOWN;
     lastEventTime = simulation.getSimulationTime();
-    setChanged();
-    notifyObservers();
+    radioEventTriggers.trigger(RadioEvent.UNKNOWN, this);
   }
 
   @Override
@@ -308,11 +300,8 @@ public class ApplicationRadio extends Radio implements NoiseSourceRadio, Directi
         setChannel(Integer.parseInt(s));
       }
     });
-    if (getChannel() == -1) {
-      channelMenu.setSelectedIndex(0);
-    } else {
-      channelMenu.setSelectedIndex(getChannel());
-    }
+    var currentChannel = getChannel();
+    channelMenu.setSelectedIndex(currentChannel == -1 ? 0 : currentChannel);
     final JFormattedTextField outputPower = new JFormattedTextField(getCurrentOutputPower());
     outputPower.addPropertyChangeListener("value", evt -> setOutputPower(((Number)outputPower.getValue()).doubleValue()));
 
@@ -328,7 +317,7 @@ public class ApplicationRadio extends Radio implements NoiseSourceRadio, Directi
     updateButton.addActionListener(e -> ssLabel.setText("Signal strength (not auto-updated): "
         + String.format("%1.1f", getCurrentSignalStrength()) + " dBm"));
 
-    final Observer observer = (obs, obj) -> {
+    final BiConsumer<RadioEvent, Radio> observer = (event, radio) -> {
       if (isTransmitting()) {
         statusLabel.setText("Transmitting");
       } else if (isReceiving()) {
@@ -340,18 +329,12 @@ public class ApplicationRadio extends Radio implements NoiseSourceRadio, Directi
       lastEventLabel.setText("Last event (time=" + lastEventTime + "): " + lastEvent);
       ssLabel.setText("Signal strength (not auto-updated): "
           + String.format("%1.1f", getCurrentSignalStrength()) + " dBm");
-      if (getChannel() == -1) {
-        channelLabel.setText("Current channel: ALL");
-      } else {
-        channelLabel.setText("Current channel: " + getChannel());
-      }
+      var infoChannel = getChannel();
+      channelLabel.setText("Current channel: " + (infoChannel == -1 ? "ALL" : String.valueOf(infoChannel)));
     };
-    this.addObserver(observer);
-
-    observer.update(null, null);
-
+    radioEventTriggers.addTrigger(this, observer);
+    observer.accept(null, null);
     panel.add(BorderLayout.NORTH, box);
-    panel.putClientProperty("intf_obs", observer);
     return panel;
   }
 
@@ -369,8 +352,7 @@ public class ApplicationRadio extends Radio implements NoiseSourceRadio, Directi
     this.radioOn = radioOn;
     lastEvent = radioOn?RadioEvent.HW_ON:RadioEvent.HW_OFF;
     lastEventTime = simulation.getSimulationTime();
-    this.setChanged();
-    this.notifyObservers();
+    radioEventTriggers.trigger(radioOn ? RadioEvent.HW_ON : RadioEvent.HW_OFF, this);
   }
   @Override
   public boolean isRadioOn() {

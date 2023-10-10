@@ -29,13 +29,12 @@
  */
 
 package org.contikios.cooja;
-
 import java.util.Collection;
-import java.util.Observable;
-import java.util.Observer;
-import org.jdom2.Element;
-
+import java.util.Collections;
+import java.util.List;
 import org.contikios.cooja.interfaces.Radio;
+import org.contikios.cooja.util.EventTriggers;
+import org.jdom2.Element;
 
 /**
  * The RadioMedium interface should be implemented by all COOJA radio
@@ -71,27 +70,21 @@ public interface RadioMedium {
   void unregisterRadioInterface(Radio radio, Simulation sim);
 
   /**
-   * Adds an observer which is notified each time a radio connection has finished.
+   * Get the list of radios within transmission range of specified radio interface.
+   *
+   * @param radio A radio interface whose neighbors are requested.
+   * @return A list of radios within transmission range.
+   */
+  default List<Radio> getNeighbors(Radio radio) {
+    return Collections.emptyList();
+  }
+
+  /**
+   * Triggers that are notified of radio events.
    *
    * @see #getLastConnection()
-   * @see #deleteRadioTransmissionObserver(Observer)
-   * @param observer New observer
    */
-  void addRadioTransmissionObserver(Observer observer);
-
-  /**
-   * @return Radio medium observable
-   */
-  Observable getRadioTransmissionObservable();
-
-  /**
-   * Deletes an radio medium observer.
-   *
-   * @see #addRadioTransmissionObserver(Observer)
-   * @param observer
-   *          Observer to delete
-   */
-  void deleteRadioTransmissionObserver(Observer observer);
+  EventTriggers<Radio.RadioEvent, Object> getRadioTransmissionTriggers();
 
   /**
    * @return Last radio connection finished in the radio medium

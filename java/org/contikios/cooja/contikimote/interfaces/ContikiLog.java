@@ -32,8 +32,8 @@ package org.contikios.cooja.contikimote.interfaces;
 
 import java.util.Vector;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.contikios.cooja.*;
 import org.contikios.cooja.contikimote.ContikiMote;
 import org.contikios.cooja.dialogs.LogUI;
@@ -66,7 +66,7 @@ import org.contikios.cooja.mote.memory.VarMemory;
  */
 @ClassDescription("Debug Log")
 public class ContikiLog extends LogUI implements PolledAfterActiveTicks {
-  private static final Logger logger = LogManager.getLogger(ContikiLog.class);
+  private static final Logger logger = LoggerFactory.getLogger(ContikiLog.class);
 
   private ContikiMote mote = null;
   private VarMemory moteMem = null;

@@ -30,28 +30,10 @@
 
 package org.contikios.cooja;
 
-import static java.util.Map.entry;
-
 import java.lang.Throwable;
-import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Map;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.contikios.cooja.contikimote.ContikiMoteType;
-import org.contikios.cooja.contikimote.interfaces.ContikiBeeper;
-import org.contikios.cooja.contikimote.interfaces.ContikiButton;
-import org.contikios.cooja.contikimote.interfaces.ContikiCFS;
-import org.contikios.cooja.contikimote.interfaces.ContikiClock;
-import org.contikios.cooja.contikimote.interfaces.ContikiEEPROM;
-import org.contikios.cooja.contikimote.interfaces.ContikiLED;
-import org.contikios.cooja.contikimote.interfaces.ContikiMoteID;
-import org.contikios.cooja.contikimote.interfaces.ContikiPIR;
 import org.contikios.cooja.contikimote.interfaces.ContikiLog;
-import org.contikios.cooja.contikimote.interfaces.ContikiRS232;
-import org.contikios.cooja.contikimote.interfaces.ContikiRadio;
-import org.contikios.cooja.contikimote.interfaces.ContikiVib;
 import org.contikios.cooja.interfaces.Battery;
 import org.contikios.cooja.interfaces.Beeper;
 import org.contikios.cooja.interfaces.Button;
@@ -59,25 +41,16 @@ import org.contikios.cooja.interfaces.Clock;
 import org.contikios.cooja.interfaces.IPAddress;
 import org.contikios.cooja.interfaces.LED;
 import org.contikios.cooja.interfaces.Log;
-import org.contikios.cooja.interfaces.Mote2MoteRelations;
-import org.contikios.cooja.interfaces.MoteAttributes;
 import org.contikios.cooja.interfaces.MoteID;
 import org.contikios.cooja.interfaces.PIR;
 import org.contikios.cooja.interfaces.Position;
 import org.contikios.cooja.interfaces.Radio;
 import org.contikios.cooja.interfaces.RimeAddress;
+import org.contikios.cooja.interfaces.SerialPort;
 import org.contikios.cooja.interfaces.SerialIO;
-import org.contikios.cooja.motes.DisturberMoteType;
-import org.contikios.cooja.motes.ImportAppMoteType;
-import org.contikios.cooja.mspmote.SkyMoteType;
-import org.contikios.cooja.mspmote.Z1MoteType;
-import org.contikios.cooja.radiomediums.DirectedGraphMedium;
-import org.contikios.cooja.radiomediums.LogisticLoss;
-import org.contikios.cooja.radiomediums.SilentRadioMedium;
-import org.contikios.cooja.radiomediums.UDGM;
-import org.contikios.cooja.radiomediums.UDGMConstantLoss;
-import org.contikios.mrm.MRM;
 import org.jdom2.Element;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The mote interface handler holds all interfaces for a specific mote.
@@ -85,30 +58,7 @@ import org.jdom2.Element;
  * @author Fredrik Osterlind
  */
 public class MoteInterfaceHandler {
-  private static final Logger logger = LogManager.getLogger(MoteInterfaceHandler.class);
-
-  /** Static translation map from name -> class for builtin interfaces. */
-  private static final Map<String, Class<? extends MoteInterface>> builtinInterfaces = Map.ofEntries(
-          entry("org.contikios.cooja.interfaces.IPAddress", IPAddress.class),
-          entry("org.contikios.cooja.interfaces.Position", Position.class),
-          entry("org.contikios.cooja.interfaces.Battery", Battery.class),
-          entry("org.contikios.cooja.contikimote.interfaces.ContikiVib", ContikiVib.class),
-          entry("org.contikios.cooja.contikimote.interfaces.ContikiMoteID", ContikiMoteID.class),
-          entry("org.contikios.cooja.contikimote.interfaces.ContikiLog", ContikiLog.class),
-          entry("org.contikios.cooja.contikimote.interfaces.ContikiRS232", ContikiRS232.class),
-          entry("org.contikios.cooja.contikimote.interfaces.ContikiBeeper", ContikiBeeper.class),
-          entry("org.contikios.cooja.interfaces.RimeAddress", RimeAddress.class),
-          entry("org.contikios.cooja.contikimote.interfaces.ContikiIPAddress", IPAddress.class), // Compatibility.
-          entry("org.contikios.cooja.contikimote.interfaces.ContikiRadio", ContikiRadio.class),
-          entry("org.contikios.cooja.contikimote.interfaces.ContikiButton", ContikiButton.class),
-          entry("org.contikios.cooja.contikimote.interfaces.ContikiPIR", ContikiPIR.class),
-          entry("org.contikios.cooja.contikimote.interfaces.ContikiClock", ContikiClock.class),
-          entry("org.contikios.cooja.contikimote.interfaces.ContikiLED", ContikiLED.class),
-          entry("org.contikios.cooja.contikimote.interfaces.ContikiCFS", ContikiCFS.class),
-          entry("org.contikios.cooja.contikimote.interfaces.ContikiEEPROM", ContikiEEPROM.class),
-          entry("org.contikios.cooja.interfaces.Mote2MoteRelations", Mote2MoteRelations.class),
-          entry("org.contikios.cooja.interfaces.MoteAttributes", MoteAttributes.class)
-          );
+  private static final Logger logger = LoggerFactory.getLogger(MoteInterfaceHandler.class);
 
   private final ArrayList<MoteInterface> moteInterfaces = new ArrayList<>();
 
@@ -126,15 +76,15 @@ public class MoteInterfaceHandler {
   private PIR myPIR;
   private Position myPosition;
   private Radio myRadio;
+  private SerialPort mySerialPort;
 
   /**
    * Creates new mote interface handler. All given interfaces are created.
    *
    * @param mote Mote
-   * @param interfaceClasses Mote interface classes
    */
-  public MoteInterfaceHandler(Mote mote, Class<? extends MoteInterface>[] interfaceClasses) throws MoteType.MoteTypeCreationException {
-    for (Class<? extends MoteInterface> interfaceClass : interfaceClasses) {
+  public MoteInterfaceHandler(Mote mote) throws MoteType.MoteTypeCreationException {
+    for (var interfaceClass : mote.getType().getMoteInterfaceClasses()) {
       addInterface(generateInterface(interfaceClass, mote));
     }
   }
@@ -157,67 +107,11 @@ public class MoteInterfaceHandler {
     try {
       return interfaceClass.getConstructor(Mote.class).newInstance(mote);
     } catch (Exception e) {
-      logger.fatal("Exception when calling constructor of " + interfaceClass, e);
+        logger.error("Exception when calling constructor of " + interfaceClass, e);
       throw new MoteType.MoteTypeCreationException("Exception when calling constructor of " + interfaceClass, e);
     }
   }
   
-  /** Fast translation from class name to object for builtin mote types.
-   * @param cooja Cooja
-   * @param name Name of mote type to create
-   * @return Object or null
-   */
-  public static MoteType createMoteType(Cooja cooja, String name) {
-    switch (name) {
-      case "org.contikios.cooja.motes.ImportAppMoteType":       return new ImportAppMoteType();
-      case "org.contikios.cooja.motes.DisturberMoteType":       return new DisturberMoteType();
-      case "org.contikios.cooja.contikimote.ContikiMoteType":   return new ContikiMoteType(cooja);
-      case "org.contikios.cooja.mspmote.SkyMoteType":           return new SkyMoteType();
-      case "org.contikios.cooja.mspmote.Z1MoteType":            return new Z1MoteType();
-    }
-    Class<? extends MoteType> moteType = null;
-    for (var clazz : cooja.getRegisteredMoteTypes()) {
-      if (name.equals(clazz.getName())) {
-        moteType = clazz;
-        break;
-      }
-    }
-    if (moteType == null) return null;
-    try {
-      return moteType.getConstructor().newInstance();
-    } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-      return null;
-    }
-  }
-
-  /** Fast translation from class name to object for radio mediums.
-   * @param sim Simulation
-   * @param name Name of radio medium to create
-   * @return Object or null
-   */
-  public static RadioMedium createRadioMedium(Simulation sim, String name) {
-    if (name.startsWith("se.sics")) {
-      name = name.replaceFirst("se\\.sics", "org.contikios");
-    }
-    switch (name) {
-      case "org.contikios.cooja.radiomediums.UDGM": return new UDGM(sim);
-      case "org.contikios.cooja.radiomediums.UDGMConstantLoss": return new UDGMConstantLoss(sim);
-      case "org.contikios.cooja.radiomediums.DirectedGraphMedium": return new DirectedGraphMedium(sim);
-      case "org.contikios.cooja.radiomediums.SilentRadioMedium": return new SilentRadioMedium(sim);
-      case "org.contikios.cooja.radiomediums.LogisticLoss": return new LogisticLoss(sim);
-      case "org.contikios.mrm.MRM": return new MRM(sim);
-    }
-    var clazz = sim.getCooja().tryLoadClass(sim, RadioMedium.class, name);
-    if (clazz == null) {
-      return null;
-    }
-    try {
-      return clazz.getConstructor(Simulation.class).newInstance(sim);
-    } catch (Exception e) {
-      return null;
-    }
-  }
-
   /** Fast translation from class name to class file for builtin interfaces. Uses the classloader
    * to load other interfaces.
    * @param gui Cooja
@@ -225,15 +119,36 @@ public class MoteInterfaceHandler {
    * @param name Name of class to find
    * @return Found class or null
    */
-  public static Class<? extends MoteInterface> getInterfaceClass(Cooja gui, Object caller, String name) {
+  static
+  public Class<? extends MoteInterface> getInterfaceClass(Cooja gui, Object caller
+                                      , String name
+                                      , Collection<MoteInterface> loaded
+                                      ) 
+  {
+    if (name.endsWith("MoteID"))
+        return MoteID.class;
+    
     if (name.startsWith("se.sics")) {
       name = name.replaceFirst("se\\.sics", "org.contikios");
     }
-    var clazz = builtinInterfaces.get(name);
-    if (clazz != null) {
-      return clazz;
+
+    // if alredy have loaded interface
+    if (loaded != null )
+    for (var candidateInterface : loaded ) {
+        if (name.equals(candidateInterface.getClass().getName())) {
+          return candidateInterface.getClass();
+        }
     }
+    
     return gui.tryLoadClass(caller, MoteInterface.class, name);
+  }
+
+  static
+  public Class<? extends MoteInterface> getInterfaceClass(Cooja gui, Object caller
+          , String name
+          )
+  {
+      return getInterfaceClass(gui, caller, name, null);    // getInterfaces()
   }
 
   /**
@@ -433,6 +348,23 @@ public class MoteInterfaceHandler {
   }
 
   /**
+   * Returns the first serial port interface (if any).
+   *
+   * @return Serial port interface
+   */
+  public SerialPort getSerialPort() {
+    if (mySerialPort == null) {
+      for (var moteInterface : moteInterfaces) {
+        if (moteInterface instanceof SerialPort port) {
+          mySerialPort = port;
+          break;
+        }
+      }
+    }
+    return mySerialPort;
+  }
+
+  /**
    * @return Mote interfaces
    */
   public Collection<MoteInterface> getInterfaces() {
@@ -466,30 +398,39 @@ public class MoteInterfaceHandler {
     return config;
   }
 
-  public boolean setConfigXML(Simulation sim, Element element, Object caller) {
-    var clazz = element.getText().trim();
-    var moteInterfaceClass = getInterfaceClass(sim.getCooja(), caller, clazz);
-    if (moteInterfaceClass == null) {
-      logger.warn("Cannot find mote interface class: " + clazz);
-      return false;
+  public boolean setConfigXML(Mote mote, Element element, boolean ignoreFailure) {
+    var name = element.getText().trim();
+    if (name.startsWith("se.sics")) {
+      name = name.replaceFirst("se\\.sics", "org.contikios");
     }
-    var moteInterface = getInterfaceOfType(moteInterfaceClass);
+    MoteInterface moteInterface = null;
+    for (var candidateInterface : getInterfaces()) {
+      if (name.equals(candidateInterface.getClass().getName())) {
+        moteInterface = candidateInterface;
+        break;
+      }
+    }
     if (moteInterface == null) {
       // Check for compatible interfaces, for example, when reconfiguring mote types.
-      if (MoteID.class.isAssignableFrom(moteInterfaceClass)) {
-        moteInterface = getMoteID();
+      // Start with a name match, so native-image works for the builtin mote types.
+      var moteInterfaceClass = name.endsWith("MoteID")
+              ? MoteID.class : mote.getSimulation().getCooja().tryLoadClass(mote, MoteInterface.class, name);
+      if (moteInterfaceClass == null) {
+        logger.warn("Cannot find mote interface class: " + name);
+        return ignoreFailure;
       }
+      moteInterface = getInterfaceOfType(moteInterfaceClass);
       if (moteInterface == null) {
-        logger.fatal("Cannot find mote interface of class: " + moteInterfaceClass);
-        return false;
+        logger.warn("Cannot find mote interface of class: " + moteInterfaceClass);
+        return ignoreFailure;
       }
     }
     try {
         moteInterface.setConfigXML(element.getChildren(), Cooja.isVisualized());
     }
     catch (Throwable e) {
-        logger.fatal("crushed conf mote " + getMoteID()
-                    + " interface of class: " + moteInterfaceClass);
+        logger.error("crushed conf mote " + getMoteID()
+                    + " interface of class: " + name);
         return false;
     }
     return true;

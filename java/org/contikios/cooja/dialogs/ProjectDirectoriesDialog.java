@@ -40,7 +40,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Enumeration;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -58,12 +57,12 @@ import javax.swing.ListSelectionModel;
 import javax.swing.filechooser.FileFilter;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.COOJAProject;
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.ProjectConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This dialog allows a user to manage Cooja extensions: extensions to COOJA that 
@@ -72,7 +71,7 @@ import org.contikios.cooja.ProjectConfig;
  * @author Fredrik Osterlind
  */
 public class ProjectDirectoriesDialog extends JDialog {
-	private static final Logger logger = LogManager.getLogger(ProjectDirectoriesDialog.class);
+	private static final Logger logger = LoggerFactory.getLogger(ProjectDirectoriesDialog.class);
 
   private final Cooja gui;
 
@@ -80,7 +79,7 @@ public class ProjectDirectoriesDialog extends JDialog {
 	private final JTextArea projectInfo = new JTextArea("Extension information:");
 
   final ArrayList<COOJAProject> currentProjects = new ArrayList<>();
-	private COOJAProject[] returnedProjects = null;
+	private COOJAProject[] returnedProjects;
 
 	/**
 	 * Shows a blocking configuration dialog.
@@ -179,7 +178,7 @@ public class ProjectDirectoriesDialog extends JDialog {
           var myDialog = new ConfigViewer(ProjectDirectoriesDialog.this, config);
           myDialog.setVisible(true);
         } catch (Exception ex) {
-          logger.fatal("Error when merging config: " + ex.getMessage(), ex);
+          logger.error("Error when merging config: " + ex.getMessage(), ex);
         }
       });
 			buttonPane.add(button);
@@ -207,7 +206,7 @@ public class ProjectDirectoriesDialog extends JDialog {
       button.addActionListener(e -> {
         var newDefaultProjectDirs = new StringBuilder();
         for (COOJAProject p : currentProjects) {
-          if (newDefaultProjectDirs.length() > 0) {
+          if (!newDefaultProjectDirs.isEmpty()) {
             newDefaultProjectDirs.append(";");
           }
           var portablePath = Cooja.createContikiRelativePath(p.dir);
@@ -392,12 +391,6 @@ public class ProjectDirectoriesDialog extends JDialog {
       projectInfo.append(sb.append("\n").toString());
       sb.setLength(0);
     }
-		if (project.getConfigMoteInterfaces() != null) {
-			projectInfo.append("Cooja mote interfaces: " + Arrays.toString(project.getConfigMoteInterfaces()) + "\n");
-		}
-		if (project.getConfigCSources() != null) {
-			projectInfo.append("Cooja mote C sources: " + Arrays.toString(project.getConfigCSources()) + "\n");
-		}
 	}
 
 	public COOJAProject[] getProjects() {
@@ -455,14 +448,12 @@ class ConfigViewer extends JDialog {
 		label.setForeground(Color.RED);
 		valuePane.add(label);
 
-		Enumeration<String> allPropertyNames = config.getPropertyNames();
-		while (allPropertyNames.hasMoreElements()) {
-			String propertyName = allPropertyNames.nextElement();
+    for (var entry : config.getEntrySet()) {
+      if (!(entry.getKey() instanceof String propertyName && entry.getValue() instanceof String val)) continue;
 			keyPane.add(new JLabel(propertyName));
-      var val = config.getStringValue(propertyName);
       // Add artificial space so the valuePane contains something. Otherwise, the next
       // row will have its values displayed on this row.
-      valuePane.add(new JLabel(val.equals("") ? " " : val));
+      valuePane.add(new JLabel(val.isEmpty() ? " " : val));
 		}
 
 		Container contentPane = getContentPane();

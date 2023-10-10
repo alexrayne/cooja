@@ -53,7 +53,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Observer;
 import java.util.Properties;
 import java.util.regex.PatternSyntaxException;
 import javax.swing.AbstractAction;
@@ -78,8 +77,6 @@ import javax.swing.RowFilter;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableModel;
 import javax.swing.table.TableRowSorter;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.ConvertedRadioPacket;
 import org.contikios.cooja.Cooja;
@@ -101,6 +98,8 @@ import org.contikios.cooja.plugins.analyzers.PacketAnalyzer;
 import org.contikios.cooja.plugins.analyzers.RadioLoggerAnalyzerSuite;
 import org.contikios.cooja.util.StringUtils;
 import org.jdom2.Element;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Radio logger listens to the simulation radio medium and lists all transmitted
@@ -114,7 +113,7 @@ public class RadioLogger extends VisPlugin
     implements TimeSelect
 {
 
-  private static final Logger logger = LogManager.getLogger(RadioLogger.class);
+  private static final Logger logger = LoggerFactory.getLogger(RadioLogger.class);
 
   private final static int COLUMN_NO = 0;
   private final static int COLUMN_TIME = 1;
@@ -123,7 +122,7 @@ public class RadioLogger extends VisPlugin
   private final static int COLUMN_DATA = 4;
 
   private final JSplitPane splitPane;
-  private JTextPane verboseBox = null;
+  private JTextPane verboseBox;
 
   private boolean formatTimeString = true;
 
@@ -140,12 +139,11 @@ public class RadioLogger extends VisPlugin
   private final TableRowSorter<TableModel> logFilter;
   private final ArrayList<RadioConnectionLog> connections = new ArrayList<RadioConnectionLog>();
   private final RadioMedium radioMedium;
-  private final Observer radioMediumObserver;
   private final AbstractTableModel model;
 
   private final HashMap<String, Action> analyzerMap = new HashMap<String, Action>();
-  private String analyzerName = null;
-  private ArrayList<PacketAnalyzer> analyzers = null;
+  private String analyzerName;
+  private ArrayList<PacketAnalyzer> analyzers;
   private final IEEE802154Analyzer analyzerWithPcap;
   private File pcapFile;
 
@@ -242,7 +240,7 @@ public class RadioLogger extends VisPlugin
           }
           if (aliases != null) {
             /* Check if alias exists */
-            String alias = (String) aliases.get(conn.data);
+            String alias = aliases.getProperty(conn.data);
             if (alias != null) {
               return alias;
             }
@@ -256,7 +254,7 @@ public class RadioLogger extends VisPlugin
       public boolean isCellEditable(int row, int col) {
         if (col == COLUMN_FROM) {
           /* Highlight source */
-          Cooja.signalMoteHighlight(connections.get(row).connection.getSource().getMote());
+          gui.signalMoteHighlight(connections.get(row).connection.getSource().getMote());
           return false;
         }
 
@@ -264,7 +262,7 @@ public class RadioLogger extends VisPlugin
           /* Highlight all destinations */
           Radio[] dests = connections.get(row).connection.getDestinations();
           for (Radio dest: dests) {
-            Cooja.signalMoteHighlight(dest.getMote());
+            gui.signalMoteHighlight(dest.getMote());
           }
           return false;
         }
@@ -467,8 +465,8 @@ public class RadioLogger extends VisPlugin
         if (selectedRow < 0) return;
 
         String current = "";
-        if (aliases != null && aliases.get(connections.get(selectedRow).data) != null) {
-          current = (String) aliases.get(connections.get(selectedRow).data);
+        if (aliases != null && aliases.getProperty(connections.get(selectedRow).data) != null) {
+          current = aliases.getProperty(connections.get(selectedRow).data);
         }
 
         String alias = (String) JOptionPane.showInputDialog(
@@ -492,7 +490,7 @@ public class RadioLogger extends VisPlugin
         }
 
         // Remove current alias
-        if (alias.equals("")) {
+        if (alias.isEmpty()) {
           aliases.remove(connections.get(selectedRow).data);
 
           // Should be null if empty
@@ -547,7 +545,7 @@ public class RadioLogger extends VisPlugin
         }
 
         if (saveFile.exists() && !saveFile.canWrite()) {
-          logger.fatal("No write access to file: " + saveFile);
+          logger.error("No write access to file: " + saveFile);
           return;
         }
 
@@ -558,7 +556,7 @@ public class RadioLogger extends VisPlugin
           }
           outStream.close();
         } catch (Exception ex) {
-          logger.fatal("Could not write to file: " + saveFile);
+          logger.error("Could not write to file: " + saveFile);
         }
       }
     };
@@ -649,7 +647,7 @@ public class RadioLogger extends VisPlugin
     adjuster.setDynamicAdjustment(true);
     adjuster.packColumns();
 
-    radioMedium.addRadioTransmissionObserver(radioMediumObserver = (obs, obj) -> {
+    radioMedium.getRadioTransmissionTriggers().addTrigger(this, (obs, obj) -> {
       RadioConnection conn = radioMedium.getLastConnection();
       if (conn == null) {
         return;
@@ -685,11 +683,6 @@ public class RadioLogger extends VisPlugin
     });
 
     setSize(500, 300);
-    try {
-      setSelected(true);
-    } catch (java.beans.PropertyVetoException e) {
-      // Could not select
-    }
   }
 
   @Override
@@ -834,7 +827,7 @@ public class RadioLogger extends VisPlugin
       if (packet.hasMoreData()) {
         byte[] payload = packet.getPayload();
         brief.append(StringUtils.toHex(payload, 4));
-        if (verbose.length() > 0) {
+        if (!verbose.isEmpty()) {
           verbose.append("<p>");
         }
         verbose.append("<b>Payload (")
@@ -844,7 +837,7 @@ public class RadioLogger extends VisPlugin
       }
       conn.data = (data.length < 100 ? (data.length < 10 ? "  " : " ") : "")
               + data.length + ": " + brief;
-      if (verbose.length() > 0) {
+      if (!verbose.isEmpty()) {
         conn.tooltip = verbose.toString();
       }
     } else {
@@ -861,13 +854,13 @@ public class RadioLogger extends VisPlugin
         for (PacketAnalyzer analyzer : analyzers) {
           if (analyzer.matchPacket(packet)) {
             int res = analyzer.analyzePacket(packet, brief, verbose);
-            if (packet.hasMoreData() && brief.length() > 0) {
+            if (packet.hasMoreData() && !brief.isEmpty()) {
               brief.append('|');
               verbose.append("<br>");
             }
             if (res != PacketAnalyzer.ANALYSIS_OK_CONTINUE) {
               /* this was the final or the analysis failed - no analyzable payload possible here... */
-              return brief.length() > 0;
+              return !brief.isEmpty();
             }
             /* continue another round if more bytes left */
             analyze = packet.hasMoreData();
@@ -879,7 +872,7 @@ public class RadioLogger extends VisPlugin
       logger.warn("Error when analyzing packet: " + e.getMessage(), e);
       return false;
     }
-    return brief.length() > 0;
+    return !brief.isEmpty();
   }
 
   private void prepareTooltipString(RadioConnectionLog conn) {
@@ -918,9 +911,7 @@ public class RadioLogger extends VisPlugin
 
   @Override
   public void closePlugin() {
-    if (radioMediumObserver != null) {
-      radioMedium.deleteRadioTransmissionObserver(radioMediumObserver);
-    }
+    radioMedium.getRadioTransmissionTriggers().deleteTriggers(this);
   }
 
   @Override
@@ -1015,11 +1006,11 @@ public class RadioLogger extends VisPlugin
     RadioConnection connection;
     RadioPacket packet;
 
-    RadioConnectionLog hiddenBy = null;
-    int hides = 0;
+    RadioConnectionLog hiddenBy;
+    int hides;
 
-    String data = null;
-    String tooltip = null;
+    String data;
+    String tooltip;
 
     @Override
     public String toString() {
@@ -1075,7 +1066,7 @@ public class RadioLogger extends VisPlugin
   private void rebuildAllEntries() {
     applyFilter();
 
-    if (connections.size() > 0) {
+    if (!connections.isEmpty()) {
       model.fireTableRowsUpdated(0, connections.size() - 1);
     }
     verboseBox.setText("");
@@ -1145,9 +1136,9 @@ public class RadioLogger extends VisPlugin
     }
   };
 
-  private Properties aliases = null;
+  private Properties aliases;
 
-  private boolean showDuplicates = false;
+  private boolean showDuplicates;
   private final AbstractAction showDuplicatesAction = new AbstractAction("Show duplicates") {
     @Override
     public void actionPerformed(ActionEvent e) {
@@ -1156,7 +1147,7 @@ public class RadioLogger extends VisPlugin
     }
   };
 
-  private boolean hideNoDestinationPackets = false;
+  private boolean hideNoDestinationPackets;
   private final AbstractAction hideNoDestinationAction = new AbstractAction("Hide airshots") {
     @Override
     public void actionPerformed(ActionEvent e) {

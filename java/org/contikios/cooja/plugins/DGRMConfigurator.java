@@ -36,8 +36,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.Observer;
-
 import javax.swing.DefaultCellEditor;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -52,8 +50,6 @@ import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellEditor;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
 
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
@@ -67,6 +63,8 @@ import org.contikios.cooja.radiomediums.AbstractRadioMedium;
 import org.contikios.cooja.radiomediums.DGRMDestinationRadio;
 import org.contikios.cooja.radiomediums.DirectedGraphMedium;
 import org.contikios.cooja.util.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Simple user interface for configuring edges for the Directed Graph
@@ -79,7 +77,7 @@ import org.contikios.cooja.util.StringUtils;
 @PluginType(PluginType.PType.SIM_PLUGIN)
 @SupportedArguments(radioMediums = {DirectedGraphMedium.class})
 public class DGRMConfigurator extends VisPlugin {
-	private static final Logger logger = LogManager.getLogger(DGRMConfigurator.class);
+	private static final Logger logger = LoggerFactory.getLogger(DGRMConfigurator.class);
 
   private final static int IDX_SRC = 0;
   private final static int IDX_DST = 1;
@@ -88,13 +86,12 @@ public class DGRMConfigurator extends VisPlugin {
   private final static int IDX_LQI = 4;
   private final static int IDX_DELAY = 5;
 
-  private final static String[] COLUMN_NAMES = new String[] {
+  private final static String[] COLUMN_NAMES = {
     "Source", "Destination", "RX Ratio", "RSSI","LQI", "Delay"
   };
 
   private final Cooja gui;
   private final DirectedGraphMedium radioMedium;
-  private final Observer radioMediumObserver;
   private final JTable graphTable;
   private final JComboBox<Number> combo = new JComboBox<>();
 	private final JButton removeButton;
@@ -105,7 +102,7 @@ public class DGRMConfigurator extends VisPlugin {
     radioMedium = (DirectedGraphMedium) sim.getRadioMedium();
 
     /* Listen for graph updates */
-    radioMedium.addRadioTransmissionObserver(radioMediumObserver = (obs, obj) -> model.fireTableDataChanged());
+    radioMedium.getRadioTransmissionTriggers().addTrigger(this, (event, obj) -> model.fireTableDataChanged());
 
     /* Represent directed graph by table */
     graphTable = new JTable(model) {
@@ -230,7 +227,7 @@ public class DGRMConfigurator extends VisPlugin {
     JOptionPane optionPane = new JOptionPane();
     optionPane.setMessage(description);
     optionPane.setMessageType(JOptionPane.QUESTION_MESSAGE);
-    String[] options = new String[] {"Cancel", "Add"};
+    String[] options = {"Cancel", "Add"};
     optionPane.setOptions(options);
     optionPane.setInitialValue(options[1]);
     JDialog dialog = optionPane.createDialog(this, title);
@@ -266,7 +263,7 @@ public class DGRMConfigurator extends VisPlugin {
 	private void doImportFromFile() {
 		/* Delete existing edges */
     if (radioMedium.getEdges().length > 0) {
-      String[] options = new String[] { "Remove", "Cancel" };
+      String[] options = { "Remove", "Cancel" };
       int n = JOptionPane.showOptionDialog(
           Cooja.getTopParentContainer(),
           "Importing edges will remove all your existing edges.",
@@ -290,7 +287,7 @@ public class DGRMConfigurator extends VisPlugin {
     }
     File file = fc.getSelectedFile();
     if (file == null || !file.exists() || !file.canRead()) {
-      logger.fatal("No read access to file: " + file);
+      logger.error("No read access to file: " + file);
       return;
     }
     Cooja.setExternalToolsSetting("DGRM_IMPORT_LINKS_FILE", file.getPath());
@@ -442,11 +439,11 @@ public class DGRMConfigurator extends VisPlugin {
 
       Mote sourceMote = radioMedium.getEdges()[row].source.getMote();
       if (column == IDX_SRC) {
-        Cooja.signalMoteHighlight(sourceMote);
+        gui.signalMoteHighlight(sourceMote);
         return false;
       }
       if (column == IDX_DST) {
-        Cooja.signalMoteHighlight(radioMedium.getEdges()[row].superDest.radio.getMote());
+        gui.signalMoteHighlight(radioMedium.getEdges()[row].superDest.radio.getMote());
         return false;
       }
       if (column == IDX_RATIO) {
@@ -469,7 +466,7 @@ public class DGRMConfigurator extends VisPlugin {
 
   @Override
   public void closePlugin() {
-    radioMedium.deleteRadioTransmissionObserver(radioMediumObserver);
+    radioMedium.getRadioTransmissionTriggers().deleteTriggers(this);
   }
 
 }

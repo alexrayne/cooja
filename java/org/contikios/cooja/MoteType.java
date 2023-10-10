@@ -28,9 +28,10 @@
 package org.contikios.cooja;
 
 import java.awt.Container;
+import java.io.File;
 import java.util.Collection;
+import java.util.List;
 import java.util.ArrayList;
-
 import javax.swing.JComponent;
 
 import org.jdom2.Element;
@@ -78,7 +79,7 @@ public interface MoteType {
   /**
    * @return Mote interface classes of mote type.
    */
-  Class<? extends MoteInterface>[] getMoteInterfaceClasses();
+  List<Class<? extends MoteInterface>> getMoteInterfaceClasses();
 
   /**
    * Sets mote interface Java classes of mote type.
@@ -96,7 +97,7 @@ public interface MoteType {
   default 
   public <N extends MoteInterface> 
   void addMoteInterfaceClass( Class<N> interfaceType ) {
-      Class<? extends MoteInterface>[] intfs = getMoteInterfaceClasses();
+      var intfs = getMoteInterfaceClasses();
       if ( haveInterfaceOfType(interfaceType, intfs ) != null )
           return;
 
@@ -116,6 +117,21 @@ public interface MoteType {
   public <N extends MoteInterface> 
   Class<? extends MoteInterface> haveInterfaceOfType(Class<N> interfaceType
           , ArrayList< Class<? extends MoteInterface> > list) 
+  {
+      if (list == null)
+          return null;
+      for (Class<? extends MoteInterface> intf : list) {
+        if (isSubclassOf( interfaceType, intf) ) {
+          return intf;
+        }
+      }
+      return null;
+  }
+
+  static
+  public <N extends MoteInterface> 
+  Class<? extends MoteInterface> haveInterfaceOfType(Class<N> interfaceType
+          , List< Class<? extends MoteInterface> > list) 
   {
       if (list == null)
           return null;
@@ -233,6 +249,10 @@ public interface MoteType {
   boolean setConfigXML(
       Simulation simulation, Collection<Element> configXML, boolean visAvailable)
   throws MoteTypeCreationException;
+
+  default long getExecutableAddressOf(File file, int lineNr) {
+    return -1;
+  }
 
   class MoteTypeCreationException extends Exception {
     private MessageList compilationOutput;

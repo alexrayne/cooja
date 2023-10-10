@@ -35,10 +35,11 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Enumeration;
+import java.util.Map;
 import java.util.Properties;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
+import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A project configuration may hold the configuration for one or several project
@@ -89,7 +90,7 @@ import org.apache.logging.log4j.LogManager;
  * @author Fredrik Osterlind
  */
 public class ProjectConfig {
-  private static final Logger logger = LogManager.getLogger(ProjectConfig.class);
+  private static final Logger logger = LoggerFactory.getLogger(ProjectConfig.class);
 
   /**
    * User extension configuration filename.
@@ -110,7 +111,6 @@ public class ProjectConfig {
     if (useDefault) {
       var settings = new Properties();
       settings.put("org.contikios.cooja.contikimote.interfaces.ContikiRadio.RADIO_TRANSMISSION_RATE_kbps", "250");
-      settings.put("org.contikios.cooja.contikimote.ContikiMoteType.C_SOURCES", "");
       appendConfig(myConfig, settings);
     }
   }
@@ -211,7 +211,7 @@ public class ProjectConfig {
       }
 
     } catch (Exception e) {
-      logger.fatal("Exception when searching in project directory history: " + e);
+      logger.error("Exception when searching in project directory history: " + e);
       return null;
     }
 
@@ -249,10 +249,8 @@ public class ProjectConfig {
   }
 
   private static boolean appendConfig(Properties currentValues, Properties newProps) {
-    var en = newProps.keys();
-    while (en.hasMoreElements()) {
-      String key = (String) en.nextElement();
-      String property = newProps.getProperty(key);
+    for (var entry : newProps.entrySet()) {
+      if (!(entry.getKey() instanceof String key && entry.getValue() instanceof String property)) continue;
       if (property.startsWith("+ ")) {
         if (currentValues.getProperty(key) != null) {
           currentValues.setProperty(key, currentValues.getProperty(key) + " "
@@ -269,10 +267,8 @@ public class ProjectConfig {
   }
 
   public boolean appendConfig(ProjectConfig config) {
-  	Enumeration<String> propertyNames = config.getPropertyNames();
-  	while (propertyNames.hasMoreElements()) {
-  		String key = propertyNames.nextElement();
-  		String property = config.getStringValue(key);
+    for (var entry : config.myConfig.entrySet()) {
+      if (!(entry.getKey() instanceof String key && entry.getValue() instanceof String property)) continue;
       if (property.startsWith("+ ")) {
         if (myConfig.getProperty(key) != null) {
         	myConfig.setProperty(key, myConfig.getProperty(key) + " "
@@ -288,10 +284,11 @@ public class ProjectConfig {
   }
 
   /**
-   * @return All property names in configuration
+   * Returns the entry set of the configuration.
+   * @return Entry set of the configuration
    */
-  public Enumeration<String> getPropertyNames() {
-    return (Enumeration<String>) myConfig.propertyNames();
+  public Set<Map.Entry<Object, Object>> getEntrySet() {
+    return myConfig.entrySet();
   }
 
   /**
@@ -306,17 +303,7 @@ public class ProjectConfig {
    * @return Value or defaultValue if id wasn't found
    */
   public String getStringValue(Class<?> callingClass, String id, String defaultValue) {
-    return getStringValue(myConfig, callingClass, id, defaultValue);
-  }
-
-  private static String getStringValue(Properties currentValues, Class<?> callingClass, String id, String defaultValue) {
-    String val = currentValues.getProperty(callingClass.getName() + "." + id);
-
-    if (val == null) {
-      return defaultValue;
-    }
-
-    return val;
+    return myConfig.getProperty(callingClass.getName() + "." + id, defaultValue);
   }
 
   /**
@@ -327,10 +314,6 @@ public class ProjectConfig {
    * @return Value as string
    */
   public String getStringValue(String name) {
-    if (!myConfig.containsKey(name)) {
-    	return null;
-    }
-
     return myConfig.getProperty(name);
   }
 

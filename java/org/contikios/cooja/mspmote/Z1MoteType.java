@@ -38,7 +38,6 @@ import org.contikios.cooja.interfaces.IPAddress;
 import org.contikios.cooja.interfaces.Mote2MoteRelations;
 import org.contikios.cooja.interfaces.MoteAttributes;
 import org.contikios.cooja.interfaces.Position;
-import org.contikios.cooja.interfaces.RimeAddress;
 import org.contikios.cooja.mspmote.interfaces.CoojaM25P80;
 import org.contikios.cooja.mspmote.interfaces.Msp802154Radio;
 import org.contikios.cooja.mspmote.interfaces.MspButton;
@@ -70,21 +69,19 @@ public class Z1MoteType extends MspMoteType {
 
     @Override
     public MspMote generateMote(Simulation simulation) throws MoteTypeCreationException {
-        var node = new Z1Node();
-        node.setFlash(new CoojaM25P80(node.getCPU()));
-        return new Z1Mote(this, simulation, node);
+        var cpu = Z1Node.makeCPU(Z1Node.makeChipConfig());
+        return new Z1Mote(this, simulation, new Z1Node(cpu, new CoojaM25P80(cpu)));
     }
 
     @Override
-    public Class<? extends MoteInterface>[] getDefaultMoteInterfaceClasses() {
+    public List<Class<? extends MoteInterface>> getDefaultMoteInterfaceClasses() {
   	  return getAllMoteInterfaceClasses();
     }
 
     @Override
-    public Class<? extends MoteInterface>[] getAllMoteInterfaceClasses() {
-        var classes = List.of(
+    public List<Class<? extends MoteInterface>> getAllMoteInterfaceClasses() {
+        return List.of(
                 Position.class,
-                RimeAddress.class,
                 IPAddress.class,
                 Mote2MoteRelations.class,
                 MoteAttributes.class,
@@ -96,7 +93,5 @@ public class Z1MoteType extends MspMoteType {
                 MspDefaultSerial.class,
                 MspLED.class,
                 MspDebugOutput.class);
-        return classes.toArray(new Class[0]);
     }
-
 }

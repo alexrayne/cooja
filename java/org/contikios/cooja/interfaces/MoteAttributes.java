@@ -33,19 +33,17 @@ package org.contikios.cooja.interfaces;
 import java.awt.BorderLayout;
 import java.awt.EventQueue;
 import java.util.HashMap;
-import java.util.Observable;
-import java.util.Observer;
+import java.util.function.BiConsumer;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
-
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
-
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.Mote;
 import org.contikios.cooja.MoteInterface;
 import org.contikios.cooja.plugins.skins.AttributeVisualizerSkin;
+import org.contikios.cooja.util.EventTriggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * MoteAttributes used to store mote attributes for debugging and statistics
@@ -77,17 +75,15 @@ import org.contikios.cooja.plugins.skins.AttributeVisualizerSkin;
  * @author Joakim Eriksson
  */
 @ClassDescription("Mote Attributes")
-public class MoteAttributes extends Observable implements MoteInterface {
-  private static final Logger logger = LogManager.getLogger(MoteAttributes.class);
+public class MoteAttributes implements MoteInterface {
+  private static final Logger logger = LoggerFactory.getLogger(MoteAttributes.class);
   private final Mote mote;
 
   private final HashMap<String, Object> attributes = new HashMap<>();
   private final HashMap<JPanel, JTextArea> labels = new HashMap<>();
 
-  private Observer logObserver = (o, arg) -> {
-    String msg = ((Log) o).getLastLogMessage();
-    handleNewLog(msg);
-  };
+  private final EventTriggers<EventTriggers.AddRemoveUpdate, MoteAttributeUpdateData> attributesTriggers = new EventTriggers<>();
+  private BiConsumer<EventTriggers.Update, Log.LogDataInfo> logOutputTrigger;
 
   public MoteAttributes(Mote mote) {
     this.mote = mote;
@@ -95,10 +91,36 @@ public class MoteAttributes extends Observable implements MoteInterface {
 
   @Override
   public void added() {
+    logOutputTrigger = (event, data) -> {
+      String msg = data.msg();
+      if (msg == null) {
+        return;
+      }
+
+      if (msg.startsWith("DEBUG: ")) {
+        msg = msg.substring("DEBUG: ".length());
+      }
+
+      if (!msg.startsWith("#A ")) {
+        return;
+      }
+      // Remove "#A ".
+      msg = msg.substring(3);
+
+      setAttributes(msg);
+      if (Cooja.isVisualized()) {
+        EventQueue.invokeLater(() -> {
+          for (var text : labels.values()) {
+            text.setText(getText());
+          }
+        });
+      }
+      attributesTriggers.trigger(EventTriggers.AddRemoveUpdate.UPDATE, new MoteAttributeUpdateData(msg));
+    };
     /* Observe log interfaces */
     for (MoteInterface mi: mote.getInterfaces().getInterfaces()) {
       if (mi instanceof Log log) {
-        log.addObserver(logObserver);
+        log.getLogDataTriggers().addTrigger(this, logOutputTrigger);
       }
     }
   }
@@ -108,37 +130,10 @@ public class MoteAttributes extends Observable implements MoteInterface {
     /* Stop observing log interfaces */
     for (MoteInterface mi: mote.getInterfaces().getInterfaces()) {
       if (mi instanceof Log log) {
-        log.deleteObserver(logObserver);
+        log.getLogDataTriggers().removeTrigger(this, logOutputTrigger);
       }
     }
-    logObserver = null;
-  }
-
-  private void handleNewLog(String msg) {
-    if (msg == null) {
-      return;
-    }
-
-    if (msg.startsWith("DEBUG: ")) {
-      msg = msg.substring("DEBUG: ".length());
-    }
-
-    if (!msg.startsWith("#A ")) {
-      return;
-    }
-    /* remove "#A " */
-    msg = msg.substring(3);
-
-    setAttributes(msg);
-    if (Cooja.isVisualized()) {
-      EventQueue.invokeLater(() -> {
-        for (var text : labels.values()) {
-          text.setText(getText());
-        }
-      });
-    }
-    setChanged();
-    notifyObservers();
+    logOutputTrigger = null;
   }
 
   private void setAttributes(String att) {
@@ -186,4 +181,12 @@ public class MoteAttributes extends Observable implements MoteInterface {
   public void releaseInterfaceVisualizer(JPanel panel) {
     labels.remove(panel);
   }
+
+  public EventTriggers<EventTriggers.AddRemoveUpdate, MoteAttributeUpdateData> getAttributesTriggers() {
+    return attributesTriggers;
+  }
+
+  /** The attributes updated. */
+  // TODO: split the attributes and pass a list of updates.
+  public record MoteAttributeUpdateData(String attributes) {}
 }

@@ -29,24 +29,25 @@
 
 package org.contikios.cooja.mspmote;
 
+import java.awt.EventQueue;
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
+import java.util.Map;
 import org.contikios.cooja.dialogs.AbstractCompileDialog;
 import org.contikios.cooja.mote.BaseContikiMoteType;
-import org.jdom2.Element;
-
+import org.contikios.cooja.mote.memory.MemoryInterface.Symbol;
 import org.contikios.cooja.ClassDescription;
 import org.contikios.cooja.Cooja;
 import org.contikios.cooja.Simulation;
+import org.jdom2.Element;
+import se.sics.mspsim.platform.GenericNode;
 import se.sics.mspsim.util.DebugInfo;
 import se.sics.mspsim.util.ELF;
+import se.sics.mspsim.util.MapEntry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * MSP430-based mote types emulated in MSPSim.
@@ -57,10 +58,10 @@ import se.sics.mspsim.util.ELF;
  */
 @ClassDescription("Msp Mote Type")
 public abstract class MspMoteType extends BaseContikiMoteType {
-  private static final Logger logger = LogManager.getLogger(MspMoteType.class);
+  private static final Logger logger = LoggerFactory.getLogger(MspMoteType.class);
 
-  private boolean loadedDebugInfo = false;
-  private HashMap<File, HashMap<Integer, Integer>> debuggingInfo = null; /* cached */
+  private boolean loadedDebugInfo;
+  private HashMap<File, HashMap<Integer, Integer>> debuggingInfo; /* cached */
   private ELF elf; /* cached */
 
   @Override
@@ -73,52 +74,11 @@ public abstract class MspMoteType extends BaseContikiMoteType {
   }
 
   @Override
-  public Collection<Element> getConfigXML(Simulation simulation) {
-    ArrayList<Element> config = new ArrayList<>();
-
-    // Description
-    var element = new Element("description");
-    element.setText(getDescription());
-    config.add(element);
-
-    // Source file
-    if (fileSource != null) {
-      element = new Element("source");
-      File file = simulation.getCooja().createPortablePath(fileSource);
-      element.setText(file.getPath().replaceAll("\\\\", "/"));
-      config.add(element);
-      element = new Element("commands");
-      element.setText(compileCommands);
-      config.add(element);
-    }
-
-    // Firmware file
-    element = new Element("firmware");
-    File file = simulation.getCooja().createPortablePath(fileFirmware);
-    element.setText(file.getPath().replaceAll("\\\\", "/"));
-    config.add(element);
-
-    // Mote interfaces
-    for (var moteInterface : moteInterfaceClasses) {
-      element = new Element("moteinterface");
-      element.setText(moteInterface.getName());
-      config.add(element);
-    }
-
-    return config;
-  }
-
-  @Override
   public boolean setConfigXML(Simulation simulation,
       Collection<Element> configXML, boolean visAvailable)
       throws MoteTypeCreationException {
     if (!setBaseConfigXML(simulation, configXML)) {
       return false;
-    }
-    if (moteInterfaceClasses.isEmpty()) {
-      /* Backwards compatibility: No interfaces specified */
-      logger.warn("Old simulation config detected: no mote interfaces specified, assuming all.");
-      moteInterfaceClasses.addAll(Arrays.asList(getAllMoteInterfaceClasses()));
     }
 
     if (fileFirmware == null && fileSource == null) {
@@ -138,6 +98,7 @@ public abstract class MspMoteType extends BaseContikiMoteType {
     return configureAndInit(Cooja.getTopParentContainer(), simulation, Cooja.isVisualized());
   }
 
+  @Override
   public long getExecutableAddressOf(File file, int lineNr) {
     if (file == null || lineNr < 0) {
       return -1;
@@ -179,6 +140,28 @@ public abstract class MspMoteType extends BaseContikiMoteType {
       }
     }
     return -1;
+  }
+
+  protected Map<String, Symbol> getEntries(GenericNode node) throws MoteTypeCreationException {
+    if (Cooja.isVisualized()) {
+      EventQueue.invokeLater(() -> Cooja.setProgressMessage("Loading " + getContikiFirmwareFile().getName()));
+    }
+    ELF elf;
+    try {
+      elf = getELF();
+    } catch (Exception e) {
+      logger.error("Error when reading firmware:", e);
+      throw new MoteTypeCreationException("Error when reading firmware: " + e.getMessage());
+    }
+    node.loadFirmware(elf);
+    var vars = new HashMap<String, Symbol>();
+    for (var entry : elf.getMap().getAllEntries()) {
+      if (entry.getType() != MapEntry.TYPE.variable) {
+        continue;
+      }
+      vars.put(entry.getName(),new Symbol(Symbol.Type.VARIABLE, entry.getName(), entry.getAddress(), entry.getSize()));
+    }
+    return vars;
   }
 
   public ELF getELF() throws IOException {
