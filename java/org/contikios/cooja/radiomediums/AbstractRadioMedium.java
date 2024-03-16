@@ -436,6 +436,9 @@ public abstract class AbstractRadioMedium implements RadioMedium {
 			logger.warn("No radio to register");
 			return;
 		}
+        if (registeredRadios.contains(radio)) {
+            return;
+        }
 		
 		registeredRadios.add(radio);
 		radio.addObserver(radioEventsObserver);
