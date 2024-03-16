@@ -182,18 +182,23 @@ public abstract class LogUI extends Log
       //we can try to build string directly from data
       //scan received for \n
       int start = 0;
+      
+      // filter data from nonprinting chars
+      byte[] fdata = data;
+      
       for (int i = 0; i < len; ++i) {
-          if (data[i] == '\n') {
+          
+          if (fdata[i] == '\n') {
+              
               int slen = (i-start);
               if ( slen > 1) {
               if ( slen < MAX_LENGTH) {
-                  lastLogMessage = new String(data, start, slen);
+                  lastLogMessage = new String(fdata, start, slen);
               }
               else {
                   /*logger.warn("Dropping too large log message (>" + MAX_LENGTH + " bytes).");*/
-                  lastLogMessage = "# [1024 bytes, no line ending]: " + new String(data, 0, 20) + "...";
+                  lastLogMessage = "# [1024 bytes, no line ending]: " + new String(fdata, 0, 20) + "...";
               }
-              lastLogMessage = fix_nonPrintable(lastLogMessage);
               }
               else {
                   lastLogMessage = "";
@@ -201,11 +206,23 @@ public abstract class LogUI extends Log
               InvalidatedData();
               start = i+1;
           }
+
+          if (fdata[i] < 32) {
+              //replace nonprinting chars with '.'
+              //if ((x != '\r') && (x != '\t') && x != '\r')
+              fdata[i] = '.';
+          }
       }
       // collect rest of received
       if (start < len) {
           for (int k = start; k < len; ++k) {
-              newMessage.append((char) data[k]);
+              byte x = fdata[k];
+              if (x < 32) {
+                  //replace nonprinting chars with '.'
+                  //if ((x != '\r') && (x != '\t') && x != '\r')
+                  x = '.';
+              }
+              newMessage.append((char) x);
           }
       }
   }
@@ -213,15 +230,20 @@ public abstract class LogUI extends Log
   public void dataReceived(int data) {
     if (data == '\n') {
       /* Notify observers of new log */
-      lastLogMessage = fix_nonPrintable( newMessage.toString() );
+      lastLogMessage = newMessage.toString();
       newMessage.setLength(0);
       InvalidatedData();
     } else {
+      if (data < 32) {
+            //replace nonprinting chars with '.'
+            //if ((x != '\r') && (x != '\t') && x != '\r')
+            data = '.';
+      }
       newMessage.append((char) data);
+      
       if (newMessage.length() > MAX_LENGTH) {
         /*logger.warn("Dropping too large log message (>" + MAX_LENGTH + " bytes).");*/
         lastLogMessage = "# [1024 bytes, no line ending]: " + newMessage.substring(0, 20) + "...";
-        lastLogMessage = fix_nonPrintable(lastLogMessage);
         newMessage.setLength(0);
         InvalidatedData();
       }

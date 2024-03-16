@@ -35,6 +35,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.contikios.cooja.util.ArrayUtils;
 
 /**
  * Represents a mote memory consisting of non-overlapping memory sections with
@@ -263,7 +264,7 @@ public class SectionMoteMemory implements MemoryInterface {
   @Override
   public boolean addSegmentMonitor(SegmentMonitor.EventType flag, long address, int size, SegmentMonitor monitor) {
     PolledMemorySegments t = new PolledMemorySegments(monitor, address, size);
-    polledMemories.add(t);
+    polledMemories = ArrayUtils.add(polledMemories,t);
     return true;
   }
 
@@ -273,7 +274,7 @@ public class SectionMoteMemory implements MemoryInterface {
       if (mcm.mm != monitor || mcm.address != address || mcm.size != size) {
         continue;
       }
-      polledMemories.remove(mcm);
+      polledMemories = ArrayUtils.remove(polledMemories, mcm);
       return true;
     }
     return false;
@@ -297,10 +298,12 @@ public class SectionMoteMemory implements MemoryInterface {
     return clone;
   }
 
-  private final ArrayList<PolledMemorySegments> polledMemories = new ArrayList<>();
+  private PolledMemorySegments[] polledMemories = new PolledMemorySegments[0];
+  
   public void pollForMemoryChanges() {
-    for (PolledMemorySegments mem: polledMemories.toArray(new PolledMemorySegments[0])) {
-      mem.notifyIfChanged();
+    int sz = polledMemories.length;
+    for (int i = 0; i < sz; ++i) {
+        polledMemories[i].notifyIfChanged();
     }
   }
 

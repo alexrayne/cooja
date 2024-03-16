@@ -173,10 +173,8 @@ public abstract class SerialUI extends SerialIO
   protected void receiveFlush() {
 	  if (recvLen <= 0)
 		  return;
-      /* Notify observers of new log */
-      // FIXME: Never add the nonPrintable characters to newMessage in the first place
-      //        instead of removing them at the end.
-      lastLogMessage = nonPrintable.matcher(newMessage.toString()).replaceAll("");
+      
+      lastLogMessage = newMessage.toString();
       newMessage.setLength(0);
       is_recv = true;
       logDataTriggers.trigger(UPDATE, new LogDataInfo(getMote(), lastLogMessage));
@@ -200,11 +198,15 @@ public abstract class SerialUI extends SerialIO
 			this.receiveFlush();
 			flushed = true;
 	    } else {
+	      if (x < 32) {
+	          //replace nonprinting chars with '.'
+	          //if ((x != '\r') && (x != '\t') && x != '\r')
+	          x = '.';
+	      }
 	      newMessage.append((char) x);
 	      if (newMessage.length() > MAX_LENGTH) {
 	        /*logger.warn("Dropping too large log message (>" + MAX_LENGTH + " bytes).");*/
-	        lastLogMessage = "# [1024 bytes, no line ending]: " + 
-	            nonPrintable.matcher(newMessage.substring(0, 20)).replaceAll("") + "...";
+	        lastLogMessage = "# [1024 bytes, no line ending]: " +  newMessage.substring(0, 20) + "...";
 			this.receiveFlush();
 			flushed = true;
 	      }

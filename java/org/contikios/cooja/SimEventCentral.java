@@ -79,8 +79,9 @@ public class SimEventCentral {
       synchronized (logOutputEvents) {
         logOutputEvents.add(ev);
       }
-      for (var l : logOutputListeners) {
-        l.newLogOutput(ev);
+      int sz = logOutputListeners.length;
+      for (int i = 0 ; i < sz; ++i) {
+          logOutputListeners[i].newLogOutput(ev);
       }
     };
   }
@@ -141,7 +142,7 @@ public class SimEventCentral {
 
   void removeMote(Mote mote) {
     // Disconnect and remove mote observations.
-    for (var o : moteObservations.toArray(new MoteObservation[0])) {
+    for (var o : moteObservations) {
       if (o.mote() == mote) {
         o.disconnect();
         moteObservations.remove(o);

@@ -745,7 +745,7 @@ public final class Simulation {
     }
     // Delete all events associated with deleted mote.
     eventQueue.removeIf(ev -> ev instanceof MoteTimeEvent moteTimeEvent && moteTimeEvent.getMote() == mote);
-    for (var p : startedPlugins.toArray(new Plugin[0])) {
+    for (var p : startedPlugins) {
       if (p instanceof MotePlugin plugin) {
         if (mote == plugin.getMote()) {
           Cooja.removePlugin(startedPlugins, p);
@@ -760,7 +760,7 @@ public final class Simulation {
    */
   void removed() {
     // Close all simulation plugins.
-    for (var startedPlugin : startedPlugins.toArray(new Plugin[0])) {
+    for (var startedPlugin : startedPlugins) {
       Cooja.removePlugin(startedPlugins, startedPlugin);
     }
     if (!isShutdown) {

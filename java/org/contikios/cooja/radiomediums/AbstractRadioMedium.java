@@ -422,7 +422,6 @@ public abstract class AbstractRadioMedium implements RadioMedium {
             return;
         }
         if (registeredRadios.contains(radio)) {
-            logger.warn("Alredy registrered radio to register: mote" + radio.getMote().getID() );
             return;
         }
         

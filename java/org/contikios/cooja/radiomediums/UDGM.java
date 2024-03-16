@@ -197,14 +197,17 @@ public class UDGM extends AbstractRadioMedium {
     double moteInterferenceRange = INTERFERENCE_RANGE * powerRate;
 
     /* Get all potential destination radios */
-    DestinationRadio[] potentialDestinations = dgrm.getPotentialDestinations(sender);
+    final DestinationRadio[] potentialDestinations = dgrm.getPotentialDestinations(sender);
     if (potentialDestinations == null) {
       return newConnection;
     }
 
     /* Loop through all potential destinations */
     Position senderPos = sender.getPosition();
-    for (DestinationRadio dest: potentialDestinations) {
+    
+    int sz = potentialDestinations.length;
+    for (int desti = 0; desti < sz; ++desti ) {
+        DestinationRadio dest = potentialDestinations[desti]; 
       Radio recv = dest.radio;
 
       /* Fail if radios are on different (but configured) channels */
