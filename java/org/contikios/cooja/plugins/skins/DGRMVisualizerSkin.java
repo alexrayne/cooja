@@ -91,6 +91,13 @@ public class DGRMVisualizerSkin implements VisualizerSkin {
       return;
     }
 
+    DirectedGraphMedium radioMedium = (DirectedGraphMedium) simulation.getRadioMedium();
+    
+    // medium edges obsolete, cant use getPotentialDestinations since it crushes edge-map
+    //      that calculates in sim-thread
+    if (radioMedium.needsEdgeAnalysis())
+        return;
+    
     for (final Mote selectedMote : selectedMotes) {
       if (selectedMote.getInterfaces().getRadio() == null) {
         continue;
@@ -107,10 +114,8 @@ public class DGRMVisualizerSkin implements VisualizerSkin {
       FontMetrics fm = g.getFontMetrics();
       g.setColor(Color.BLACK);
 
-      DirectedGraphMedium radioMedium = (DirectedGraphMedium) simulation.getRadioMedium();
-
       /* Print transmission success probabilities */
-      DestinationRadio[] dests = radioMedium.getPotentialDestinations(selectedRadio);
+      DestinationRadio[] dests = radioMedium.viewPotentialDestinations(selectedRadio);
       if (dests == null || dests.length == 0) {
         String msg = "No edges";
         int msgWidth = fm.stringWidth(msg);

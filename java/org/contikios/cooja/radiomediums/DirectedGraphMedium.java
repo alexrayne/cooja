@@ -190,7 +190,10 @@ public class DirectedGraphMedium extends AbstractRadioMedium {
 
   /**
    * Generates hash table using current edges for efficient lookup.
+
+   * method accesed from visualiser thread, so it need sinchronized
    */
+  synchronized 
   protected void analyzeEdges() {
     HashMap<Radio,ArrayList<DGRMDestinationRadio>> listTable = new HashMap<>();
 
@@ -235,6 +238,14 @@ public class DirectedGraphMedium extends AbstractRadioMedium {
       analyzeEdges();
     }
     return edgesTable.get(source);
+  }
+
+  /** @brief like getPotentialDestinations - returns all accessable destinations
+   *         but returns collection used by simulation - not evaluates it.  
+   *         for external usage - from visualisers.
+   */
+  public DGRMDestinationRadio[] viewPotentialDestinations(Radio source) {
+      return edgesTable.get(source);
   }
 
   @Override
