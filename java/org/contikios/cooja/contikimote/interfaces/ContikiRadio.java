@@ -477,9 +477,17 @@ public class ContikiRadio extends Radio implements PolledAfterActiveTicks {
     return mote;
   }
 
+  private String radioName;
+  private int    moteID = -1;
+  
+
   @Override
   public String toString() {
-    return "Radio at " + mote;
+      if (moteID == mote.getID())
+          return radioName;
+      
+      radioName = "Radio at " + mote;
+      return radioName;
   }
 
 }

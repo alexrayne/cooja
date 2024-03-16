@@ -188,8 +188,13 @@ public class ContikiMote extends AbstractWakeupMote<ContikiMoteType, SectionMote
 
     /* Poll mote interfaces */
     moteMemory.pollForMemoryChanges();
-    polledAfterActive.forEach(PolledAfterActiveTicks::doActionsAfterTick);
-    polledAfterPassive.forEach(PolledAfterAllTicks::doActionsAfterTick);
+    int sz = polledAfterActive.size();
+    for (int i =0; i < sz; ++i)
+        polledAfterActive.get(i).doActionsAfterTick();
+    
+    sz = polledAfterPassive.size();
+    for (int i =0; i < sz; ++i)
+        polledAfterPassive.get(i).doActionsAfterTick();
 
     if (execute_state != MoteState.STATE_OK) {
         simulation.stopSimulation();
@@ -266,8 +271,17 @@ public class ContikiMote extends AbstractWakeupMote<ContikiMoteType, SectionMote
       }
   }
   
+  private String moteName;
+  private int    moteNameID = -1;
+  
   @Override
   public String toString() {
-    return "Contiki " + getID();
+    int id = getID();
+    if (moteNameID == id)
+        return moteName;
+    
+    moteName = "Contiki" + id;
+    moteNameID = id;
+    return moteName;
   }
 }
