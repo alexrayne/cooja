@@ -442,7 +442,9 @@ public class TimeLine extends VisPlugin implements HasQuickHelp, TimeSelect
         LogEvent logEvent = new LogEvent(ev);
         
         /* TODO Optimize */
-        for (MoteEvents moteEvents: allMoteEvents) {
+        int sz = allMoteEvents.size();
+        for ( int i = 0; i < sz; ++i) {
+          var moteEvents = allMoteEvents.get(i);
           if (moteEvents.mote == mote) {
             moteEvents.addLog(logEvent);
             break;

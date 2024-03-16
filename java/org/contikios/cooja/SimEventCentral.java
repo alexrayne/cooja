@@ -126,7 +126,7 @@ public class SimEventCentral {
 
   void removeMote(Mote mote) {
     // Disconnect and remove mote observations.
-    for (var o : moteObservations.toArray(new MoteObservation[0])) {
+    for (var o : moteObservations) {
       if (o.mote() == mote) {
         o.disconnect();
         moteObservations.remove(o);
@@ -187,8 +187,10 @@ public class SimEventCentral {
         if (removed == null) {
           break;
         }
-        for (LogOutputListener l: logOutputListeners) {
-          l.removedLogOutput(removed);
+
+        int sz = logOutputListeners.length;
+        for (int i = 0 ; i < sz; ++i) {
+            logOutputListeners[i].removedLogOutput(removed);
         }
       }
 
@@ -197,8 +199,10 @@ public class SimEventCentral {
       synchronized (logOutputEvents) {
         logOutputEvents.add(ev);
       }
-      for (LogOutputListener l: logOutputListeners) {
-        l.newLogOutput(ev);
+
+      int sz = logOutputListeners.length;
+      for (int i = 0 ; i < sz; ++i) {
+          logOutputListeners[i].newLogOutput(ev);
       }
     }
   };

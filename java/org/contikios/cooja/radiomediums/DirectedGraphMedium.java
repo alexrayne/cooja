@@ -195,7 +195,9 @@ public class DirectedGraphMedium extends AbstractRadioMedium {
     HashMap<Radio,ArrayList<DGRMDestinationRadio>> listTable = new HashMap<>();
 
     /* Fill edge hash table with all edges */
-    for (Edge edge: getEdges()) {
+    final int sz = edges.size();
+    for (int i = 0 ; i < sz; ++i) {
+      var edge = edges.get(i);
       ArrayList<DGRMDestinationRadio> destRadios;
       if (!listTable.containsKey(edge.source)) {
         destRadios = new ArrayList<>();
@@ -209,9 +211,10 @@ public class DirectedGraphMedium extends AbstractRadioMedium {
 
     /* Convert to arrays */
     HashMap<Radio,DGRMDestinationRadio[]> arrTable = new HashMap<>();
-    for (var entry : listTable.entrySet()) {
-      arrTable.put(entry.getKey(), entry.getValue().toArray(new DGRMDestinationRadio[0]));
-    }
+    DGRMDestinationRadio[] dummydst = new DGRMDestinationRadio[0];
+    listTable.forEach( (radio, dests) -> {
+                    arrTable.put( radio, dests.toArray(dummydst) ); 
+                            } );
 
     this.edgesTable = arrTable;
     edgesDirty = false;
@@ -246,7 +249,7 @@ public class DirectedGraphMedium extends AbstractRadioMedium {
 
     /* Create new radio connection using edge hash table */
     RadioConnection newConn = new RadioConnection(source);
-    DGRMDestinationRadio[] destinations = getPotentialDestinations(source);
+    final DGRMDestinationRadio[] destinations = getPotentialDestinations(source);
     if (destinations == null) {
       /* No destinations */
       /*logger.info(sendingRadio + ": No dest");*/
@@ -254,8 +257,10 @@ public class DirectedGraphMedium extends AbstractRadioMedium {
     }
 
     /*logger.info(source + ": " + destinations.length + " potential destinations");*/
-    for (DGRMDestinationRadio dest: destinations) {
-    
+    int sz = destinations.length;
+    for (int desti = 0; desti < sz; ++desti ) {
+        DGRMDestinationRadio dest = destinations[desti]; 
+
       if (dest.radio == source) {
         /* Fail: cannot receive our own transmission */
         /*logger.info(source + ": Fail, receiver is sender");*/
