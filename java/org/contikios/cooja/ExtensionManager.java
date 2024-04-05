@@ -146,41 +146,47 @@ public class ExtensionManager {
   public static RadioMedium createRadioMedium(Cooja cooja, Simulation sim, String name)
           throws Cooja.SimulationCreationException {
     if (name.startsWith("se.sics")) {
-      name = name.replaceFirst("se\\.sics", "org.contikios");
+      name = name.replaceFirst("^se\\.sics", "org.contikios");
     }
-    return switch (name) {
-      case "org.contikios.cooja.radiomediums.UDGM" -> new UDGM(sim);
-      case "org.contikios.cooja.radiomediums.UDGMConstantLoss" -> new UDGMConstantLoss(sim);
-      case "org.contikios.cooja.radiomediums.DirectedGraphMedium" -> new DirectedGraphMedium(sim);
-      case "org.contikios.cooja.radiomediums.SilentRadioMedium" -> new SilentRadioMedium(sim);
-      case "org.contikios.cooja.radiomediums.LogisticLoss" -> new LogisticLoss(sim);
-      case "org.contikios.mrm.MRM" -> new MRM(sim);
-      default -> {
+
+    RadioMedium y = null;
+    switch (name) {
+      case "org.contikios.cooja.radiomediums.UDGM"              : return new UDGM(sim);
+      case "org.contikios.cooja.radiomediums.UDGMConstantLoss"  : return new UDGMConstantLoss(sim);
+      case "org.contikios.cooja.radiomediums.DirectedGraphMedium": return new DirectedGraphMedium(sim);
+      case "org.contikios.cooja.radiomediums.SilentRadioMedium" : return new SilentRadioMedium(sim);
+      case "org.contikios.cooja.radiomediums.LogisticLoss"      : return new LogisticLoss(sim);
+      case "org.contikios.mrm.MRM"                              : return new MRM(sim);
+      default : {
         var clazz = getRadioMediumClass(cooja, name);
         if (clazz == null) {
           throw new Cooja.SimulationCreationException("Could not load " + name, null);
         }
+        
         try {
-          yield clazz.getConstructor(Simulation.class).newInstance(sim);
+          y = clazz.getConstructor(Simulation.class).newInstance(sim);
         } catch (Exception e) {
           throw new Cooja.SimulationCreationException("Could not construct " + name, e);
         }
       }
     };
+    return y;
   }
 
   /** Create a mote of a certain class, returns null on failure. */
   public static MoteType createMoteType(Cooja cooja, String name) throws MoteType.MoteTypeCreationException {
     if (name.startsWith("se.sics")) {
-      name = name.replaceFirst("se\\.sics", "org.contikios");
+      name = name.replaceFirst("^se\\.sics", "org.contikios");
     }
-    return switch (name) {
-      case "org.contikios.cooja.motes.ImportAppMoteType" -> new ImportAppMoteType();
-      case "org.contikios.cooja.motes.DisturberMoteType" -> new DisturberMoteType();
-      case "org.contikios.cooja.contikimote.ContikiMoteType" -> new ContikiMoteType(cooja);
-      case "org.contikios.cooja.mspmote.SkyMoteType" -> new SkyMoteType();
-      case "org.contikios.cooja.mspmote.Z1MoteType" -> new Z1MoteType();
-      default -> {
+    
+    MoteType y =null;
+    switch (name) {
+      case "org.contikios.cooja.motes.ImportAppMoteType"    : return new ImportAppMoteType();
+      case "org.contikios.cooja.motes.DisturberMoteType"    : return new DisturberMoteType();
+      case "org.contikios.cooja.contikimote.ContikiMoteType": return new ContikiMoteType(cooja);
+      case "org.contikios.cooja.mspmote.SkyMoteType"        : return new SkyMoteType();
+      case "org.contikios.cooja.mspmote.Z1MoteType"         : return new Z1MoteType();
+      default : {
         Class<? extends MoteType> moteType = null;
         for (var clazz : cooja.getRegisteredMoteTypes()) {
           if (name.equals(clazz.getName())) {
@@ -192,12 +198,13 @@ public class ExtensionManager {
           throw new MoteType.MoteTypeCreationException("MoteType " + name + " not registered");
         }
         try {
-          yield moteType.getConstructor().newInstance();
+          y = moteType.getConstructor().newInstance();
         } catch (InstantiationException | IllegalAccessException | InvocationTargetException |
                  NoSuchMethodException e) {
           throw new MoteType.MoteTypeCreationException("Could not create " + name, e);
         }
       }
     };
+    return y;
   }
 }
