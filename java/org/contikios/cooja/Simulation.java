@@ -270,6 +270,8 @@ public final class Simulation {
         removeMoteRelation(r.source, r.dest);
       }
 
+      synchronized(startedPlugins) {
+
       // Remove all motes and mote types.
       for (var m : motes.toArray(new Mote[0])) {
         doRemoveMote(m);
@@ -277,6 +279,8 @@ public final class Simulation {
       for (var m : moteTypes.toArray(new MoteType[0])) {
         removeMoteType(m);
       }
+      
+      } //synchronized(startedPlugins)
 
       // Remove the radio medium
       currentRadioMedium.removed();
@@ -428,8 +432,8 @@ public final class Simulation {
   }
 
   private void dropPlugins(ArrayList<Plugin> startedPlugins) {
-      for (var plugin : startedPlugins) {
-          cooja.removePlugin(plugin);
+      while (!startedPlugins.isEmpty() ) {
+          cooja.removePlugin(startedPlugins.get(0));
       }
   }
 
@@ -737,20 +741,28 @@ public final class Simulation {
   }
 
   private void doRemoveMote(Mote mote) {
+      // Delete all events associated with deleted mote.
+      eventQueue.removeIf(ev -> ev instanceof MoteTimeEvent moteTimeEvent && moteTimeEvent.getMote() == mote);
+      
+    //synchronized(startedPlugins) 
+    {
+      for (int i = 0; i < startedPlugins.size(); ) {
+        var p = startedPlugins.get(i);
+        if (p instanceof MotePlugin plugin) {
+          if (mote == plugin.getMote()) {
+            Cooja.removePlugin(startedPlugins, p);
+            continue;
+          }
+        }
+        ++i;
+      }
+    } // synchronized(startedPlugins)
+
     boolean removed = motes.remove(mote);
     mote.removed();
     if (removed) {
       moteTriggers.trigger(AddRemove.REMOVE, mote);
       eventCentral.removeMote(mote);
-    }
-    // Delete all events associated with deleted mote.
-    eventQueue.removeIf(ev -> ev instanceof MoteTimeEvent moteTimeEvent && moteTimeEvent.getMote() == mote);
-    for (var p : startedPlugins) {
-      if (p instanceof MotePlugin plugin) {
-        if (mote == plugin.getMote()) {
-          Cooja.removePlugin(startedPlugins, p);
-        }
-      }
     }
   }
 
@@ -760,9 +772,10 @@ public final class Simulation {
    */
   void removed() {
     // Close all simulation plugins.
-    for (var startedPlugin : startedPlugins) {
-      Cooja.removePlugin(startedPlugins, startedPlugin);
+    synchronized(startedPlugins) {
+        dropPlugins(startedPlugins);
     }
+    
     if (!isShutdown) {
       commandQueue.add(Command.QUIT);
     }

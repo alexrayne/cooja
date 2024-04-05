@@ -142,7 +142,8 @@ public class SimEventCentral {
 
   void removeMote(Mote mote) {
     // Disconnect and remove mote observations.
-    for (var o : moteObservations) {
+    MoteObservation[] observations = moteObservations.toArray(new MoteObservation[0]);
+    for (var o : observations) {
       if (o.mote() == mote) {
         o.disconnect();
         moteObservations.remove(o);
