@@ -266,18 +266,18 @@ public final class Simulation {
       }
 
       // Clear current mote relations.
-      for (var r: getMoteRelations()) {
-        removeMoteRelation(r.source, r.dest);
+      while(!moteRelations.isEmpty()) {
+        removeMoteRelation(moteRelations.get(0));
       }
 
       synchronized(startedPlugins) {
 
       // Remove all motes and mote types.
-      for (var m : motes.toArray(new Mote[0])) {
-        doRemoveMote(m);
+      while (motes.size() > 0) {
+        doRemoveMote(motes.get(0));
       }
-      for (var m : moteTypes.toArray(new MoteType[0])) {
-        removeMoteType(m);
+      while (moteTypes.size() > 0) {
+        doRemoveMoteType(moteTypes.get(0));
       }
       
       } //synchronized(startedPlugins)
@@ -873,14 +873,18 @@ public final class Simulation {
    * @param type Mote type
    */
   public void removeMoteType(MoteType type) {
+      invokeSimulationThread(() -> doRemoveMoteType(type));
+  }
+  
+  private void doRemoveMoteType(MoteType type) {
     for (Mote m: getMotes()) {
       if (m.getType() == type) {
-        removeMote(m);
+        doRemoveMote(m);
       }
     }
 
     if (moteTypes.remove(type)) {
-      moteTypeTriggers.trigger(AddRemove.REMOVE, type);
+        moteTypeTriggers.trigger(AddRemove.REMOVE, type);
     }
   }
 
@@ -920,6 +924,11 @@ public final class Simulation {
       }
     }
   }
+
+  private void removeMoteRelation(MoteRelation r) {
+      if (moteRelations.remove(r))
+          moteRelationsTriggers.trigger(AddRemove.REMOVE, r);
+  } 
 
   /**
    * Returns all mote relations.
