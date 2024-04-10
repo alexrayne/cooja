@@ -112,6 +112,9 @@ public class ApplicationRadio extends Radio implements NoiseSourceRadio, Directi
       return;
     }
 
+    if (!isRadioOn())
+        return;
+    
     isReceiving = true;
     lastEventTime = simulation.getSimulationTime();
     lastEvent = RadioEvent.RECEPTION_STARTED;
@@ -121,7 +124,7 @@ public class ApplicationRadio extends Radio implements NoiseSourceRadio, Directi
   @Override
   public void signalReceptionEnd() {
     //System.out.println("SignalReceptionEnded for node: " + mote.getID() + " intf:" + interfered);
-    if (isInterfered() || packetToMote == null) {
+    if (isInterfered() || packetToMote == null || !isRadioOn()) {
       interfered--;
       if (interfered == 0) isInterfered = false;
       if (interfered < 0) {
@@ -134,6 +137,9 @@ public class ApplicationRadio extends Radio implements NoiseSourceRadio, Directi
     }
 
     isReceiving = false;
+    if (!isRadioOn())
+        return;
+
     lastEventTime = simulation.getSimulationTime();
     lastEvent = RadioEvent.RECEPTION_FINISHED;
     radioEventTriggers.trigger(RadioEvent.RECEPTION_FINISHED, this);
@@ -175,9 +181,11 @@ public class ApplicationRadio extends Radio implements NoiseSourceRadio, Directi
     if (!isInterfered()) {
       isInterfered = true;
 
+      if (isReceiving()) {
       lastEvent = RadioEvent.RECEPTION_INTERFERED;
       lastEventTime = simulation.getSimulationTime();
       radioEventTriggers.trigger(RadioEvent.RECEPTION_INTERFERED, this);
+      }
     }
   }
 

@@ -202,6 +202,9 @@ public class ContikiRadio extends Radio implements PolledAfterActiveTicks {
       return;
     }
 
+    if (!isRadioOn())
+        return;
+    
     myMoteMemory.setByteValueOf("simReceiving", (byte) 1);
     mote.requestImmediateWakeup();
 
@@ -214,7 +217,7 @@ public class ContikiRadio extends Radio implements PolledAfterActiveTicks {
 
   @Override
   public void signalReceptionEnd() {
-    if (isInterfered || packetToMote == null) {
+    if (isInterfered || (packetToMote == null) || !isRadioOn()) {
       isInterfered = false;
       packetToMote = null;
       myMoteMemory.setIntValueOf("simInSize", 0);
@@ -224,6 +227,9 @@ public class ContikiRadio extends Radio implements PolledAfterActiveTicks {
     }
 
     myMoteMemory.setByteValueOf("simReceiving", (byte) 0);
+    if (!isRadioOn())
+        return;
+
     mote.requestImmediateWakeup();
     lastEventTime = mote.getSimulation().getSimulationTime();
     lastEvent = RadioEvent.RECEPTION_FINISHED;
@@ -243,6 +249,9 @@ public class ContikiRadio extends Radio implements PolledAfterActiveTicks {
  
     isInterfered = true;
 
+    if (!isReceiving())
+        return;
+    
     lastEvent = RadioEvent.RECEPTION_INTERFERED;
     lastEventTime = mote.getSimulation().getSimulationTime();
     radioEventTriggers.trigger(RadioEvent.RECEPTION_INTERFERED, this);
