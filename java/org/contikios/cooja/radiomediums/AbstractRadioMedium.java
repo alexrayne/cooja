@@ -281,8 +281,9 @@ public abstract class AbstractRadioMedium implements RadioMedium {
             } else {
                 
                 /* EXPERIMENTAL: Simulating propagation delay */
-                final Radio delayedRadio = radio;
                 TimeEvent delayedEvent = new TimeEvent() {
+                    final Radio delayedRadio = radio;
+                    
                     @Override
                     public void execute(long t) {
                         action.run(delayedRadio);
@@ -379,7 +380,7 @@ public abstract class AbstractRadioMedium implements RadioMedium {
 	
 	/**
 	 * Remove given radio from any active connections.
-	 * This method can be called if a radio node falls asleep or is removed.
+	 * This method can be called if a radio node falls asleep
 	 *
 	 * @param radio Radio
 	 */
@@ -396,6 +397,22 @@ public abstract class AbstractRadioMedium implements RadioMedium {
 			}
 		}
 	}
+	
+    /**
+     * Remove given radio from any active connections.
+     * This method can be called if a radio node is removed.
+     *
+     * @param radio Radio
+     */
+    protected void dropFromActiveConnections(Radio radio) {
+        /* Set interfered if currently a connection destination */
+        if (!activeConnections.isEmpty())
+        for (int i = 0; i < activeConnections.size(); ++i) {
+            RadioConnection conn = activeConnections.get(i);
+            conn.removeDestination(radio);
+        }
+    }
+
 	
 	protected RadioConnection getActiveConnectionFrom(Radio source) {
 		if (!activeConnections.isEmpty())
@@ -442,7 +459,7 @@ public abstract class AbstractRadioMedium implements RadioMedium {
         radio.getRadioEventTriggers().removeTrigger(this, radioEventsObserver);
         registeredRadios.remove(radio);
     
-        removeFromActiveConnections(radio);
+        dropFromActiveConnections(radio);
         radioMediumTriggers.trigger(EventTriggers.AddRemove.REMOVE, radio);
 
         /* Update signal strengths */

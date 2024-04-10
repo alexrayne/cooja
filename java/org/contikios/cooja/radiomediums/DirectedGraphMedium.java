@@ -128,14 +128,13 @@ public class DirectedGraphMedium extends AbstractRadioMedium {
 
   @Override
   public void unregisterRadioInterface(Radio radio, Simulation sim) {
-    super.unregisterRadioInterface(radio, sim);
-
     for (Edge edge: getEdges()) {
       if (edge.source == radio || edge.superDest.radio == radio) {
         removeEdge(edge);
         requestEdgeAnalysis();
       }
     }
+    super.unregisterRadioInterface(radio, sim);
   }
 
 
