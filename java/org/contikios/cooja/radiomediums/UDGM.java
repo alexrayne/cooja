@@ -98,14 +98,15 @@ public class UDGM extends AbstractRadioMedium {
         /* Create edges according to distances.
          * XXX May be slow for mobile networks */
         clearEdges();
-        for (Radio source: UDGM.this.getRegisteredRadios()) {
+        Radio[] radios = UDGM.this.getRegisteredRadios();
+        for (Radio source: radios) {
           Position sourcePos = source.getPosition();
-          for (Radio dest: UDGM.this.getRegisteredRadios()) {
-            Position destPos = dest.getPosition();
+          for (Radio dest: radios) {
             /* Ignore ourselves */
             if (source == dest) {
               continue;
             }
+            Position destPos = dest.getPosition();
             double distance = sourcePos.getDistanceTo(destPos);
             if (distance < Math.max(TRANSMITTING_RANGE, INTERFERENCE_RANGE)) {
               /* Add potential destination */
