@@ -516,6 +516,7 @@ public abstract class SerialUI extends SerialIO
   }
 
   public void close() {
+      setLogged(false);
   }
 
   @Override

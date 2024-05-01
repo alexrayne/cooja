@@ -63,4 +63,8 @@ public abstract class SerialIO  extends Log //maybe better extends Log?
 
 	  public abstract void close();
 
+	  @Override
+	  public void removed() {
+	      close();
+	  }
 }
