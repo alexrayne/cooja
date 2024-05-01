@@ -1006,6 +1006,7 @@ public class Cooja {
 
     // Delete simulation
     mySimulation.removed();
+    mySimulation.stopSimulation();
     mySimulation = null;
 
     // Reset frame title
