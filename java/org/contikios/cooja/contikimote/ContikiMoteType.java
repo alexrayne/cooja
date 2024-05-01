@@ -1441,6 +1441,8 @@ public class ContikiMoteType extends BaseContikiMoteType {
     var compilationOutput = MessageContainer.createMessageList(true);
     var stdout = compilationOutput.getInputStream(MessageList.NORMAL);
     var stderr = compilationOutput.getInputStream(MessageList.ERROR);
+
+    try {
     try (var outputStream = p.inputReader(UTF_8);
          var errorStream = p.errorReader(UTF_8)) {
       int b;
@@ -1450,16 +1452,28 @@ public class ContikiMoteType extends BaseContikiMoteType {
       while ((b = errorStream.read()) >= 0) {
         stderr.write(b);
       }
-      if (p.waitFor() == 0) {
-        File classFile = new File(tempDir + "/org/contikios/cooja/corecomm/" + className + ".class");
-        classFile.deleteOnExit();
-        return;
+      if (p.waitFor() != 0) {
+        throw new MoteTypeCreationException("Could not compile corecomm source file: " + className + ".java", compilationOutput);
       }
     } catch (IOException | InterruptedException e) {
       throw new MoteTypeCreationException("Could not compile corecomm source file: " + className + ".java", e, compilationOutput);
     }
-    throw new MoteTypeCreationException("Could not compile corecomm source file: " + className + ".java", compilationOutput);
-  }
+    catch ( Exception e) {
+        throw new MoteTypeCreationException("Could not compile corecomm source file: " + className + ".java", compilationOutput);
+    }
+    
+    } 
+    finally {
+        try { stdout.close(); } 
+        catch (IOException e) { ;}
+        
+        try { stderr.close(); } 
+        catch (IOException e) { ;}
+    }
+    
+    File classFile = new File(tempDir + "/org/contikios/cooja/corecomm/" + className + ".class");
+    classFile.deleteOnExit();
+ }
 
   /**
    * Create and return an instance of the core communicator identified by
