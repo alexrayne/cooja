@@ -291,7 +291,7 @@ public class MessageListUI extends JList<MessageContainer> implements MessageLis
     // this is for text messages log/warn/error
     java.awt.EventQueue.invokeLater( () -> {
       Cooja.setProgressMessage(message, type);
-      StringMessage msg = new StringMessage(message, type);
+      final StringMessage msg = new StringMessage(message, type);
       messages.add(msg);
       updateModel();
     });
@@ -299,9 +299,10 @@ public class MessageListUI extends JList<MessageContainer> implements MessageLis
 
   public void addMessage(final MessageContainer msg)
   {
-    messages.add(msg);
-
-    java.awt.EventQueue.invokeLater(this::updateModel);
+    java.awt.EventQueue.invokeLater(() -> {
+        messages.add(msg);
+        updateModel();
+    });
   }
 
   @Override
@@ -317,8 +318,10 @@ public class MessageListUI extends JList<MessageContainer> implements MessageLis
 
   @Override
   public void clearMessages() {
-    messages.clear();
-    ((DefaultListModel<MessageContainer>) getModel()).clear();
+    java.awt.EventQueue.invokeLater( () -> {
+        messages.clear();
+        ((DefaultListModel<MessageContainer>) getModel()).clear();
+    });
   }
 
   @Override
